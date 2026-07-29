@@ -1,1 +1,1 @@
-# Team Peak — Build Some Team Social Games
+#Build Some Team Social Games
