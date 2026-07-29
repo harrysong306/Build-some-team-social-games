@@ -1,0 +1,561 @@
+Project Design Document (Draft)
+1. Project Overview
+Working Project Name
+Multiplayer Social Game Platform
+Concept
+A browser-based multiplayer game platform consisting of multiple small multiplayer games built on top of a shared framework.
+Instead of creating three completely separate games, the project will develop:
+•	a reusable multiplayer infrastructure, 
+•	shared assets, 
+•	shared map systems, 
+•	shared player systems, 
+and then implement different game modes using the same foundation.
+The three planned games are:
+1.	Hidden — Social deduction / psychological strategy 
+2.	The Lost Artifact — Deduction / information management 
+3.	Crew — Cooperative task management 
+The overall design philosophy:
+Simple mechanics, meaningful decisions, and strong player interaction.
+The project avoids unnecessary complexity such as:
+•	advanced physics, 
+•	real-time combat, 
+•	complex animations, 
+•	AI opponents, 
+•	large open worlds. 
+Instead, the focus is on:
+•	multiplayer networking, 
+•	game-state management, 
+•	interactive web development, 
+•	reusable software architecture. 
+ 
+2. Core Technical Architecture
+Overview
+The project will consist of:
+                 Player Browser
+
+                       |
+
+              React Frontend
+
+                       |
+
+                Socket.IO
+
+                       |
+
+              Node.js Backend
+
+                       |
+
+            Multiplayer Game Engine
+
+          ---------------------------
+          |            |            |
+       Hidden     Lost Artifact    Crew
+ 
+3. Technology Stack
+Frontend
+React + TypeScript
+Responsibilities:
+•	User interface 
+•	Map display 
+•	Player interaction 
+•	Game menus 
+•	Animations 
+•	Game controls 
+Example components:
+components/
+
+    Lobby.tsx
+    GameBoard.tsx
+    Player.tsx
+    Map.tsx
+    Chat.tsx
+    TaskPanel.tsx
+
+games/
+
+    Hidden.tsx
+    Treasure.tsx
+    Crew.tsx
+ 
+Backend
+Node.js
+Responsibilities:
+•	Game logic 
+•	Player management 
+•	Room management 
+•	Turn handling 
+•	Validation 
+•	Game state 
+ 
+Multiplayer Communication
+Socket.IO
+Used for:
+•	connecting players, 
+•	creating rooms, 
+•	sending actions, 
+•	synchronising game state. 
+Example:
+Player action:
+Player clicks "Search"
+
+↓
+
+Frontend sends event
+
+↓
+
+Server validates
+
+↓
+
+Server updates game state
+
+↓
+
+All players receive update
+ 
+4. Hosting and Deployment
+Source Code
+GitHub
+Used for:
+•	version control, 
+•	teamwork, 
+•	storing source code, 
+•	managing changes. 
+Repository structure:
+Multiplayer-Game-Platform/
+
+├── frontend/
+
+│   ├── src/
+│   ├── components/
+│   └── assets/
+
+├── backend/
+
+│   ├── server.js
+│   ├── games/
+│   └── gameManager.js
+
+├── README.md
+
+└── documentation/
+ 
+Frontend Hosting
+Recommended:
+Vercel
+Hosts:
+•	React application 
+•	images 
+•	game interface 
+Example:
+https://project-name.vercel.app
+ 
+Backend Hosting
+Recommended:
+Render
+Hosts:
+•	Node.js server 
+•	Socket.IO connections 
+•	multiplayer sessions 
+ 
+5. Shared Game Framework
+The goal is to create one engine that supports multiple games.
+ 
+5.1 Lobby System
+Every game uses the same lobby.
+Features:
+•	Create room 
+•	Join room 
+•	Room code 
+•	Player list 
+•	Ready system 
+•	Start game 
+Example:
+Room Code: ABCD
+
+Players:
+
+Alice       Ready
+Bob         Ready
+Charlie     Ready
+
+[Start Game]
+ 
+5.2 Player System
+Universal player object:
+{
+ id:"123",
+
+ username:"Alice",
+
+ character:"robot",
+
+ position:{
+    x:4,
+    y:3
+ },
+
+ score:0,
+
+ status:"alive"
+}
+Individual games can add extra information.
+Example:
+Hidden:
+hidingSpot:"closet"
+Crew:
+skills:{
+ engineering:2,
+ cleaning:3
+}
+ 
+5.3 Map System
+All games use a shared grid-based map.
+Example:
+□□□□□□□□
+
+□  C   B  □
+
+□  T   D  □
+
+□  L      □
+
+□□□□□□□□
+Objects:
+•	Closet 
+•	Bed 
+•	Desk 
+•	Door 
+•	Storage box 
+Stored as:
+{
+type:"closet",
+
+x:3,
+
+y:4
+}
+ 
+Asset Reuse
+The same objects have different purposes.
+Example:
+Object	Hidden	Lost Artifact	Crew
+Closet	Hide	Search	Storage task
+Bed	Hide	Search	Repair
+Desk	Hide	Search	Work station
+Generator	Hide	Search	Repair
+ 
+6. Game Mode 1: Hidden
+Genre
+Social deduction.
+Core Question
+"Can you predict where other players will hide?"
+ 
+Gameplay
+Phase 1: Preparation
+One player becomes:
+The Seeker
+Others become:
+Hiders
+Hiders choose hiding locations.
+Example:
+Alice → Closet
+
+Bob → Bed
+
+Charlie → Storage Box
+ 
+Phase 2: Lock-In
+Players cannot change their hiding spots.
+ 
+Phase 3: Search
+The seeker has limited searches.
+Example:
+Possible locations:
+20
+Available searches:
+5
+The seeker must decide where to search.
+ 
+Phase 4: Reveal
+If the seeker finds players:
+They are eliminated.
+If not:
+The round continues.
+ 
+Main Mechanic
+Shared Risk
+Example:
+Closet capacity:
+3 players.
+Three players hide together.
+Risk:
+•	If safe → three survive. 
+•	If discovered → all eliminated. 
+ 
+Technical Requirements
+Server stores:
+{
+playerID,
+hidingLocation,
+role
+}
+ 
+7. Game Mode 2: The Lost Artifact
+Genre
+Deduction and information management.
+Core Question
+"How long should you wait before taking the risk?"
+ 
+Concept
+A treasure is hidden somewhere on the map.
+Players search locations over multiple rounds.
+The goal:
+Find the treasure before another player does.
+ 
+Setup Example
+Map:
+20 locations.
+Objects:
+•	Bedroom 
+•	Library 
+•	Kitchen 
+•	Basement 
+•	Garden 
+Hidden:
+•	1 treasure 
+•	2 clues 
+ 
+Search Results
+A player searches a location.
+Possible outcomes:
+1. Treasure
+Player wins.
+ 
+2. Empty
+Player gains no information.
+ 
+3. Clue
+Only that player receives the clue.
+Other players do not know.
+ 
+Example
+Alice searches:
+Library
+Everyone sees:
+Alice searched Library
+Only Alice receives:
+Treasure is not outside.
+ 
+Information System
+Players accumulate knowledge.
+Example:
+Round 1:
+Possible locations:
+20
+Round 3:
+Possible locations:
+5
+Round 5:
+Possible locations:
+2
+ 
+Strategic Decisions
+Players choose:
+Search immediately
+Risk:
+Someone else wins.
+ 
+Wait and gather information
+Risk:
+Another player discovers the treasure first.
+ 
+Technical Requirements
+Server stores:
+{
+ treasureLocation:"basement",
+
+ clues:[
+ {
+ location:"library",
+ message:"Treasure is not outside"
+ }
+ ],
+
+ searchedLocations:[]
+}
+ 
+8. Game Mode 3: Crew
+Genre
+Cooperative multiplayer strategy.
+Core Question
+"Can your team coordinate and specialise effectively?"
+ 
+Concept
+Players work together to maintain a system.
+Theme examples:
+•	Spaceship 
+•	Haunted mansion 
+•	Research station 
+•	Factory 
+The theme changes, but the mechanics remain the same.
+ 
+Gameplay
+The team receives tasks.
+Example:
+Spaceship:
+Engine damaged
+
+Oxygen system failing
+
+Communication offline
+Players assign themselves tasks.
+ 
+Skills
+Players start equally.
+Example:
+Engineering: 1
+
+Cleaning: 1
+
+Electronics: 1
+
+Medical: 1
+ 
+Upgrade System
+After each round:
+Players improve skills.
+Possible strategies:
+Specialisation
+Example:
+One player becomes the engineer.
+Advantages:
+Very efficient.
+Disadvantages:
+Team depends on one person.
+ 
+Balanced Skills
+Everyone learns everything.
+Advantages:
+Flexible.
+Disadvantages:
+Nobody becomes excellent.
+ 
+Task Resolution
+Example:
+Task:
+Repair Engine
+Requirement:
+Engineering Level 3
+Player:
+Engineering Level 1
+Result:
+Possible failure.
+ 
+Technical Requirements
+Server stores:
+{
+tasks:[
+
+{
+name:"Repair Engine",
+
+skill:"engineering",
+
+difficulty:3
+
+}
+
+],
+
+players:[
+
+{
+skills:{
+engineering:2
+}
+
+}
+
+]
+}
+ 
+9. Development Strategy
+Phase 1: Foundation
+Build:
+•	GitHub repository 
+•	React project 
+•	Node server 
+•	Socket.IO connection 
+•	Lobby system 
+ 
+Phase 2: Shared Systems
+Build:
+•	Player system 
+•	Grid map 
+•	Objects 
+•	Turn management 
+ 
+Phase 3: Hidden
+First complete game.
+Reason:
+Tests the entire framework.
+ 
+Phase 4: Lost Artifact
+Reuse:
+•	map, 
+•	turns, 
+•	search system. 
+Add:
+•	clues, 
+•	treasure logic. 
+ 
+Phase 5: Crew
+Reuse:
+•	map, 
+•	players, 
+•	actions. 
+Add:
+•	tasks, 
+•	skills, 
+•	upgrades. 
+ 
+10. Project Scope Control
+Avoid:
+ Voice chat
+ Real-time movement
+ Combat
+ Complex animations
+ Large maps
+ Player accounts
+ Leaderboards
+ 
+Focus On:
+ Multiplayer rooms
+    Interesting decisions
+    Smooth UI
+    Reusable architecture
+    Polished gameplay
+ 
+11. Final Project Vision
+The final product is not simply three games.
+It is:
+A reusable browser-based multiplayer game framework capable of supporting different social and strategic game experiences.
+The three games demonstrate different multiplayer interactions:
+Game	Main Experience
+Hidden	Bluffing and psychology
+Lost Artifact	Deduction and information
+Crew	Cooperation and planning
+Together, they showcase:
+•	frontend development, 
+•	backend development, 
+•	WebSocket networking, 
+•	multiplayer architecture, 
+•	reusable software design, 
+•	game-state management. 
+ 
+Final Design Philosophy
+Simple systems create complex decisions.
