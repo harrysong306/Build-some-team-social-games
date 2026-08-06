@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Whiteboard Sketch</title>
+    <link rel="stylesheet" href="styles.css" />
+    <script defer src="app.js"></script>
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="board-panel">
+        <header class="hero">
+          <p class="eyebrow">Simple drawing board</p>
+          <h1>Sketch, erase, repeat.</h1>
+          <p class="description">
+            A browser whiteboard with a brush, eraser, size control, and a clean
+            paper-like canvas.
+          </p>
+        </header>
+
+        <div class="toolbar" aria-label="Drawing tools">
+          <div class="tool-group" role="group" aria-label="Tool selection">
+            <button class="tool-button active" id="brushButton" type="button">
+              Brush
+            </button>
+            <button class="tool-button" id="eraserButton" type="button">
+              Eraser
+            </button>
+          </div>
+
+          <label class="control">
+            <span>Color</span>
+            <input id="colorPicker" type="color" value="#1f2937" />
+          </label>
+
+          <label class="control slider-control">
+            <span>Size</span>
+            <input id="sizePicker" type="range" min="2" max="40" value="10" />
+          </label>
+
+          <button class="tool-button subtle" id="clearButton" type="button">
+            Clear board
+          </button>
+        </div>
+
+        <div class="canvas-shell">
+          <canvas id="drawingCanvas" aria-label="Drawing surface"></canvas>
+          <div class="canvas-hint">Click or drag to draw. Use the eraser to clear strokes.</div>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>
