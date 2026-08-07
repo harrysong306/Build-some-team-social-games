@@ -165,7 +165,7 @@ Language
     TypeScript
 
 2D Engine
-    Phaser
+    Excalibur
 
 3D Engine
     Babylon.js
