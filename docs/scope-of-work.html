@@ -1,0 +1,148 @@
+<!DOCTYPE html PUBLIC "-//w3c//dtd html 4.0 transitional//en">
+<html><head>
+   <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+   <meta name="GENERATOR" content="Mozilla/4.7 (Macintosh; I; PPC) [Netscape]">
+   <title>Group31 Requirements Analysis Document</title>
+</head>
+<body bgcolor="#FFFFFF">
+&nbsp; 
+<center>
+<h2>
+Requirements Analysis Document</h2></center>
+
+<center>
+<h2>
+Wu Create Some Games Project</h2></center>
+
+<p>Winter 2026
+</p><p>University of Western Australia
+</p><p>Perth, </p></center>
+
+<p><br>
+<br>
+</p><p>
+</p><hr width="75%">
+<b>Revision History:</b>
+<p>Version R0.1 07/08/26 Aidin Fenwick. Created
+</p><p>
+</p><p><b>Preface:</b>
+</p><blockquote>This document addresses the requirements of the Group31 system.
+The primary audience of this document is the developer/s, secondarily: The client/s</blockquote>
+<b>Target Audience:</b>
+<blockquote>Client, Developers</blockquote>
+<b>Group31 Members:</b>
+<blockquote><font color="#00CC66">Aidin Fenwick, Yixuan Hu, Abbas Fadaee, Surtaj Singh Surtaj Singh, Hayden Ivins, </font></blockquote>
+
+
+
+<b>MILESTONES</b>
+<ul>
+<li>
+</li>
+
+<li>
+</li>
+
+<li>
+</li>
+
+<li>
+</li>
+</ul>
+
+<hr size="4">
+<h2>
+<b>1.0 General Goals</b></h2>
+Build a small set of browser-based party games for a remote team to play together - should have no installs, no accounts, quick to join. Each game should feel familiar (inspired by games like Gartic Phone/scatterbrain) but include a twist (If taken from pre-existing game) so it isn't a direct copy.<br>
+<h2>
+<b>2.0 Current System</b></h2>
+The client's remote team currently plays existing online party games (e.g. Scattergories, Codenames). These work, but the client wants something original and tailored to their team, rather than relying on third-party sites.<br>
+<h2>
+<b>3.0 Proposed System</b></h2>
+
+<br>
+<b>3.1 Overview</b><br>
+<br>
+<br>A website holding multiple browser based games that can be played with a team.<br>
+<br>
+<b>3.2 Functional Requirements<br>
+</b>Users can browse games. Player can create a room and receive a shareable code.
+Player/s can join a room using that code. The host can start the game once enough players have joined. Player/s can play a game. Player/s can see results after game completion.<br>
+<br>
+<b>3.3 Nonfunctional Requirements<br>
+
+<h4>
+3.3.1 User Interface and Human Factors</h4>
+</b>Each user/player that utilises the website should not be regarded with any skill. It should be inconsequential to their navigation and use of the system. The only user that requires sepcial treatment are complete beginners to computers, wherein failsafes, such as a short guide on how to play, can be utilised to prevent them from interacting in unitended ways.
+<br>
+<h4>
+3.3.2 Documentation</h4>
+Documentation to be held includes; Design, Planning, README, How to use, File structure, Sprint related documentation.
+
+<br>
+<h4>
+3.3.3 Hardware Consideration</h4>
+Hardware should be inconsequential to the system. Nothing specialized. As the system itself should be usable within any browser it should be stressed that lower end systems are able to view pages with throttling the users hardware. Additionally desktop support should be provided over alternative hardwares.
+<br>
+<h4>
+3.3.4 Performance Characteristics</h4>
+There are no constraints on throughput for the system. As all data passed between server and user should be small in size due, not due to constraint, but due to the nature of the games being created. There will be constraints for the speed of delivery for the server dependent on real time games.
+
+<h4>
+3.3.5 Error Handling and Extreme Conditions</h4>
+Errors should be handled gracefully with a page dedicated to displaying error
+<h4>
+3.3.6 System Interfacing</h4>
+The system has no dependency on external systems for core functionality. All input (prompts, drawings, guesses) originates from players within the same room, and all output is delivered back to players within that room via the server. No external APIs are required for the MVP. If an AI-generated modifier or caption is added later, this would introduce a single outbound dependency on a third-party API, but this is not required for base functionality that we've got planned.
+<h4>
+3.3.7 Quality Issues</h4>
+The system should recover gracefully from individual player disconnects without disrupting the game for remaining players. A full server crash is not expected to preserve game state, given sessions are ephemeral by design. If the session itself is reset then simply disconnect players and boot to either an error, or a connect to lobby.
+<h4>
+3.3.8 System Modifications</h4>
+The system is expected to expand over time to support additional games beyond the initial MVP, additional modifiers within existing games, and potentially a scoring/leaderboard system if the specific game permits it. We'll endevour to use standardised assets to reduce workload, such as a standard lobby, rather than specialised lobbies for each game.
+<h4>
+3.3.9 Physical Environment</h4>
+Not applicable in a traditional sense, as the system is software-only and runs entirely in a standard web browser.
+<br>
+<h4>
+3.3.10 Security Issues</h4>
+Given that the system does not store persistent data at all or require accounts, security requirements are minimal. Room codes act as the only access control available, and rooms should expire or become inaccessible after a period of inactivity to prevent stale rooms being rejoined.
+<br>
+<h4>
+3.3.11 Resource Issues</h4>
+No backups are required, as all game data (prompts, drawings and guesses) is session-based and intentionally not persisted beyond the life of a lobby. The development team is responsible for installation, deployment, and maintenance of the server for the duration of the project. Perhaps extended to a few months after for maintanence on the deployed product.
+. 
+<h3>
+3.5 System Model</h3>
+<h4>
+3.5.1 Scenarios</h4>
+
+<h4>Browsing &amp; Setup</h4>
+<ul>
+  <li>As a user, I want to browse the available games, so that I can choose a game that I would like to play.</li>
+  <li>As a user, I want to view a brief description of each game, so that I can understand its basic rules and recommended player count before choosing it.</li>
+  <li>As a user, I want to select Sketch Recall from the game library, so that I can start setting up a game session.</li>
+  <li>As a user, I want to create a private game room, so that I can invite my teammates to play together.</li>
+  <li>As a user, I want to join a game room using a room code or invite link, so that I can quickly enter the same session as my teammates.</li>
+  <li>As a user, I want to enter a temporary nickname without creating an account, so that I can start playing quickly.</li>
+</ul>
+
+<h4>Lobby</h4>
+<ul>
+<li>As a player, I want to see who has joined the lobby and whether they are ready, so that I know when the group is ready to start.</li>
+<li>As a player, I want to mark myself as ready or not ready, so that the host and other players know whether I am prepared to begin.</li>
+<li>As a host, I want to select the game mode before starting the game, so that the group can choose between cooperative and competitive gameplay.</li>
+<li>As a host, I want to start the game once enough players are ready, so that everyone can begin the game together.</li>
+</ul>
+
+<h4>Gameplay — Drawing Phase</h4>
+<ul>
+<li>As a player, I want to read a short explanation of the game rules before the game begins, so that I understand what I need to do.</li>
+<li>As a player, I want to receive the same sequence of words as the other players, so that everyone plays under the same conditions.</li>
+<li>As a player, I want the current grid cell to be clearly highlighted, so that I know where to draw each word.</li>
+<li>As a player, I want basic drawing tools such as a pencil, eraser, and clear-cell function, so that I can quickly create and correct my sketches.</li>
+<li>As a player, I want to see a countdown timer during the drawing phase, so that I know how much time I have left before the next word appears.</li>
+<li>As a player, I want my drawing board to remain private during the drawing phase, so that other players cannot use my drawings as hints.</li>
+</ul>
+
+</body></html>
