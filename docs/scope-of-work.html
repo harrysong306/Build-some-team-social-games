@@ -98,13 +98,23 @@ Given that the system does not store persistent data at all or require accounts,
 3.3.11 Resource Issues</h4>
 No backups are required, as all game data (prompts, drawings and guesses) is session-based and intentionally not persisted beyond the life of a lobby. The development team is responsible for installation, deployment, and maintenance of the server for the duration of the project. Perhaps extended to a few months after for maintanence on the deployed product.
 . 
-<h3>
+<h4>
+  <b>3.4 Confirmed Requirements from Client Discussion<br>
+  </b></h4>
+Minimum deliverable is at least one game, with quality prioritised over quantity. The game
+should comfortably support 3-8 players with a typical session length of 7-20 minutes. No
+persistent save state or accounts are required - the system is lobby-based, joined via a shared
+link. Games must not be a direct copy of an existing game and should add an original twist.
+No high visual polish is expected. No in-game chat is needed, as the client's team already
+uses Zoom for voice communication. Security requirements are minimal given the nonadversarial context. The client has approved AI-assisted code. A fully deployed/hosted version
+is not required for evaluation - a working, playtestable build is sufficient. The client prefers
+cooperative games but is flexible, with competitive modes acceptable as a fallback
 3.5 System Model</h3>
 
 <h4>
 3.5.1 Epics</h4>
 All epics detailed below are loose outlines of expecatations for each subsystem, The specific stories for these epics can be found in the Stories document. Due to the nature of the proposed project, Epics for additional games may be added in later sprints.
-<h5>3.5.1.1 Shared Epics</h5>
+<h4>3.5.1.1 Shared Epics</h4>
 <p>Stories under these epics are shared across multiple games. They should be parameterized and reusable rather than game-specific or game agnostic (No relation to any game).</p>
 <ul>
   <li>Browsing &amp; Setup</li>
@@ -112,7 +122,7 @@ All epics detailed below are loose outlines of expecatations for each subsystem,
   <li>Results &amp; Scoring</li>
 </ul>
 
-<h5>3.5.1.2 Sketch Recall Epics</h5>
+<h4>3.5.1.2 Sketch Recall Epics</h4>
 <p>Stories under these epics are specific to Sketch Recall and do not share systems with other games.</p>
 <ul>
   <li>Drawing Phase</li>
