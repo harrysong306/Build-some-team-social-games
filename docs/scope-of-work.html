@@ -13,17 +13,18 @@ Requirements Analysis Document</h2></center>
 <center>
 <h2>
 Wu Create Some Games Project</h2></center>
-
+<center>
 <p>Winter 2026
 </p><p>University of Western Australia
-</p><p>Perth, </p></center>
+</p><p>Crawley, 6009</p></center>
 
 <p><br>
 <br>
 </p><p>
 </p><hr width="75%">
 <b>Revision History:</b>
-<p>Version R0.1 07/08/26 Aidin Fenwick. Created
+<p>Version R0.1 07/08/26 Aidin Fenwick. Created; 
+<p>Version R0.2 13/08/26 Aidin Fenwick. Scenarios changed to Epics;
 </p><p>
 </p><p><b>Preface:</b>
 </p><blockquote>This document addresses the requirements of the Group31 system.
@@ -31,29 +32,14 @@ The primary audience of this document is the developer/s, secondarily: The clien
 <b>Target Audience:</b>
 <blockquote>Client, Developers</blockquote>
 <b>Group31 Members:</b>
-<blockquote><font color="#00CC66">Aidin Fenwick, Yixuan Hu, Abbas Fadaee, Surtaj Singh Surtaj Singh, Hayden Ivins, </font></blockquote>
+<blockquote><font color="#00CC66">Aidin Fenwick, Yixuan Hu, Abbas Fadaee, Surtaj Singh Surtaj Singh, Hayden Ivins </font></blockquote>
 
 
-
-<b>MILESTONES</b>
-<ul>
-<li>
-</li>
-
-<li>
-</li>
-
-<li>
-</li>
-
-<li>
-</li>
-</ul>
 
 <hr size="4">
 <h2>
 <b>1.0 General Goals</b></h2>
-Build a small set of browser-based party games for a remote team to play together - should have no installs, no accounts, quick to join. Each game should feel familiar (inspired by games like Gartic Phone/scatterbrain) but include a twist (If taken from pre-existing game) so it isn't a direct copy.<br>
+Build a small set of browser-based party games for a remote team to play together - should have no installs, no accounts, quick to join. Each game should feel familiar (inspired by games like Gartic Phone/scatterbrain) but include a twist (If taken from pre-existing game) so it isn't a direct copy. These games should take no less than 15-30 minutes to ensure multiple games can be played in a session. Additional criteria includes that the game/s must be fun.<br>
 <h2>
 <b>2.0 Current System</b></h2>
 The client's remote team currently plays existing online party games (e.g. Scattergories, Codenames). These work, but the client wants something original and tailored to their team, rather than relying on third-party sites.<br>
@@ -61,11 +47,11 @@ The client's remote team currently plays existing online party games (e.g. Scatt
 <b>3.0 Proposed System</b></h2>
 
 <br>
-<b>3.1 Overview</b><br>
+<b>3.1 Overview</b>
+</br>
+<br>A website holding multiple browser based games that can be played with a team. Focus on short, board game like experiences.<br>
 <br>
-<br>A website holding multiple browser based games that can be played with a team.<br>
-<br>
-<b>3.2 Functional Requirements<br>
+<b>3.2 Functional Requirements<br></br>
 </b>Users can browse games. Player can create a room and receive a shareable code.
 Player/s can join a room using that code. The host can start the game once enough players have joined. Player/s can play a game. Player/s can see results after game completion.<br>
 <br>
@@ -102,7 +88,7 @@ The system should recover gracefully from individual player disconnects without 
 The system is expected to expand over time to support additional games beyond the initial MVP, additional modifiers within existing games, and potentially a scoring/leaderboard system if the specific game permits it. We'll endevour to use standardised assets to reduce workload, such as a standard lobby, rather than specialised lobbies for each game.
 <h4>
 3.3.9 Physical Environment</h4>
-Not applicable in a traditional sense, as the system is software-only and runs entirely in a standard web browser.
+Not applicable in a traditional sense, as the system is software-only and runs entirely in a standard web browser. If factoring deployment then a server will be used to host, such as a droplet on digital ocean.
 <br>
 <h4>
 3.3.10 Security Issues</h4>
@@ -114,25 +100,30 @@ No backups are required, as all game data (prompts, drawings and guesses) is ses
 . 
 <h3>
 3.5 System Model</h3>
+
 <h4>
-3.5.1 Scenarios</h4>
-
-<h4>Browsing &amp; Setup</h4>
+3.5.1 Epics</h4>
+All epics detailed below are loose outlines of expecatations for each subsystem, The specific stories for these epics can be found in the Stories document. Due to the nature of the proposed project, Epics for additional games may be added in later sprints.
+<h5>3.5.1.1 Shared Epics</h5>
+<p>Stories under these epics are shared across multiple games. They should be parameterized and reusable rather than game-specific or game agnostic (No relation to any game).</p>
 <ul>
-  <li>As a user, I want to browse the available games, so that I can choose a game that I would like to play.</li>
-  <li>As a user, I want to view a brief description of each game, so that I can understand its basic rules and recommended player count before choosing it.</li>
-  <li>As a user, I want to select Sketch Recall from the game library, so that I can start setting up a game session.</li>
-  <li>As a user, I want to create a private game room, so that I can invite my teammates to play together.</li>
-  <li>As a user, I want to join a game room using a room code or invite link, so that I can quickly enter the same session as my teammates.</li>
-  <li>As a user, I want to enter a temporary nickname without creating an account, so that I can start playing quickly.</li>
+  <li>Browsing &amp; Setup</li>
+  <li>Lobby</li>
+  <li>Results &amp; Scoring</li>
 </ul>
 
-<h4>Lobby</h4>
+<h5>3.5.1.2 Sketch Recall Epics</h5>
+<p>Stories under these epics are specific to Sketch Recall and do not share systems with other games.</p>
 <ul>
-<li>As a player, I want to see who has joined the lobby and whether they are ready, so that I know when the group is ready to start.</li>
-<li>As a player, I want to mark myself as ready or not ready, so that the host and other players know whether I am prepared to begin.</li>
-<li>As a host, I want to select the game mode before starting the game, so that the group can choose between cooperative and competitive gameplay.</li>
-<li>As a host, I want to start the game once enough players are ready, so that everyone can begin the game together.</li>
+  <li>Drawing Phase</li>
+  <li>Cooperative Mode</li>
+  <li>Competitive Mode</li>
 </ul>
+
+<h5>3.5.1.3 Game #2 Epics</h5>
+<p>To be determined following client presentation and completion of shared epics.</p>
+
+<h5>3.5.1.4 Game #3 Epics</h5>
+<p>To be determined following client presentation and completion of shared epics.</p>
 
 </body></html>
