@@ -1,0 +1,8 @@
+{
+  "name": "build-some-team-social-games",
+  "private": true,
+  "workspaces": [
+    "frontend",
+    "backend"
+  ]
+}
