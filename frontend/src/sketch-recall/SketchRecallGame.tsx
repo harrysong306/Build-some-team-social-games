@@ -4,6 +4,7 @@ import DistractionPhase from './DistractionPhase'
 import DrawingPhase from './DrawingPhase'
 import InstructionsScreen from './InstructionsScreen'
 import RecallPhase from './RecallPhase'
+import ResultsScreen from './ResultsScreen'
 
 type SketchRecallGameProps = {
   onExit: () => void
@@ -35,6 +36,12 @@ function SketchRecallGame({
 
   const [recallScore, setRecallScore] =
     useState(0)
+
+  const playAgain = () => {
+    setSavedDrawings([])
+    setRecallScore(0)
+    setPhase('instructions')
+  }
 
   if (phase === 'drawing') {
     return (
@@ -76,30 +83,12 @@ function SketchRecallGame({
 
   if (phase === 'results') {
     return (
-      <main className="flex min-h-[calc(100vh-80px)] items-center justify-center bg-[#0d0704] px-6 text-white">
-
-        <section className="w-full max-w-xl rounded-2xl border border-amber-500/30 bg-[#160b06] p-10 text-center">
-
-          <p className="text-sm font-semibold uppercase tracking-widest text-amber-400">
-            Round Complete
-          </p>
-
-          <h1 className="mt-3 text-3xl font-bold">
-            Results
-          </h1>
-
-          <p className="mt-6 text-6xl font-black text-amber-400">
-            {recallScore} / {gameWords.length}
-          </p>
-
-          <p className="mt-4 text-white/55">
-            You remembered {recallScore} of{' '}
-            {gameWords.length} words.
-          </p>
-
-        </section>
-
-      </main>
+      <ResultsScreen
+        score={recallScore}
+        total={gameWords.length}
+        onPlayAgain={playAgain}
+        onExit={onExit}
+      />
     )
   }
 
