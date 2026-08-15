@@ -19,12 +19,17 @@ const mockWords = [
 
 type DrawingPhaseProps = {
   onBack: () => void
+  onComplete: (drawings: (string | null)[]) => void
 }
 
-function DrawingPhase({ onBack }: DrawingPhaseProps) {
+function DrawingPhase({
+  onBack,
+  onComplete,
+}: DrawingPhaseProps) {
   const canvasRef = useRef<DrawingCanvasHandle>(null)
 
   const [currentIndex, setCurrentIndex] = useState(0)
+
   const [tool, setTool] =
     useState<'brush' | 'eraser'>('brush')
 
@@ -43,7 +48,9 @@ function DrawingPhase({ onBack }: DrawingPhaseProps) {
 
     setDrawings((previous) => {
       const updated = [...previous]
+
       updated[currentIndex] = image
+
       return updated
     })
 
@@ -53,6 +60,7 @@ function DrawingPhase({ onBack }: DrawingPhaseProps) {
     }
 
     setCurrentIndex((current) => current + 1)
+
     setTimeLeft(15)
 
     canvasRef.current?.clear()
@@ -78,7 +86,11 @@ function DrawingPhase({ onBack }: DrawingPhaseProps) {
     if (timeLeft === 0 && !finished) {
       saveAndNext()
     }
-  }, [timeLeft, finished, saveAndNext])
+  }, [
+    timeLeft,
+    finished,
+    saveAndNext,
+  ])
 
   if (finished) {
     return (
@@ -95,12 +107,14 @@ function DrawingPhase({ onBack }: DrawingPhaseProps) {
           </h1>
 
           <p className="mt-3 text-white/55">
-            Your drawings are now hidden. Next comes the distraction phase.
+            Your drawings are now hidden.
+            Next comes the distraction phase.
           </p>
 
           <button
             type="button"
-            className="mt-8 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-400 px-8 py-4 font-bold text-black"
+            onClick={() => onComplete(drawings)}
+            className="mt-8 w-full rounded-xl bg-gradient-to-r from-amber-500 to-yellow-400 px-8 py-4 font-bold text-black transition hover:brightness-110"
           >
             CONTINUE →
           </button>
@@ -188,7 +202,9 @@ function DrawingPhase({ onBack }: DrawingPhaseProps) {
 
               <button
                 type="button"
-                onClick={() => canvasRef.current?.clear()}
+                onClick={() =>
+                  canvasRef.current?.clear()
+                }
                 className="rounded-lg border border-amber-500/30 bg-[#211006] px-5 py-2 text-sm font-semibold text-white"
               >
                 Clear
@@ -206,7 +222,9 @@ function DrawingPhase({ onBack }: DrawingPhaseProps) {
                   max="25"
                   value={brushSize}
                   onChange={(event) =>
-                    setBrushSize(Number(event.target.value))
+                    setBrushSize(
+                      Number(event.target.value),
+                    )
                   }
                   className="accent-amber-400"
                 />
@@ -245,42 +263,52 @@ function DrawingPhase({ onBack }: DrawingPhaseProps) {
 
             <div className="mt-5 grid grid-cols-5 gap-2">
 
-              {Array.from({ length: 25 }).map((_, index) => {
-                const drawing = drawings[index]
-                const active = index === currentIndex
+              {Array.from({ length: 25 }).map(
+                (_, index) => {
+                  const drawing = drawings[index]
 
-                return (
-                  <div
-                    key={index}
-                    className={`aspect-square overflow-hidden rounded-md border ${
-                      active
-                        ? 'border-amber-400 bg-amber-400/10'
-                        : drawing
-                          ? 'border-amber-500/30 bg-white'
-                          : 'border-white/10 bg-white/5'
-                    }`}
-                  >
-                    {drawing ? (
-                      <img
-                        src={drawing}
-                        alt={`Drawing ${index + 1}`}
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      <div className="flex h-full items-center justify-center text-[10px] text-white/25">
-                        {index + 1}
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
+                  const active =
+                    index === currentIndex
+
+                  return (
+                    <div
+                      key={index}
+                      className={`aspect-square overflow-hidden rounded-md border ${
+                        active
+                          ? 'border-amber-400 bg-amber-400/10'
+                          : drawing
+                            ? 'border-amber-500/30 bg-white'
+                            : 'border-white/10 bg-white/5'
+                      }`}
+                    >
+
+                      {drawing ? (
+                        <img
+                          src={drawing}
+                          alt={`Drawing ${index + 1}`}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-full items-center justify-center text-[10px] text-white/25">
+                          {index + 1}
+                        </div>
+                      )}
+
+                    </div>
+                  )
+                },
+              )}
 
             </div>
 
             <div className="mt-6 rounded-xl bg-amber-400/10 p-4">
+
               <p className="text-xs leading-5 text-amber-100/70">
-                Keep your sketches simple. You will need them later to remember the original words.
+                Keep your sketches simple.
+                You will need them later to remember
+                the original words.
               </p>
+
             </div>
 
           </aside>
