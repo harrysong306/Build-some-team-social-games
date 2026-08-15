@@ -9,62 +9,52 @@ import DrawingCanvas, {
   type DrawingCanvasHandle,
 } from './DrawingCanvas'
 
-const mockWords = [
-  'Apple',
-  'Car',
-  'Tree',
-  'Sun',
-  'House',
-]
-
 type DrawingPhaseProps = {
+  words: string[]
   onBack: () => void
   onComplete: (drawings: (string | null)[]) => void
 }
 
 function DrawingPhase({
+  words,
   onBack,
   onComplete,
 }: DrawingPhaseProps) {
   const canvasRef = useRef<DrawingCanvasHandle>(null)
 
   const [currentIndex, setCurrentIndex] = useState(0)
-
   const [tool, setTool] =
     useState<'brush' | 'eraser'>('brush')
-
   const [brushSize, setBrushSize] = useState(8)
   const [timeLeft, setTimeLeft] = useState(15)
 
   const [drawings, setDrawings] =
     useState<(string | null)[]>(
-      Array(25).fill(null),
+      Array(words.length).fill(null),
     )
 
   const [finished, setFinished] = useState(false)
 
   const saveAndNext = useCallback(() => {
-    const image = canvasRef.current?.getImage() ?? ''
+    const image =
+      canvasRef.current?.getImage() ?? ''
 
     setDrawings((previous) => {
       const updated = [...previous]
-
       updated[currentIndex] = image
-
       return updated
     })
 
-    if (currentIndex >= mockWords.length - 1) {
+    if (currentIndex >= words.length - 1) {
       setFinished(true)
       return
     }
 
     setCurrentIndex((current) => current + 1)
-
     setTimeLeft(15)
 
     canvasRef.current?.clear()
-  }, [currentIndex])
+  }, [currentIndex, words.length])
 
   useEffect(() => {
     if (finished) return
@@ -86,16 +76,11 @@ function DrawingPhase({
     if (timeLeft === 0 && !finished) {
       saveAndNext()
     }
-  }, [
-    timeLeft,
-    finished,
-    saveAndNext,
-  ])
+  }, [timeLeft, finished, saveAndNext])
 
   if (finished) {
     return (
       <main className="flex min-h-[calc(100vh-80px)] items-center justify-center bg-[#0d0704] px-6 text-white">
-
         <div className="w-full max-w-xl rounded-2xl border border-amber-500/30 bg-[#160b06] p-10 text-center">
 
           <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-amber-400/10 text-4xl text-amber-400">
@@ -107,8 +92,8 @@ function DrawingPhase({
           </h1>
 
           <p className="mt-3 text-white/55">
-            Your drawings are now hidden.
-            Next comes the distraction phase.
+            Your drawings are now hidden. Next comes
+            the distraction phase.
           </p>
 
           <button
@@ -120,7 +105,6 @@ function DrawingPhase({
           </button>
 
         </div>
-
       </main>
     )
   }
@@ -141,7 +125,7 @@ function DrawingPhase({
           </button>
 
           <div className="rounded-full border border-amber-500/30 bg-[#160b06] px-5 py-2 text-sm text-white/70">
-            Drawing {currentIndex + 1} / {mockWords.length}
+            Drawing {currentIndex + 1} / {words.length}
           </div>
 
         </div>
@@ -154,7 +138,7 @@ function DrawingPhase({
             </p>
 
             <h1 className="mt-2 text-5xl font-black">
-              {mockWords[currentIndex]}
+              {words[currentIndex]}
             </h1>
           </div>
 
@@ -251,15 +235,13 @@ function DrawingPhase({
 
           <aside className="rounded-2xl border border-amber-500/30 bg-[#160b06] p-5">
 
-            <div>
-              <h2 className="font-bold">
-                Memory Grid
-              </h2>
+            <h2 className="font-bold">
+              Memory Grid
+            </h2>
 
-              <p className="mt-1 text-xs text-white/45">
-                Your drawings are stored here during this phase.
-              </p>
-            </div>
+            <p className="mt-1 text-xs text-white/45">
+              Your drawings are stored here during this phase.
+            </p>
 
             <div className="mt-5 grid grid-cols-5 gap-2">
 
@@ -302,13 +284,11 @@ function DrawingPhase({
             </div>
 
             <div className="mt-6 rounded-xl bg-amber-400/10 p-4">
-
               <p className="text-xs leading-5 text-amber-100/70">
-                Keep your sketches simple.
-                You will need them later to remember
-                the original words.
+                Keep your sketches simple. You will
+                need them later to remember the original
+                words.
               </p>
-
             </div>
 
           </aside>
