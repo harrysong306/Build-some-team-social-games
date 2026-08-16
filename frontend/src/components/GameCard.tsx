@@ -4,9 +4,15 @@ type GameCardProps = {
   title: string
   description: string
   players: string
+  onPlay: () => void
 }
 
-function GameCard({ title, description, players }: GameCardProps) {
+function GameCard({
+  title,
+  description,
+  players,
+  onPlay,
+}: GameCardProps) {
   return (
     <article className="overflow-hidden rounded-2xl border border-amber-500/40 bg-[#160b06] shadow-2xl shadow-black/40">
 
@@ -57,10 +63,19 @@ function GameCard({ title, description, players }: GameCardProps) {
 
           <button
             type="button"
+            onClick={onPlay}
             className="mt-auto flex w-full items-center justify-center gap-4 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-400 py-4 text-lg font-bold text-black transition duration-200 hover:scale-[1.01] hover:brightness-110"
           >
-            <span className="text-xl">▶</span>
+            <svg
+              viewBox="0 0 24 24"
+              className="h-5 w-5"
+              fill="currentColor"
+            >
+              <path d="M8 5v14l11-7z" />
+            </svg>
+
             PLAY
+
             <span>→</span>
           </button>
 
