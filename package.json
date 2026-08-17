@@ -1,0 +1,13 @@
+{
+  "name": "build-some-team-social-games",
+  "private": true,
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  "allowScripts": {
+    "esbuild": true,
+    "msgpackr-extract": true,
+    "fsevents@2.3.3": true
+  }
+}
