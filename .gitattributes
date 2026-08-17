@@ -1,0 +1,4 @@
+package-lock.json -linguist-generated
+backend/package-lock.json -linguist-generated
+frontend/package.json -linguist-generated
+*.lock -linguist-generated
