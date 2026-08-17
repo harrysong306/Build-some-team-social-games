@@ -64,8 +64,32 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(
     const startDrawing = (
       event: React.PointerEvent<HTMLCanvasElement>,
     ) => {
+      const canvas = canvasRef.current
+      if (!canvas) return
+
+      const context = canvas.getContext('2d')
+      if (!context) return
+
+      const point = getPointerPosition(event)
+
       drawingRef.current = true
-      lastPointRef.current = getPointerPosition(event)
+      lastPointRef.current = point
+
+      context.beginPath()
+      context.arc(
+        point.x,
+        point.y,
+        brushSize / 2,
+        0,
+        Math.PI * 2,
+      )
+
+      context.fillStyle =
+        tool === 'eraser'
+          ? '#fffdf7'
+          : '#25150b'
+
+      context.fill()
 
       event.currentTarget.setPointerCapture(event.pointerId)
     }
