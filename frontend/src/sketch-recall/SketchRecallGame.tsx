@@ -17,19 +17,98 @@ type GamePhase =
   | 'recall'
   | 'results'
 
-const gameWords = [
+const WORDS_PER_ROUND = 8
+
+const easyWordPool = [
   'Apple',
-  'Car',
-  'Tree',
+  'Ball',
+  'Cat',
+  'Dog',
   'Sun',
+  'Moon',
+  'Star',
+  'Tree',
+  'Fish',
+  'Bird',
+  'Book',
+  'Cup',
+  'Cake',
+  'Car',
+  'Bus',
+  'Bike',
+  'Boat',
   'House',
+  'Chair',
+  'Table',
+  'Shoe',
+  'Hat',
+  'Clock',
+  'Phone',
+  'Key',
+  'Bottle',
+  'Flower',
+  'Cloud',
+  'Rain',
+  'Snow',
+  'Pizza',
+  'Burger',
+  'Banana',
+  'Orange',
+  'Grape',
+  'Strawberry',
+  'Pencil',
+  'Paper',
+  'Laptop',
+  'Robot',
+  'Rocket',
+  'Train',
+  'Bridge',
+  'Mountain',
+  'River',
+  'Island',
+  'Frog',
+  'Turtle',
+  'Elephant',
+  'Lion',
 ]
+
+function getRandomUniqueItems<T>(
+  items: T[],
+  count: number,
+): T[] {
+  const pool = [...items]
+
+  for (
+    let index = pool.length - 1;
+    index > 0;
+    index -= 1
+  ) {
+    const swapIndex = Math.floor(
+      Math.random() * (index + 1),
+    )
+
+    ;[pool[index], pool[swapIndex]] = [
+      pool[swapIndex],
+      pool[index],
+    ]
+  }
+
+  return pool.slice(0, count)
+}
 
 function SketchRecallGame({
   onExit,
 }: SketchRecallGameProps) {
   const [phase, setPhase] =
     useState<GamePhase>('instructions')
+
+  const [roundWords, setRoundWords] =
+    useState<string[]>(() =>
+      getRandomUniqueItems(
+        easyWordPool,
+        WORDS_PER_ROUND,
+      ),
+    )
 
   const [savedDrawings, setSavedDrawings] =
     useState<(string | null)[]>([])
@@ -38,6 +117,13 @@ function SketchRecallGame({
     useState(0)
 
   const playAgain = () => {
+    setRoundWords(
+      getRandomUniqueItems(
+        easyWordPool,
+        WORDS_PER_ROUND,
+      ),
+    )
+
     setSavedDrawings([])
     setRecallScore(0)
     setPhase('instructions')
@@ -46,7 +132,7 @@ function SketchRecallGame({
   if (phase === 'drawing') {
     return (
       <DrawingPhase
-        words={gameWords}
+        words={roundWords}
         onBack={() =>
           setPhase('instructions')
         }
@@ -72,7 +158,7 @@ function SketchRecallGame({
     return (
       <RecallPhase
         drawings={savedDrawings}
-        words={gameWords}
+        words={roundWords}
         onComplete={(score) => {
           setRecallScore(score)
           setPhase('results')
@@ -85,7 +171,7 @@ function SketchRecallGame({
     return (
       <ResultsScreen
         score={recallScore}
-        total={gameWords.length}
+        total={roundWords.length}
         onPlayAgain={playAgain}
         onExit={onExit}
       />
