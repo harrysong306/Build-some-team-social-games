@@ -1,0 +1,4 @@
+package-lock.json linguist-generated=true
+backend/package-lock.json linguist-generated=true
+frontend/package.json linguist-generated=false
+*.lock linguist-generated=true
