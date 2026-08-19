@@ -21,6 +21,7 @@ function DrawingPhase({
   onComplete,
 }: DrawingPhaseProps) {
   const canvasRef = useRef<DrawingCanvasHandle>(null)
+  const isAdvancingRef = useRef(false)
 
   const [currentIndex, setCurrentIndex] = useState(0)
   const [tool, setTool] =
@@ -36,6 +37,10 @@ function DrawingPhase({
   const [finished, setFinished] = useState(false)
 
   const saveAndNext = useCallback(() => {
+    if (isAdvancingRef.current) return
+
+    isAdvancingRef.current = true
+
     const image =
       canvasRef.current?.getImage() ?? ''
 
@@ -54,6 +59,10 @@ function DrawingPhase({
     setTimeLeft(15)
 
     canvasRef.current?.clear()
+
+    window.setTimeout(() => {
+      isAdvancingRef.current = false
+    }, 500)
   }, [currentIndex, words.length])
 
   useEffect(() => {

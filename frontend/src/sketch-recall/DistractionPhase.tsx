@@ -266,7 +266,7 @@ function DistractionPhase({
         setTimeLeft(10)
       }
 
-      return
+    return
     }
 
     const timer = window.setTimeout(() => {
