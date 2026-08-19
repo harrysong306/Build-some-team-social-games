@@ -1,24 +1,50 @@
-#Build Some Team Social Games
-initial project discription :
-Here’s a quick outline:
+# Build Some Team Social Games
+
+### Structure
+project/
+```
+├── backend/            # Backend/server code
+│   ├── src/
+│   └── tests/
+├── frontend/           # Frontend/client code
+│   ├── src/
+│   └── public/
+├── shared/             # Code/types shared between frontend and backend
+├── tests/              # Integration/end-to-end tests
+├── docs/               # Project documentation and design material
+├── package.json        # Project dependencies
+├── package-lock.json   # Project dependecy references, used in development. - Will discontinue
+├── .gitignore
+├── .gitattributes
+└── README.md
+```
+
+### initial project discription:
 Project: Build Some Team Social Games Client: Yi Fei Wu (Melbourne)
-What they want: Our client’s remote team enjoys online social games like Scattergories and Codenames, and wants us to build a few new browser-based games they can play together.
+What client wants: Our client’s remote team enjoys online social games like Scattergories and Codenames, and wants us to build a few new browser-based games they can play together.
+
 Requirements:
 
- Must run entirely in the browser — no installation needed
+- Must run entirely in the browser — no installation needed
 
- Can’t be a 1:1 copy of an existing game — if similar, we need to add a twist
+- Can’t be a 1:1 copy of an existing game — if similar, we need to add a twist
 
- At least one game should be cooperative, similar in style to Spaceteam
+- At least one game should be cooperative, similar in style to Spaceteam
 Notes:
 
- This is fairly open-ended — no strict spec, just a creative brief
+- This is fairly open-ended. No strict spec is required for games, just a creative brief for the client to approve.
 
- Low backend/auth complexity, mostly frontend + real-time multiplayer logic
-
- We’ll likely need to build more than one game
-
- First thing to clarify with the client: how many games they want, typical team size, and whether voice/text chat needs to be built in or handled separately
+- Low backend/auth complexity, mostly frontend + real-time multiplayer logic.
 
 
- to be added and modified as we go along ...
+ ### Current Games:
+
+ Sketch Recall (Name pending):
+
+
+ ### Services:
+
+ Vite
+
+
+ Colyseus
