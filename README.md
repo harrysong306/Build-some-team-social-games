@@ -1,11 +1,11 @@
 # Build Some Team Social Games
 
 ### Structure
-project/
+
 ```
 ├── backend/            # Backend/server code
 │   ├── src/
-│   └── tests/
+│   └── test/
 ├── frontend/           # Frontend/client code
 │   ├── src/
 │   └── public/
@@ -14,9 +14,7 @@ project/
 ├── docs/               # Project documentation and design material
 ├── package.json        # Project dependencies
 ├── package-lock.json   # Project dependecy references, used in development. - Will discontinue
-├── .gitignore
-├── .gitattributes
-└── README.md
+└── README.md           # This document
 ```
 
 ### initial project discription:
@@ -36,15 +34,20 @@ Notes:
 
 - Low backend/auth complexity, mostly frontend + real-time multiplayer logic.
 
+### Starting:
+
+1. `npm install` in base directory. Ensure node 22+ is installed.
+2. Reference each directory README for specific instructions.
+
 
  ### Current Games:
 
- Sketch Recall (Name pending):
-
+Sketch Recall (Name pending):
+- 
 
  ### Services:
 
- Vite
+ - Vite
 
+ - Colyseus
 
- Colyseus
