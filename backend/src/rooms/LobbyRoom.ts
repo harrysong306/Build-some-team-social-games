@@ -1,5 +1,5 @@
 import { Room, Client, CloseCode } from "colyseus";
-import { GameState } from "./schema/GameState.js";
+import { GameState, Player } from "./schema/GameState.js";
 
 export class LobbyRoom extends Room {
   maxClients = 8;
@@ -11,6 +11,10 @@ export class LobbyRoom extends Room {
        * Handle "yourMessageType" message.
        */
       console.log(client.sessionId, "sent a message:", message);
+    },
+    markReady: (client: Client, message: { ready: boolean }) => {
+      const player = this.state.players.get(client.sessionId);
+      if (player) player.ready = message.ready;
     },
   }
 
@@ -24,13 +28,27 @@ export class LobbyRoom extends Room {
     /**
      * Called when a client joins the room.
      */
-    console.log(client.sessionId, "joined!");
-  }
+    const player = new Player();
+    player.name = options.name?.slice(0, 20) || "Player";
+    player.isHost = this.state.players.size === 0; // first player becomes host
+    this.state.players.set(client.sessionId, player);
+
+    console.log(client.sessionId, "joined as", player.name);
+  } 
 
   onLeave (client: Client, code: CloseCode) {
     /**
      * Called when a client leaves the room.
      */
+    const wasHost = this.state.players.get(client.sessionId)?.isHost;
+    this.state.players.delete(client.sessionId);
+
+    // reassign host if the host left and players remain
+    if (wasHost && this.state.players.size > 0) {
+      const nextHost = [...this.state.players.values()][0];
+      nextHost.isHost = true;
+    }
+
     console.log(client.sessionId, "left!", code);
   }
 
