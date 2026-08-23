@@ -16,6 +16,19 @@ export class LobbyRoom extends Room {
       const player = this.state.players.get(client.sessionId);
       if (player) player.ready = message.ready;
     },
+
+
+    changeName: (client: Client, message: { name: string }) => {
+      const player = this.state.players.get(client.sessionId);
+      if (!player) return;
+  
+      const trimmed = message.name?.trim().slice(0, 20);
+      if (!trimmed) {
+        client.send("name_error", { reason: "Name cannot be empty." });
+        return;
+      }
+    },
+
   }
 
   onCreate (options: any) {
@@ -29,10 +42,10 @@ export class LobbyRoom extends Room {
      * Called when a client joins the room.
      */
     const player = new Player();
-    player.name = options.name?.slice(0, 20) || "Player";
-    player.isHost = this.state.players.size === 0; // first player becomes host
+    player.name = name;
+    player.isHost = this.state.players.size === 0;
     this.state.players.set(client.sessionId, player);
-
+  
     console.log(client.sessionId, "joined as", player.name);
   } 
 
