@@ -17,7 +17,6 @@ export class LobbyRoom extends Room {
       if (player) player.ready = message.ready;
     },
 
-
     changeName: (client: Client, message: { name: string }) => {
       const player = this.state.players.get(client.sessionId);
       if (!player) return;
@@ -27,8 +26,17 @@ export class LobbyRoom extends Room {
         client.send("name_error", { reason: "Name cannot be empty." });
         return;
       }
-    },
+    const nameTaken = [...this.state.players.entries()].some(
+      ([sessionId, p]) => sessionId !== client.sessionId &&
+        p.name.toLowerCase() === trimmed.toLowerCase()
+    );
 
+    if (nameTaken) {
+      client.send("name_error", { reason: "That name is already taken." });
+      return;
+    }
+    player.name = trimmed;
+    },
   }
 
   onCreate (options: any) {
@@ -41,6 +49,15 @@ export class LobbyRoom extends Room {
     /**
      * Called when a client joins the room.
      */
+
+    let name = options.name?.trim().slice(0, 20) || "Player";
+    const nameTaken = [...this.state.players.values()].some(
+      p => p.name.toLowerCase() === name.toLowerCase()
+    );
+    if (nameTaken) {
+      name = `${name}${Math.floor(Math.random() * 1000)}`;
+    }
+  
     const player = new Player();
     player.name = name;
     player.isHost = this.state.players.size === 0;
@@ -53,6 +70,7 @@ export class LobbyRoom extends Room {
     /**
      * Called when a client leaves the room.
      */
+
     const wasHost = this.state.players.get(client.sessionId)?.isHost;
     this.state.players.delete(client.sessionId);
 
@@ -61,7 +79,6 @@ export class LobbyRoom extends Room {
       const nextHost = [...this.state.players.values()][0];
       nextHost.isHost = true;
     }
-
     console.log(client.sessionId, "left!", code);
   }
 
@@ -69,7 +86,7 @@ export class LobbyRoom extends Room {
     /**
      * Called when the room is disposed.
      */
+
     console.log("room", this.roomId, "disposing...");
   }
-
 }
