@@ -35,6 +35,7 @@ export class LobbyRoom extends Room {
       client.send("name_error", { reason: "That name is already taken." });
       return;
     }
+    console.log(player.name, "change to:",trimmed);
     player.name = trimmed;
     },
   }
