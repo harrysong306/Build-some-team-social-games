@@ -6,11 +6,6 @@ import InstructionsScreen from './InstructionsScreen'
 import RecallPhase from './RecallPhase'
 import ResultsScreen from './ResultsScreen'
 
-import {
-  generalWords,
-  similarWordGroups,
-} from './sketchRecallWords'
-
 type SketchRecallGameProps = {
   onExit: () => void
 }
@@ -22,38 +17,60 @@ type GamePhase =
   | 'recall'
   | 'results'
 
-const shuffle = <T,>(items: T[]) => {
-  const result = [...items]
+const WORDS_PER_ROUND = 8
 
-  for (let i = result.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1))
-
-    ;[result[i], result[j]] = [
-      result[j],
-      result[i],
-    ]
-  }
-
-  return result
-}
-
-const generateGameWords = () => {
-  const selectedGroups =
-    shuffle(similarWordGroups).slice(0, 3)
-
-  const similarWords = selectedGroups.flat()
-
-  const selectedGeneralWords =
-    shuffle(generalWords).slice(
-      0,
-      25 - similarWords.length,
-    )
-
-  return shuffle([
-    ...similarWords,
-    ...selectedGeneralWords,
-  ])
-}
+const easyWordPool = [
+  'Apple',
+  'Ball',
+  'Cat',
+  'Dog',
+  'Sun',
+  'Moon',
+  'Star',
+  'Tree',
+  'Fish',
+  'Bird',
+  'Book',
+  'Cup',
+  'Cake',
+  'Car',
+  'Bus',
+  'Bike',
+  'Boat',
+  'House',
+  'Chair',
+  'Table',
+  'Shoe',
+  'Hat',
+  'Clock',
+  'Phone',
+  'Key',
+  'Bottle',
+  'Flower',
+  'Cloud',
+  'Rain',
+  'Snow',
+  'Pizza',
+  'Burger',
+  'Banana',
+  'Orange',
+  'Grape',
+  'Strawberry',
+  'Pencil',
+  'Paper',
+  'Laptop',
+  'Robot',
+  'Rocket',
+  'Train',
+  'Bridge',
+  'Mountain',
+  'River',
+  'Island',
+  'Frog',
+  'Turtle',
+  'Elephant',
+  'Lion',
+]
 
 function getRandomUniqueItems<T>(
   items: T[],
@@ -85,8 +102,13 @@ function SketchRecallGame({
   const [phase, setPhase] =
     useState<GamePhase>('instructions')
 
-  const [gameWords, setGameWords] =
-    useState<string[]>(() => generateGameWords())
+  const [roundWords, setRoundWords] =
+    useState<string[]>(() =>
+      getRandomUniqueItems(
+        easyWordPool,
+        WORDS_PER_ROUND,
+      ),
+    )
 
   const [savedDrawings, setSavedDrawings] =
     useState<(string | null)[]>([])
@@ -95,7 +117,13 @@ function SketchRecallGame({
     useState(0)
 
   const playAgain = () => {
-    setGameWords(generateGameWords())
+    setRoundWords(
+      getRandomUniqueItems(
+        easyWordPool,
+        WORDS_PER_ROUND,
+      ),
+    )
+
     setSavedDrawings([])
     setRecallScore(0)
     setPhase('instructions')
