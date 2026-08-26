@@ -1,4 +1,4 @@
- import { Schema, type } from "@colyseus/schema";
+import { Schema, type } from "@colyseus/schema";
 
 // everything related to the actual game (not lobby/player stuff) lives here
 export class Game extends Schema {
@@ -7,6 +7,9 @@ export class Game extends Schema {
 
   // which cell of the 5x5 grid we're on (0 to 24)
   @type("number") currentGridIndex: number = 0;
+
+  // timestamp (ms) for when the current turn ends, so clients can show a countdown (BE-12)
+  @type("number") roundEndTime: number = 0;
 
   // 5x5 grid = 25 cells total
   private static readonly GRID_SIZE = 25;
@@ -51,6 +54,7 @@ export class Game extends Schema {
 
   private startTurnTimer() {
     this.clearTurnTimer();
+    this.roundEndTime = Date.now() + Game.TURN_DURATION_MS;
     this.turnTimer = this.clock.setTimeout(
       () => this.advanceGridIndex(),
       Game.TURN_DURATION_MS
