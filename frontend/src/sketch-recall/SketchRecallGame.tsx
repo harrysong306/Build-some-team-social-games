@@ -55,30 +55,6 @@ const generateGameWords = () => {
   ])
 }
 
-function getRandomUniqueItems<T>(
-  items: T[],
-  count: number,
-): T[] {
-  const pool = [...items]
-
-  for (
-    let index = pool.length - 1;
-    index > 0;
-    index -= 1
-  ) {
-    const swapIndex = Math.floor(
-      Math.random() * (index + 1),
-    )
-
-    ;[pool[index], pool[swapIndex]] = [
-      pool[swapIndex],
-      pool[index],
-    ]
-  }
-
-  return pool.slice(0, count)
-}
-
 function SketchRecallGame({
   onExit,
 }: SketchRecallGameProps) {
@@ -104,7 +80,7 @@ function SketchRecallGame({
   if (phase === 'drawing') {
     return (
       <DrawingPhase
-        words={roundWords}
+        words={gameWords}
         onBack={() =>
           setPhase('instructions')
         }
@@ -130,7 +106,7 @@ function SketchRecallGame({
     return (
       <RecallPhase
         drawings={savedDrawings}
-        words={roundWords}
+        words={gameWords}
         onComplete={(score) => {
           setRecallScore(score)
           setPhase('results')
@@ -143,7 +119,7 @@ function SketchRecallGame({
     return (
       <ResultsScreen
         score={recallScore}
-        total={roundWords.length}
+        total={gameWords.length}
         onPlayAgain={playAgain}
         onExit={onExit}
       />
