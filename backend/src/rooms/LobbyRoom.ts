@@ -5,12 +5,6 @@ export class LobbyRoom extends Room {
   maxClients = 8;
   state = new GameState();
 
-  // 5x5 grid = 25 cells total
-  private static readonly GRID_SIZE = 25;
-  // how long each turn lasts, not sure if this is the real value yet, need to check with Abbas
-  private static readonly TURN_DURATION_MS = 60_000;
-
-  private turnTimer: { clear: () => void } | null = null;
   messages = {
     yourMessageType: (client: Client, message: any) => {
       /**
@@ -21,6 +15,9 @@ export class LobbyRoom extends Room {
     markReady: (client: Client, message: { ready: boolean }) => {
       const player = this.state.players.get(client.sessionId);
       if (player) player.ready = message.ready;
+
+      // BE-8: auto start once at least half the lobby is ready, no more explicit start_game message
+      this.checkAutoStart();
     },
 
     changeName: (client: Client, message: { name: string }) => {
@@ -50,6 +47,7 @@ export class LobbyRoom extends Room {
     /**
      * Called when a new room is created.
      */
+    this.state.game.init(this.clock);
   }
 
   onJoin (client: Client, options: any) {
@@ -88,46 +86,18 @@ export class LobbyRoom extends Room {
     }
     console.log(client.sessionId, "left!", code);
   }
-      setPhase(phase: string) {
-    if (this.state.phase === phase) return;
 
-    this.state.phase = phase;
-    this.clearTurnTimer();
-    this.state.currentGridIndex = 0;
+  // BE-8: start the game once at least half the players in the lobby are ready
+  private checkAutoStart() {
+    if (this.state.game.phase !== "lobby") return;
 
-    if (phase === "drawing") {
-      this.startTurnTimer();
-    }
+    const total = this.state.players.size;
+    if (total === 0) return;
 
-    console.log("room", this.roomId, "phase ->", phase);
-  }
+    const readyCount = [...this.state.players.values()].filter(p => p.ready).length;
 
-  advanceGridIndex() {
-    if (this.state.phase !== "drawing") return;
-
-    const next = this.state.currentGridIndex + 1;
-
-    if (next >= LobbyRoom.GRID_SIZE) {
-      this.setPhase("recall");
-      return;
-    }
-
-    this.state.currentGridIndex = next;
-    this.startTurnTimer();
-  }
-
-  private startTurnTimer() {
-    this.clearTurnTimer();
-    this.turnTimer = this.clock.setTimeout(
-      () => this.advanceGridIndex(),
-      LobbyRoom.TURN_DURATION_MS
-    );
-  }
-
-  private clearTurnTimer() {
-    if (this.turnTimer) {
-      this.turnTimer.clear();
-      this.turnTimer = null;
+    if (readyCount >= Math.ceil(total / 2)) {
+      this.state.game.setPhase("drawing");
     }
   }
 
@@ -135,8 +105,7 @@ export class LobbyRoom extends Room {
     /**
      * Called when the room is disposed.
      */
-    this.clearTurnTimer();
+    this.state.game.clearTurnTimer();
     console.log("room", this.roomId, "disposing...");
   }
 }
-
