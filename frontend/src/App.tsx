@@ -3,9 +3,11 @@ import { useState } from 'react'
 import Header from './components/Header'
 import GameCollectionPage from './GameCollectionPage'
 import SketchRecallGame from './sketch-recall/SketchRecallGame'
+import CreateRoomScreen from './multiplayer/CreateRoomScreen'
 
 type Screen =
   | 'collection'
+  | 'create-room'
   | 'sketch-recall'
 
 function App() {
@@ -19,8 +21,10 @@ function App() {
 
       {screen === 'collection' ? (
         <GameCollectionPage
-          onPlay={() => setScreen('sketch-recall')}
+          onPlay={() => setScreen('create-room')}
         />
+      ) : screen === 'create-room' ? (
+        <CreateRoomScreen />
       ) : (
         <SketchRecallGame
           onExit={() => setScreen('collection')}
