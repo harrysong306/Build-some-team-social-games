@@ -41,13 +41,18 @@ export class LobbyRoom extends Room {
     console.log(player.name, "change to:",trimmed);
     player.name = trimmed;
     },
+
+    // BE-13: just store it server-side, Game class makes sure this doesn't get broadcast until recall
+    submitDrawing: (client: Client, message: { imageData: string }) => {
+      this.state.game.submitDrawing(message.imageData);
+    },
   }
 
   onCreate (options: any) {
     /**
      * Called when a new room is created.
      */
-    this.state.game.init(this.clock);
+    this.state.game.init(this.clock, this.broadcast.bind(this));
   }
 
   onJoin (client: Client, options: any) {
