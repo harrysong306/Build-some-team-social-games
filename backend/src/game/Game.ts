@@ -18,10 +18,16 @@ export class Game extends Schema {
 
   private clock: any = null;
   private turnTimer: { clear: () => void } | null = null;
+  private broadcast: ((type: string, message?: any) => void) | null = null;
 
-  // room calls this once after creating the game, so we can use the room's clock
-  init(clock: any) {
+  // finished drawings, keyed by grid index. NOT a @type field on purpose -
+  // this way colyseus never auto-syncs it to clients while drawing is happening (BE-13)
+  private submittedDrawings = new Map<number, string>();
+
+  // room calls this once after creating the game, so we can use the room's clock + broadcast
+  init(clock: any, broadcast: (type: string, message?: any) => void) {
     this.clock = clock;
+    this.broadcast = broadcast;
   }
 
   setPhase(phase: string) {
@@ -32,7 +38,13 @@ export class Game extends Schema {
     this.currentGridIndex = 0;
 
     if (phase === "drawing") {
+      this.submittedDrawings.clear();
       this.startTurnTimer();
+    }
+
+    // BE-14: only reveal drawing data once we actually reach recall, not before
+    if (phase === "recall") {
+      this.broadcast?.("reveal_drawings", this.revealDrawings());
     }
 
     console.log("game phase ->", phase);
@@ -50,6 +62,20 @@ export class Game extends Schema {
 
     this.currentGridIndex = next;
     this.startTurnTimer();
+  }
+
+  // BE-13: store the finished drawing server-side, don't broadcast it to other players yet
+  submitDrawing(imageData: string) {
+    if (this.phase !== "drawing") return;
+    this.submittedDrawings.set(this.currentGridIndex, imageData);
+  }
+
+  // called once we move to "recall", sends everything that was submitted during drawing
+  private revealDrawings() {
+    return Array.from(this.submittedDrawings.entries()).map(([gridIndex, imageData]) => ({
+      gridIndex,
+      imageData,
+    }));
   }
 
   private startTurnTimer() {
