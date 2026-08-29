@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { Room } from "colyseus.js";
+import type { Room } from "@colyseus/sdk";
 
 export type PlayerView = {
   name: string;

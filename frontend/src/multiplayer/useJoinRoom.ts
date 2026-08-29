@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from "react";
-import type { Room } from "colyseus.js";
+import type { Room } from "@colyseus/sdk";
 import { client } from "./colyseusClient";
 
 // Hook for FE-5: handles joining an existing LobbyRoom by its room code
