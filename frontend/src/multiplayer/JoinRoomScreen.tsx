@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useJoinRoom } from "./useJoinRoom";
+import LobbyScreen from "./LobbyScreen";
 
 // FE-5: Implement Join Room UI using room code or invite link
 function JoinRoomScreen() {
@@ -9,18 +10,13 @@ function JoinRoomScreen() {
   // room code typed by the player
   const [roomCode, setRoomCode] = useState("");
 
-  const { connected, roomId, error, joinRoom } = useJoinRoom();
+  const { connected, roomId, error, joinRoom, room } = useJoinRoom();
 
   const canJoin = name.trim().length > 0 && roomCode.trim().length > 0;
 
-  // once joined, show a simple confirmation instead of the form
+  // once joined, hand off to the lobby screen (FE-7/FE-8)
   if (connected) {
-    return (
-      <div>
-        <h2>Joined room!</h2>
-        <p>Room code: {roomId}</p>
-      </div>
-    );
+    return <LobbyScreen room={room} roomId={roomId} />;
   }
 
   return (
