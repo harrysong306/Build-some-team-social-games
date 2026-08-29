@@ -29,5 +29,6 @@ export function useCreateRoom() {
     }
   }, []);
 
-  return { connected, roomId, error, createRoom };
+  // expose the raw room instance so the lobby screen can subscribe to it
+  return { connected, roomId, error, createRoom, room: roomRef.current };
 }
