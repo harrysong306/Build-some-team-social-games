@@ -28,10 +28,11 @@ describe("LobbyRoom", () => {
   it("second player to join is not host", async () => {
     const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
     const client1 = await colyseus.connectTo(room, { name: "Jordan" });
-    const client2 = await colyseus.connectTo(room, { name: "Sam" });
-
     await room.waitForNextPatch();
-
+  
+    const client2 = await colyseus.connectTo(room, { name: "Sam" });
+    await room.waitForNextPatch();
+  
     const p1 = client1.state.players.get(client1.sessionId);
     const p2 = client1.state.players.get(client2.sessionId);
     assert.strictEqual(p1?.isHost, true);
@@ -144,13 +145,13 @@ describe("LobbyRoom", () => {
     const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
     const client1 = await colyseus.connectTo(room, { name: "Jordan" }); // host
     const client2 = await colyseus.connectTo(room, { name: "Sam" });
-
-    client2.send("setGameMode", { mode: "sketchRecall" });
+  
+    client2.send("setGameMode", { mode: "test" }); // different from default — proves rejection
     await room.waitForNextPatch();
-    assert.strictEqual(client1.state.gameMode, "sketchRecall"); // unchanged, rejected
-
+    assert.strictEqual(client1.state.gameMode, "sketchRecall"); // still default, rejected
+  
     client1.send("setGameMode", { mode: "test" });
     await room.waitForNextPatch();
-    assert.strictEqual(client1.state.gameMode, "test");
+    assert.strictEqual(client1.state.gameMode, "test"); // host's change succeeded
   });
 });
