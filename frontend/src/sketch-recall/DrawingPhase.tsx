@@ -15,6 +15,10 @@ type DrawingPhaseProps = {
   onComplete: (drawings: (string | null)[]) => void
 }
 
+function getRandomDrawingTime() {
+  return Math.floor(Math.random() * 8) + 3
+}
+
 function DrawingPhase({
   words,
   onBack,
@@ -27,7 +31,8 @@ function DrawingPhase({
   const [tool, setTool] =
     useState<'brush' | 'eraser'>('brush')
   const [brushSize, setBrushSize] = useState(8)
-  const [timeLeft, setTimeLeft] = useState(15)
+  const [timeLeft, setTimeLeft] =
+    useState(() => getRandomDrawingTime())
 
   const [drawings, setDrawings] =
     useState<(string | null)[]>(
@@ -56,7 +61,7 @@ function DrawingPhase({
     }
 
     setCurrentIndex((current) => current + 1)
-    setTimeLeft(15)
+    setTimeLeft(getRandomDrawingTime())
 
     canvasRef.current?.clear()
 
