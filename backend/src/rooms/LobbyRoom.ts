@@ -38,6 +38,13 @@ export class LobbyRoom extends Room {
     console.log(player.name, "change to:",trimmed);
     player.name = trimmed;
     },
+    
+    setGameMode: (client: Client, message: { mode: string }) => {
+      const player = this.state.players.get(client.sessionId);
+      if (!player?.isHost) return; // only host may change mode
+      console.log(this.state.gameMode, "Changed to:", message.mode);
+      this.state.gameMode = message.mode;
+    },
   }
 
   onCreate (options: any) {
