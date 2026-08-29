@@ -1,21 +1,17 @@
 import { useState } from "react";
 import { useCreateRoom } from "./useCreateRoom";
+import LobbyScreen from "./LobbyScreen";
 
 // FE-4: Implement Create Room UI and connect room creation to backend
 function CreateRoomScreen() {
   // draft name typed by the player before creating a room
   const [name, setName] = useState("");
 
-  const { connected, roomId, error, createRoom } = useCreateRoom();
+  const { connected, roomId, error, createRoom, room } = useCreateRoom();
 
-  // once the room is created, show the room code instead of the form
+  // once the room is created, hand off to the lobby screen (FE-7/FE-8)
   if (connected) {
-    return (
-      <div>
-        <h2>Room created!</h2>
-        <p>Room code: {roomId}</p>
-      </div>
-    );
+    return <LobbyScreen room={room} roomId={roomId} />;
   }
 
   return (
