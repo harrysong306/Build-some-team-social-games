@@ -29,5 +29,6 @@ export function useJoinRoom() {
     }
   }, []);
 
-  return { connected, roomId, error, joinRoom };
+  // expose the raw room instance so the lobby screen can subscribe to it
+  return { connected, roomId, error, joinRoom, room: roomRef.current };
 }
