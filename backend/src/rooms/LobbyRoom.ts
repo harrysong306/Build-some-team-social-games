@@ -1,6 +1,10 @@
 import { Room, Client, CloseCode } from "colyseus";
 import { GameState, Player } from "./schema/GameState.js";
 
+const VALID_GAME_MODES = ["sketchRecall", "test"] as const;
+type GameMode = typeof VALID_GAME_MODES[number];
+
+
 export class LobbyRoom extends Room {
   maxClients = 8;
   state = new GameState();
@@ -39,9 +43,16 @@ export class LobbyRoom extends Room {
     player.name = trimmed;
     },
     
+    
     setGameMode: (client: Client, message: { mode: string }) => {
       const player = this.state.players.get(client.sessionId);
       if (!player?.isHost) return; // only host may change mode
+    
+      if (!VALID_GAME_MODES.includes(message.mode as GameMode)) {
+        client.send("mode_error", { reason: `Invalid game mode: ${message.mode}` });
+        return;
+      }
+    
       console.log(this.state.gameMode, "Changed to:", message.mode);
       this.state.gameMode = message.mode;
     },

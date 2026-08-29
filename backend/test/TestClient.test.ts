@@ -1,7 +1,7 @@
 import assert from "assert";
 import { ColyseusTestServer, boot } from "@colyseus/testing";
 
-// import your "app.config.ts" file here.
+// import "app.config.ts"
 import appConfig from "../src/app.config.js";
 import { GameState } from "../src/rooms/schema/GameState.js";
 
@@ -76,7 +76,7 @@ describe("LobbyRoom", () => {
     await room.waitForNextPatch();
 
     const player = client1.state.players.get(client1.sessionId);
-    assert.strictEqual(player?.name, "Jordan"); // unchanged
+    assert.strictEqual(player?.name, "Jordan");
   });
 
   it("changeName rejects a duplicate name (case-insensitive) and leaves state unchanged", async () => {
@@ -84,7 +84,7 @@ describe("LobbyRoom", () => {
     const client1 = await colyseus.connectTo(room, { name: "Jordan" });
     const client2 = await colyseus.connectTo(room, { name: "Sam" });
 
-    client2.send("changeName", { name: "jordan" }); // different case, still a collision
+    client2.send("changeName", { name: "jordan" });
     await room.waitForNextPatch();
 
     const p2 = client1.state.players.get(client2.sessionId);
@@ -140,18 +140,17 @@ describe("LobbyRoom", () => {
     assert.strictEqual(client1.state.players.get(client2.sessionId), undefined);
   });
 
-  // TODO: enable once setGameMode is implemented in LobbyRoom (US09)
-  it.skip("only the host can set the game mode", async () => {
+  it("only the host can set the game mode", async () => {
     const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
     const client1 = await colyseus.connectTo(room, { name: "Jordan" }); // host
     const client2 = await colyseus.connectTo(room, { name: "Sam" });
 
-    client2.send("setGameMode", { mode: "competitive" });
+    client2.send("setGameMode", { mode: "sketchRecall" });
     await room.waitForNextPatch();
-    assert.strictEqual(client1.state.gameMode, "cooperative"); // unchanged, rejected
+    assert.strictEqual(client1.state.gameMode, "sketchRecall"); // unchanged, rejected
 
-    client1.send("setGameMode", { mode: "competitive" });
+    client1.send("setGameMode", { mode: "test" });
     await room.waitForNextPatch();
-    assert.strictEqual(client1.state.gameMode, "competitive");
+    assert.strictEqual(client1.state.gameMode, "test");
   });
 });
