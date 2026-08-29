@@ -18,12 +18,14 @@ export function useLobbyState(room: Room | null) {
     if (!room) return;
 
     // re-sync the player list whenever the room state changes
-    const unsubscribe = room.onStateChange((state: any) => {
+    const handleStateChange = (state: any) => {
       setPlayers(Object.fromEntries(state.players.entries()));
-    });
+    };
+
+    room.onStateChange(handleStateChange);
 
     return () => {
-      unsubscribe?.();
+      room.onStateChange.remove(handleStateChange);
     };
   }, [room]);
 
