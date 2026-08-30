@@ -7,8 +7,7 @@ type LobbyScreenProps = {
 };
 
 const GAME_MODES = [
-  { value: "cooperative", label: "Cooperative" },
-  { value: "competitive", label: "Competitive" },
+  { value: "sketchRecall", label: "Sketch Recall" },
 ];
 
 // FE-7: Display lobby player list and ready status in real time
