@@ -40,15 +40,9 @@ export function useLobbyState(room: Room | null) {
     room.send("markReady", { ready: !me?.ready });
   };
 
-  // FE-9: host selects a game mode
-  // NOTE: backend "set_game_mode" handler (BE-7) doesn't exist yet.
-  // Sending an unregistered message type disconnects the client (Colyseus
-  // closes with error code 4002), so we hold off sending until BE-7 ships.
+  // FE-9: host selects a game mode (matches backend BE-7 "setGameMode" handler)
   const setGameMode = (mode: string) => {
     room?.send("setGameMode", { mode });
-  };
-    // TODO: uncomment once BE-7 is merged
-    // room?.send("set_game_mode", { mode });
   };
 
   // FE-10: host starts the game
