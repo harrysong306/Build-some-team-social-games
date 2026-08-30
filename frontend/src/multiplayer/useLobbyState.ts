@@ -41,19 +41,23 @@ export function useLobbyState(room: Room | null) {
   };
 
   // FE-9: host selects a game mode
-  // TODO: backend "set_game_mode" handler (BE-7) doesn't exist yet -
-  // this will send the message, but the backend will just ignore it for now
+  // NOTE: backend "set_game_mode" handler (BE-7) doesn't exist yet.
+  // Sending an unregistered message type disconnects the client (Colyseus
+  // closes with error code 4002), so we hold off sending until BE-7 ships.
   const setGameMode = (mode: string) => {
-    if (!room) return;
-    room.send("set_game_mode", { mode });
+    console.warn("set_game_mode not sent - waiting on backend BE-7:", mode);
+    // TODO: uncomment once BE-7 is merged
+    // room?.send("set_game_mode", { mode });
   };
 
   // FE-10: host starts the game
-  // TODO: backend "start_game" handler (BE-8) doesn't exist yet -
-  // this will send the message, but the backend will just ignore it for now
+  // NOTE: backend "start_game" handler (BE-8) doesn't exist yet.
+  // Sending an unregistered message type disconnects the client (Colyseus
+  // closes with error code 4002), so we hold off sending until BE-8 ships.
   const startGame = () => {
-    if (!room) return;
-    room.send("start_game");
+    console.warn("start_game not sent - waiting on backend BE-8");
+    // TODO: uncomment once BE-8 is merged
+    // room?.send("start_game");
   };
 
   return {
