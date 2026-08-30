@@ -15,7 +15,7 @@ export function useLobbyState(room: Room | null) {
   const [players, setPlayers] = useState<Record<string, PlayerView>>({});
 
   // mirrors the backend's gameMode field
-  const [gameMode, setGameModeState] = useState<string>("cooperative");
+  const [gameMode, setGameModeState] = useState<string>("sketchRecall");
 
   useEffect(() => {
     if (!room) return;
