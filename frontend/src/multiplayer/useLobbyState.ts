@@ -45,7 +45,8 @@ export function useLobbyState(room: Room | null) {
   // Sending an unregistered message type disconnects the client (Colyseus
   // closes with error code 4002), so we hold off sending until BE-7 ships.
   const setGameMode = (mode: string) => {
-    console.warn("set_game_mode not sent - waiting on backend BE-7:", mode);
+    room?.send("setGameMode", { mode });
+  };
     // TODO: uncomment once BE-7 is merged
     // room?.send("set_game_mode", { mode });
   };
