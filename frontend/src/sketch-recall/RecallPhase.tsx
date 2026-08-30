@@ -1,10 +1,15 @@
-import { useState } from 'react'
+import {
+  useEffect,
+  useState,
+} from 'react'
 
 type RecallPhaseProps = {
   drawings: (string | null)[]
   words: string[]
   onComplete: (score: number) => void
 }
+
+const ANSWER_TIME_SECONDS = 5
 
 function RecallPhase({
   drawings,
@@ -19,9 +24,13 @@ function RecallPhase({
   const [checked, setChecked] = useState(false)
   const [correct, setCorrect] = useState(false)
 
-  // FE-41:
-  // Player must buzz before they can answer.
   const [hasBuzzed, setHasBuzzed] =
+    useState(false)
+
+  const [timeLeft, setTimeLeft] =
+    useState(ANSWER_TIME_SECONDS)
+
+  const [timedOut, setTimedOut] =
     useState(false)
 
   const currentDrawing =
@@ -30,18 +39,60 @@ function RecallPhase({
   const currentWord =
     words[currentIndex]
 
+  useEffect(() => {
+    if (!hasBuzzed || checked) {
+      return
+    }
+
+    if (timeLeft <= 0) {
+      setTimedOut(true)
+      setCorrect(false)
+      setChecked(true)
+      return
+    }
+
+    const timer = window.setTimeout(() => {
+      setTimeLeft(
+        (current) => current - 1,
+      )
+    }, 1000)
+
+    return () => {
+      window.clearTimeout(timer)
+    }
+  }, [
+    hasBuzzed,
+    checked,
+    timeLeft,
+  ])
+
+  const buzz = () => {
+    setHasBuzzed(true)
+    setTimeLeft(ANSWER_TIME_SECONDS)
+    setTimedOut(false)
+  }
+
   const checkAnswer = () => {
-    if (!answer.trim()) return
+    if (
+      !hasBuzzed ||
+      checked ||
+      !answer.trim()
+    ) {
+      return
+    }
 
     const isCorrect =
       answer.trim().toLowerCase() ===
       currentWord.toLowerCase()
 
     setCorrect(isCorrect)
+    setTimedOut(false)
     setChecked(true)
 
     if (isCorrect) {
-      setScore((current) => current + 1)
+      setScore(
+        (current) => current + 1,
+      )
     }
   }
 
@@ -62,6 +113,8 @@ function RecallPhase({
     setChecked(false)
     setCorrect(false)
     setHasBuzzed(false)
+    setTimedOut(false)
+    setTimeLeft(ANSWER_TIME_SECONDS)
   }
 
   return (
@@ -143,9 +196,7 @@ function RecallPhase({
 
                 <button
                   type="button"
-                  onClick={() =>
-                    setHasBuzzed(true)
-                  }
+                  onClick={buzz}
                   className="mt-7 w-full rounded-xl bg-gradient-to-r from-amber-500 to-yellow-400 py-4 text-lg font-bold text-black"
                 >
                   BUZZ
@@ -154,9 +205,21 @@ function RecallPhase({
             ) : (
               <>
                 {!checked && (
-                  <p className="mt-5 font-semibold text-amber-300">
-                    You buzzed first. Enter your answer.
-                  </p>
+                  <>
+                    <p className="mt-5 font-semibold text-amber-300">
+                      You buzzed first. Enter your answer.
+                    </p>
+
+                    <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-center">
+                      <p className="text-sm uppercase tracking-wider text-white/60">
+                        Time Left
+                      </p>
+
+                      <p className="mt-1 text-3xl font-bold text-amber-400">
+                        {timeLeft}s
+                      </p>
+                    </div>
+                  </>
                 )}
 
                 <input
@@ -190,7 +253,20 @@ function RecallPhase({
                     }`}
                   >
 
-                    {correct ? (
+                    {timedOut ? (
+                      <>
+                        <p className="font-bold text-red-400">
+                          Time&apos;s up
+                        </p>
+
+                        <p className="mt-2 text-white/60">
+                          The word was{' '}
+                          <strong>
+                            {currentWord}
+                          </strong>.
+                        </p>
+                      </>
+                    ) : correct ? (
                       <p className="font-bold text-green-400">
                         Correct!
                       </p>
