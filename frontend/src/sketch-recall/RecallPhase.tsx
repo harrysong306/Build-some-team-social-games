@@ -11,6 +11,11 @@ type RecallPhaseProps = {
 
 const ANSWER_TIME_SECONDS = 5
 
+type AttemptResult =
+  | 'incorrect'
+  | 'timeout'
+  | null
+
 function RecallPhase({
   drawings,
   words,
@@ -19,19 +24,29 @@ function RecallPhase({
   const [currentIndex, setCurrentIndex] =
     useState(0)
 
-  const [answer, setAnswer] = useState('')
-  const [score, setScore] = useState(0)
-  const [checked, setChecked] = useState(false)
-  const [correct, setCorrect] = useState(false)
+  const [answer, setAnswer] =
+    useState('')
+
+  const [score, setScore] =
+    useState(0)
+
+  const [checked, setChecked] =
+    useState(false)
+
+  const [correct, setCorrect] =
+    useState(false)
 
   const [hasBuzzed, setHasBuzzed] =
+    useState(false)
+
+  const [hasAttempted, setHasAttempted] =
     useState(false)
 
   const [timeLeft, setTimeLeft] =
     useState(ANSWER_TIME_SECONDS)
 
-  const [timedOut, setTimedOut] =
-    useState(false)
+  const [attemptResult, setAttemptResult] =
+    useState<AttemptResult>(null)
 
   const currentDrawing =
     drawings[currentIndex]
@@ -40,14 +55,19 @@ function RecallPhase({
     words[currentIndex]
 
   useEffect(() => {
-    if (!hasBuzzed || checked) {
+    if (
+      !hasBuzzed ||
+      checked ||
+      hasAttempted
+    ) {
       return
     }
 
     if (timeLeft <= 0) {
-      setTimedOut(true)
-      setCorrect(false)
-      setChecked(true)
+      setAttemptResult('timeout')
+      setHasAttempted(true)
+      setHasBuzzed(false)
+      setAnswer('')
       return
     }
 
@@ -63,19 +83,25 @@ function RecallPhase({
   }, [
     hasBuzzed,
     checked,
+    hasAttempted,
     timeLeft,
   ])
 
   const buzz = () => {
+    if (hasAttempted) {
+      return
+    }
+
     setHasBuzzed(true)
     setTimeLeft(ANSWER_TIME_SECONDS)
-    setTimedOut(false)
+    setAttemptResult(null)
   }
 
   const checkAnswer = () => {
     if (
       !hasBuzzed ||
       checked ||
+      hasAttempted ||
       !answer.trim()
     ) {
       return
@@ -85,15 +111,23 @@ function RecallPhase({
       answer.trim().toLowerCase() ===
       currentWord.toLowerCase()
 
-    setCorrect(isCorrect)
-    setTimedOut(false)
-    setChecked(true)
-
     if (isCorrect) {
+      setCorrect(true)
+      setChecked(true)
+      setHasAttempted(true)
+
       setScore(
         (current) => current + 1,
       )
+
+      return
     }
+
+    setCorrect(false)
+    setAttemptResult('incorrect')
+    setHasAttempted(true)
+    setHasBuzzed(false)
+    setAnswer('')
   }
 
   const nextDrawing = () => {
@@ -113,7 +147,8 @@ function RecallPhase({
     setChecked(false)
     setCorrect(false)
     setHasBuzzed(false)
-    setTimedOut(false)
+    setHasAttempted(false)
+    setAttemptResult(null)
     setTimeLeft(ANSWER_TIME_SECONDS)
   }
 
@@ -188,7 +223,9 @@ function RecallPhase({
               What was the original word?
             </h2>
 
-            {!hasBuzzed ? (
+            {!hasBuzzed &&
+            !hasAttempted &&
+            !checked ? (
               <>
                 <p className="mt-5 text-white/60">
                   Buzz first to answer this question.
@@ -202,30 +239,29 @@ function RecallPhase({
                   BUZZ
                 </button>
               </>
-            ) : (
+            ) : null}
+
+            {hasBuzzed &&
+            !hasAttempted &&
+            !checked ? (
               <>
-                {!checked && (
-                  <>
-                    <p className="mt-5 font-semibold text-amber-300">
-                      You buzzed first. Enter your answer.
-                    </p>
+                <p className="mt-5 font-semibold text-amber-300">
+                  You buzzed first. Enter your answer.
+                </p>
 
-                    <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-center">
-                      <p className="text-sm uppercase tracking-wider text-white/60">
-                        Time Left
-                      </p>
+                <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-center">
+                  <p className="text-sm uppercase tracking-wider text-white/60">
+                    Time Left
+                  </p>
 
-                      <p className="mt-1 text-3xl font-bold text-amber-400">
-                        {timeLeft}s
-                      </p>
-                    </div>
-                  </>
-                )}
+                  <p className="mt-1 text-3xl font-bold text-amber-400">
+                    {timeLeft}s
+                  </p>
+                </div>
 
                 <input
                   type="text"
                   value={answer}
-                  disabled={checked}
                   onChange={(event) =>
                     setAnswer(
                       event.target.value,
@@ -233,88 +269,112 @@ function RecallPhase({
                   }
                   onKeyDown={(event) => {
                     if (
-                      event.key === 'Enter' &&
-                      !checked
+                      event.key === 'Enter'
                     ) {
                       checkAnswer()
                     }
                   }}
                   placeholder="Enter your answer..."
                   autoFocus
-                  className="mt-7 rounded-xl border border-amber-500/30 bg-[#211006] px-5 py-4 text-lg text-white outline-none focus:border-amber-400 disabled:opacity-60"
+                  className="mt-7 rounded-xl border border-amber-500/30 bg-[#211006] px-5 py-4 text-lg text-white outline-none focus:border-amber-400"
                 />
-
-                {checked && (
-                  <div
-                    className={`mt-5 rounded-xl border p-4 ${
-                      correct
-                        ? 'border-green-500/30 bg-green-500/10'
-                        : 'border-red-500/30 bg-red-500/10'
-                    }`}
-                  >
-
-                    {timedOut ? (
-                      <>
-                        <p className="font-bold text-red-400">
-                          Time&apos;s up
-                        </p>
-
-                        <p className="mt-2 text-white/60">
-                          The word was{' '}
-                          <strong>
-                            {currentWord}
-                          </strong>.
-                        </p>
-                      </>
-                    ) : correct ? (
-                      <p className="font-bold text-green-400">
-                        Correct!
-                      </p>
-                    ) : (
-                      <>
-                        <p className="font-bold text-red-400">
-                          Not quite
-                        </p>
-
-                        <p className="mt-2 text-white/60">
-                          The word was{' '}
-                          <strong>
-                            {currentWord}
-                          </strong>.
-                        </p>
-                      </>
-                    )}
-
-                  </div>
-                )}
 
                 <div className="mt-auto pt-7">
 
-                  {!checked ? (
-                    <button
-                      type="button"
-                      disabled={!answer.trim()}
-                      onClick={checkAnswer}
-                      className="w-full rounded-xl bg-gradient-to-r from-amber-500 to-yellow-400 py-4 font-bold text-black disabled:opacity-30"
-                    >
-                      CHECK ANSWER
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={nextDrawing}
-                      className="w-full rounded-xl bg-gradient-to-r from-amber-500 to-yellow-400 py-4 font-bold text-black"
-                    >
-                      {currentIndex ===
-                      words.length - 1
-                        ? 'VIEW RESULTS →'
-                        : 'NEXT DRAWING →'}
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    disabled={!answer.trim()}
+                    onClick={checkAnswer}
+                    className="w-full rounded-xl bg-gradient-to-r from-amber-500 to-yellow-400 py-4 font-bold text-black disabled:opacity-30"
+                  >
+                    CHECK ANSWER
+                  </button>
 
                 </div>
               </>
-            )}
+            ) : null}
+
+            {hasAttempted &&
+            !checked ? (
+              <div className="mt-7">
+
+                <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-5">
+
+                  {attemptResult ===
+                  'timeout' ? (
+                    <>
+                      <p className="font-bold text-red-400">
+                        Time&apos;s up
+                      </p>
+
+                      <p className="mt-2 text-white/60">
+                        Your attempt is over.
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="font-bold text-red-400">
+                        Incorrect answer
+                      </p>
+
+                      <p className="mt-2 text-white/60">
+                        Your attempt is over.
+                      </p>
+                    </>
+                  )}
+
+                </div>
+
+                <div className="mt-5 rounded-xl border border-amber-500/30 bg-amber-500/10 p-5">
+
+                  <p className="font-semibold text-amber-300">
+                    Waiting for another player
+                  </p>
+
+                  <p className="mt-2 text-white/60">
+                    Another eligible player can now
+                    buzz and attempt this question.
+                  </p>
+
+                </div>
+
+              </div>
+            ) : null}
+
+            {checked &&
+            correct ? (
+              <>
+                <div className="mt-7 rounded-xl border border-green-500/30 bg-green-500/10 p-5">
+
+                  <p className="font-bold text-green-400">
+                    Correct!
+                  </p>
+
+                  <p className="mt-2 text-white/60">
+                    The word was{' '}
+                    <strong>
+                      {currentWord}
+                    </strong>.
+                  </p>
+
+                </div>
+
+                <div className="mt-auto pt-7">
+
+                  <button
+                    type="button"
+                    onClick={nextDrawing}
+                    className="w-full rounded-xl bg-gradient-to-r from-amber-500 to-yellow-400 py-4 font-bold text-black"
+                  >
+                    {currentIndex ===
+                    words.length - 1
+                      ? 'VIEW RESULTS →'
+                      : 'NEXT DRAWING →'}
+                  </button>
+
+                </div>
+              </>
+            ) : null}
 
           </div>
 
