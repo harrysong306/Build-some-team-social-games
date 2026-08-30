@@ -19,6 +19,11 @@ function RecallPhase({
   const [checked, setChecked] = useState(false)
   const [correct, setCorrect] = useState(false)
 
+  // FE-41:
+  // Player must buzz before they can answer.
+  const [hasBuzzed, setHasBuzzed] =
+    useState(false)
+
   const currentDrawing =
     drawings[currentIndex]
 
@@ -56,6 +61,7 @@ function RecallPhase({
     setAnswer('')
     setChecked(false)
     setCorrect(false)
+    setHasBuzzed(false)
   }
 
   return (
@@ -122,88 +128,117 @@ function RecallPhase({
           <div className="flex flex-col rounded-2xl border border-amber-500/30 bg-[#160b06] p-7">
 
             <p className="text-sm font-semibold uppercase text-amber-400">
-              Your Answer
+              Competitive Recall
             </p>
 
             <h2 className="mt-3 text-2xl font-bold">
               What was the original word?
             </h2>
 
-            <input
-              type="text"
-              value={answer}
-              disabled={checked}
-              onChange={(event) =>
-                setAnswer(event.target.value)
-              }
-              onKeyDown={(event) => {
-                if (
-                  event.key === 'Enter' &&
-                  !checked
-                ) {
-                  checkAnswer()
-                }
-              }}
-              placeholder="Enter your answer..."
-              className="mt-7 rounded-xl border border-amber-500/30 bg-[#211006] px-5 py-4 text-lg text-white outline-none focus:border-amber-400"
-            />
+            {!hasBuzzed ? (
+              <>
+                <p className="mt-5 text-white/60">
+                  Buzz first to answer this question.
+                </p>
 
-            {checked && (
-              <div
-                className={`mt-5 rounded-xl border p-4 ${
-                  correct
-                    ? 'border-green-500/30 bg-green-500/10'
-                    : 'border-red-500/30 bg-red-500/10'
-                }`}
-              >
-
-                {correct ? (
-                  <p className="font-bold text-green-400">
-                    Correct!
+                <button
+                  type="button"
+                  onClick={() =>
+                    setHasBuzzed(true)
+                  }
+                  className="mt-7 w-full rounded-xl bg-gradient-to-r from-amber-500 to-yellow-400 py-4 text-lg font-bold text-black"
+                >
+                  BUZZ
+                </button>
+              </>
+            ) : (
+              <>
+                {!checked && (
+                  <p className="mt-5 font-semibold text-amber-300">
+                    You buzzed first. Enter your answer.
                   </p>
-                ) : (
-                  <>
-                    <p className="font-bold text-red-400">
-                      Not quite
-                    </p>
-
-                    <p className="mt-2 text-white/60">
-                      The word was{' '}
-                      <strong>
-                        {currentWord}
-                      </strong>.
-                    </p>
-                  </>
                 )}
 
-              </div>
+                <input
+                  type="text"
+                  value={answer}
+                  disabled={checked}
+                  onChange={(event) =>
+                    setAnswer(
+                      event.target.value,
+                    )
+                  }
+                  onKeyDown={(event) => {
+                    if (
+                      event.key === 'Enter' &&
+                      !checked
+                    ) {
+                      checkAnswer()
+                    }
+                  }}
+                  placeholder="Enter your answer..."
+                  autoFocus
+                  className="mt-7 rounded-xl border border-amber-500/30 bg-[#211006] px-5 py-4 text-lg text-white outline-none focus:border-amber-400 disabled:opacity-60"
+                />
+
+                {checked && (
+                  <div
+                    className={`mt-5 rounded-xl border p-4 ${
+                      correct
+                        ? 'border-green-500/30 bg-green-500/10'
+                        : 'border-red-500/30 bg-red-500/10'
+                    }`}
+                  >
+
+                    {correct ? (
+                      <p className="font-bold text-green-400">
+                        Correct!
+                      </p>
+                    ) : (
+                      <>
+                        <p className="font-bold text-red-400">
+                          Not quite
+                        </p>
+
+                        <p className="mt-2 text-white/60">
+                          The word was{' '}
+                          <strong>
+                            {currentWord}
+                          </strong>.
+                        </p>
+                      </>
+                    )}
+
+                  </div>
+                )}
+
+                <div className="mt-auto pt-7">
+
+                  {!checked ? (
+                    <button
+                      type="button"
+                      disabled={!answer.trim()}
+                      onClick={checkAnswer}
+                      className="w-full rounded-xl bg-gradient-to-r from-amber-500 to-yellow-400 py-4 font-bold text-black disabled:opacity-30"
+                    >
+                      CHECK ANSWER
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={nextDrawing}
+                      className="w-full rounded-xl bg-gradient-to-r from-amber-500 to-yellow-400 py-4 font-bold text-black"
+                    >
+                      {currentIndex ===
+                      words.length - 1
+                        ? 'VIEW RESULTS →'
+                        : 'NEXT DRAWING →'}
+                    </button>
+                  )}
+
+                </div>
+              </>
             )}
-
-            <div className="mt-auto pt-7">
-
-              {!checked ? (
-                <button
-                  type="button"
-                  disabled={!answer.trim()}
-                  onClick={checkAnswer}
-                  className="w-full rounded-xl bg-gradient-to-r from-amber-500 to-yellow-400 py-4 font-bold text-black disabled:opacity-30"
-                >
-                  CHECK ANSWER
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={nextDrawing}
-                  className="w-full rounded-xl bg-gradient-to-r from-amber-500 to-yellow-400 py-4 font-bold text-black"
-                >
-                  {currentIndex ===
-                  words.length - 1
-                    ? 'VIEW RESULTS →'
-                    : 'NEXT DRAWING →'}
-                </button>
-              )}
-
-            </div>
 
           </div>
 
