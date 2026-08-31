@@ -3,6 +3,8 @@ import {
   useState,
 } from 'react'
 
+import { scoreGuess } from './scoreUtils'
+
 type RecallPhaseProps = {
   drawings: (string | null)[]
   words: string[]
@@ -48,6 +50,9 @@ function RecallPhase({
   const [attemptResult, setAttemptResult] =
     useState<AttemptResult>(null)
 
+  const [pointsAwarded, setPointsAwarded] =
+    useState(0)
+
   const currentDrawing =
     drawings[currentIndex]
 
@@ -65,6 +70,7 @@ function RecallPhase({
 
     if (timeLeft <= 0) {
       setAttemptResult('timeout')
+      setPointsAwarded(0)
       setHasAttempted(true)
       setHasBuzzed(false)
       setAnswer('')
@@ -95,6 +101,7 @@ function RecallPhase({
     setHasBuzzed(true)
     setTimeLeft(ANSWER_TIME_SECONDS)
     setAttemptResult(null)
+    setPointsAwarded(0)
   }
 
   const checkAnswer = () => {
@@ -107,18 +114,28 @@ function RecallPhase({
       return
     }
 
+    const awardedPoints = scoreGuess(
+      answer,
+      currentWord,
+    )
+
     const isCorrect =
-      answer.trim().toLowerCase() ===
-      currentWord.toLowerCase()
+      awardedPoints === 4
+
+    setPointsAwarded(awardedPoints)
+
+    if (awardedPoints > 0) {
+      setScore(
+        (current) =>
+          current + awardedPoints,
+      )
+    }
 
     if (isCorrect) {
       setCorrect(true)
       setChecked(true)
       setHasAttempted(true)
-
-      setScore(
-        (current) => current + 1,
-      )
+      setAttemptResult(null)
 
       return
     }
@@ -149,6 +166,7 @@ function RecallPhase({
     setHasBuzzed(false)
     setHasAttempted(false)
     setAttemptResult(null)
+    setPointsAwarded(0)
     setTimeLeft(ANSWER_TIME_SECONDS)
   }
 
@@ -182,7 +200,7 @@ function RecallPhase({
           </span>
 
           <span className="font-bold text-amber-400">
-            Score: {score}
+            Score: {score} / {words.length * 4}
           </span>
 
         </div>
@@ -250,6 +268,7 @@ function RecallPhase({
                 </p>
 
                 <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-center">
+
                   <p className="text-sm uppercase tracking-wider text-white/60">
                     Time Left
                   </p>
@@ -257,6 +276,7 @@ function RecallPhase({
                   <p className="mt-1 text-3xl font-bold text-amber-400">
                     {timeLeft}s
                   </p>
+
                 </div>
 
                 <input
@@ -314,7 +334,9 @@ function RecallPhase({
                   ) : (
                     <>
                       <p className="font-bold text-red-400">
-                        Incorrect answer
+                        {pointsAwarded > 0
+                          ? `Close! +${pointsAwarded}/4`
+                          : 'Incorrect answer'}
                       </p>
 
                       <p className="mt-2 text-white/60">
@@ -347,7 +369,7 @@ function RecallPhase({
                 <div className="mt-7 rounded-xl border border-green-500/30 bg-green-500/10 p-5">
 
                   <p className="font-bold text-green-400">
-                    Correct!
+                    Correct! +4/4
                   </p>
 
                   <p className="mt-2 text-white/60">
