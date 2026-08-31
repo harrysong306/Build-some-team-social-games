@@ -16,7 +16,15 @@ export function useSubmitGuess(room: Room | null) {
     (word: string, guess: string) => {
       if (!room) return;
       setError(null);
-      room.send("submit_guess", { word, guess });
+
+      // NOTE: backend "submit_guess" handler (BE-17) doesn't exist yet.
+      // Sending an unregistered message type disconnects the client
+      // (Colyseus closes with error code 4002), so we hold off sending
+      // until BE-17 ships, and just simulate the local "submitted" UI state.
+      console.warn("submit_guess not sent - waiting on backend BE-17:", { word, guess });
+      // TODO: uncomment once BE-17 is merged
+      // room.send("submit_guess", { word, guess });
+
       setSubmitted(true);
     },
     [room],
