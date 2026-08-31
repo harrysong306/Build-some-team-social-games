@@ -3,12 +3,21 @@ import {
   useState,
 } from 'react'
 
+import CompetitiveLeaderboard, {
+  type LeaderboardPlayer,
+} from './CompetitiveLeaderboard'
+
 import { scoreGuess } from './scoreUtils'
 
 type RecallPhaseProps = {
   drawings: (string | null)[]
   words: string[]
   onComplete: (score: number) => void
+
+  // Optional multiplayer data.
+  // Later the backend can provide the
+  // real players and scores here.
+  leaderboardPlayers?: LeaderboardPlayer[]
 }
 
 const ANSWER_TIME_SECONDS = 5
@@ -22,6 +31,7 @@ function RecallPhase({
   drawings,
   words,
   onComplete,
+  leaderboardPlayers,
 }: RecallPhaseProps) {
   const [currentIndex, setCurrentIndex] =
     useState(0)
@@ -59,6 +69,34 @@ function RecallPhase({
   const currentWord =
     words[currentIndex]
 
+  const maxScore =
+    words.length * 4
+
+  /*
+   * FE-43
+   *
+   * Until multiplayer score data is
+   * connected, the leaderboard displays
+   * the current local player.
+   *
+   * When leaderboardPlayers is supplied
+   * by the multiplayer layer, the same
+   * component will display those players.
+   */
+  const playersForLeaderboard:
+    LeaderboardPlayer[] =
+    leaderboardPlayers &&
+    leaderboardPlayers.length > 0
+      ? leaderboardPlayers
+      : [
+          {
+            id: 'local-player',
+            name: 'You',
+            score,
+            isCurrentPlayer: true,
+          },
+        ]
+
   useEffect(() => {
     if (
       !hasBuzzed ||
@@ -77,11 +115,12 @@ function RecallPhase({
       return
     }
 
-    const timer = window.setTimeout(() => {
-      setTimeLeft(
-        (current) => current - 1,
-      )
-    }, 1000)
+    const timer =
+      window.setTimeout(() => {
+        setTimeLeft(
+          (current) => current - 1,
+        )
+      }, 1000)
 
     return () => {
       window.clearTimeout(timer)
@@ -99,7 +138,9 @@ function RecallPhase({
     }
 
     setHasBuzzed(true)
-    setTimeLeft(ANSWER_TIME_SECONDS)
+    setTimeLeft(
+      ANSWER_TIME_SECONDS,
+    )
     setAttemptResult(null)
     setPointsAwarded(0)
   }
@@ -114,15 +155,18 @@ function RecallPhase({
       return
     }
 
-    const awardedPoints = scoreGuess(
-      answer,
-      currentWord,
-    )
+    const awardedPoints =
+      scoreGuess(
+        answer,
+        currentWord,
+      )
 
     const isCorrect =
       awardedPoints === 4
 
-    setPointsAwarded(awardedPoints)
+    setPointsAwarded(
+      awardedPoints,
+    )
 
     if (awardedPoints > 0) {
       setScore(
@@ -141,7 +185,9 @@ function RecallPhase({
     }
 
     setCorrect(false)
-    setAttemptResult('incorrect')
+    setAttemptResult(
+      'incorrect',
+    )
     setHasAttempted(true)
     setHasBuzzed(false)
     setAnswer('')
@@ -167,13 +213,15 @@ function RecallPhase({
     setHasAttempted(false)
     setAttemptResult(null)
     setPointsAwarded(0)
-    setTimeLeft(ANSWER_TIME_SECONDS)
+    setTimeLeft(
+      ANSWER_TIME_SECONDS,
+    )
   }
 
   return (
     <main className="min-h-[calc(100vh-80px)] bg-[#0d0704] px-6 py-10 text-white">
 
-      <div className="mx-auto max-w-5xl">
+      <div className="mx-auto max-w-7xl">
 
         <section className="text-center">
 
@@ -186,26 +234,28 @@ function RecallPhase({
           </h1>
 
           <p className="mt-3 text-white/50">
-            Look at your sketch and remember
-            the original word.
+            Look at your sketch and
+            remember the original word.
           </p>
 
         </section>
 
-        <div className="mt-8 flex justify-between">
+        <div className="mt-8 flex flex-wrap items-center justify-between gap-4">
 
           <span className="text-white/50">
-            Drawing {currentIndex + 1} of{' '}
+            Drawing{' '}
+            {currentIndex + 1} of{' '}
             {words.length}
           </span>
 
           <span className="font-bold text-amber-400">
-            Score: {score} / {words.length * 4}
+            Score: {score} /{' '}
+            {maxScore}
           </span>
 
         </div>
 
-        <section className="mt-6 grid gap-6 md:grid-cols-[1.2fr_1fr]">
+        <section className="mt-6 grid gap-6 lg:grid-cols-[1.1fr_1fr_0.8fr]">
 
           <div className="rounded-2xl border border-amber-500/30 bg-[#160b06] p-6">
 
@@ -218,7 +268,9 @@ function RecallPhase({
               {currentDrawing ? (
                 <img
                   src={currentDrawing}
-                  alt={`Drawing ${currentIndex + 1}`}
+                  alt={`Drawing ${
+                    currentIndex + 1
+                  }`}
                   className="max-h-[430px] w-full object-contain"
                 />
               ) : (
@@ -238,7 +290,8 @@ function RecallPhase({
             </p>
 
             <h2 className="mt-3 text-2xl font-bold">
-              What was the original word?
+              What was the original
+              word?
             </h2>
 
             {!hasBuzzed &&
@@ -246,7 +299,8 @@ function RecallPhase({
             !checked ? (
               <>
                 <p className="mt-5 text-white/60">
-                  Buzz first to answer this question.
+                  Buzz first to answer
+                  this question.
                 </p>
 
                 <button
@@ -264,7 +318,8 @@ function RecallPhase({
             !checked ? (
               <>
                 <p className="mt-5 font-semibold text-amber-300">
-                  You buzzed first. Enter your answer.
+                  You buzzed first.
+                  Enter your answer.
                 </p>
 
                 <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-center">
@@ -282,14 +337,20 @@ function RecallPhase({
                 <input
                   type="text"
                   value={answer}
-                  onChange={(event) =>
+                  onChange={(
+                    event,
+                  ) =>
                     setAnswer(
-                      event.target.value,
+                      event.target
+                        .value,
                     )
                   }
-                  onKeyDown={(event) => {
+                  onKeyDown={(
+                    event,
+                  ) => {
                     if (
-                      event.key === 'Enter'
+                      event.key ===
+                      'Enter'
                     ) {
                       checkAnswer()
                     }
@@ -303,8 +364,12 @@ function RecallPhase({
 
                   <button
                     type="button"
-                    disabled={!answer.trim()}
-                    onClick={checkAnswer}
+                    disabled={
+                      !answer.trim()
+                    }
+                    onClick={
+                      checkAnswer
+                    }
                     className="w-full rounded-xl bg-gradient-to-r from-amber-500 to-yellow-400 py-4 font-bold text-black disabled:opacity-30"
                   >
                     CHECK ANSWER
@@ -328,19 +393,22 @@ function RecallPhase({
                       </p>
 
                       <p className="mt-2 text-white/60">
-                        Your attempt is over.
+                        Your attempt is
+                        over.
                       </p>
                     </>
                   ) : (
                     <>
                       <p className="font-bold text-red-400">
-                        {pointsAwarded > 0
+                        {pointsAwarded >
+                        0
                           ? `Close! +${pointsAwarded}/4`
                           : 'Incorrect answer'}
                       </p>
 
                       <p className="mt-2 text-white/60">
-                        Your attempt is over.
+                        Your attempt is
+                        over.
                       </p>
                     </>
                   )}
@@ -350,12 +418,15 @@ function RecallPhase({
                 <div className="mt-5 rounded-xl border border-amber-500/30 bg-amber-500/10 p-5">
 
                   <p className="font-semibold text-amber-300">
-                    Waiting for another player
+                    Waiting for another
+                    player
                   </p>
 
                   <p className="mt-2 text-white/60">
-                    Another eligible player can now
-                    buzz and attempt this question.
+                    Another eligible
+                    player can now buzz
+                    and attempt this
+                    question.
                   </p>
 
                 </div>
@@ -385,7 +456,9 @@ function RecallPhase({
 
                   <button
                     type="button"
-                    onClick={nextDrawing}
+                    onClick={
+                      nextDrawing
+                    }
                     className="w-full rounded-xl bg-gradient-to-r from-amber-500 to-yellow-400 py-4 font-bold text-black"
                   >
                     {currentIndex ===
@@ -399,6 +472,13 @@ function RecallPhase({
             ) : null}
 
           </div>
+
+          <CompetitiveLeaderboard
+            players={
+              playersForLeaderboard
+            }
+            maxScore={maxScore}
+          />
 
         </section>
 
