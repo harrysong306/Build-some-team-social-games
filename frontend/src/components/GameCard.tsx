@@ -4,6 +4,7 @@ type GameCardProps = {
   title: string
   description: string
   players: string
+  tags?: string[]
   onPlay: () => void
 }
 
@@ -11,6 +12,7 @@ function GameCard({
   title,
   description,
   players,
+  tags = ['Drawing', 'Memory'],
   onPlay,
 }: GameCardProps) {
   return (
@@ -32,14 +34,25 @@ function GameCard({
             {title}
           </h2>
 
-          <div className="mt-5 flex gap-3">
-            <span className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-yellow-400 to-amber-500 px-4 py-2 text-xs font-bold text-black">
-              ✎ Drawing
-            </span>
-
-            <span className="rounded-lg border border-amber-500/30 bg-[#231108] px-4 py-2 text-xs text-amber-100">
-              Memory
-            </span>
+          <div className="mt-5 flex flex-wrap gap-3">
+            {tags.map((tag) => (
+              <span
+                key={tag}
+                className={`rounded-lg px-4 py-2 text-xs font-bold ${
+                  tag === 'Story'
+                    ? 'bg-gradient-to-r from-indigo-400 to-sky-400 text-black'
+                    : 'bg-gradient-to-r from-yellow-400 to-amber-500 text-black'
+                }`}
+              >
+                {tag === 'Story'
+                  ? '✎ Story'
+                  : tag === 'Memory'
+                    ? '🧠 Memory'
+                    : tag === 'Drawing'
+                      ? '✎ Drawing'
+                      : `✦ ${tag}`}
+              </span>
+            ))}
           </div>
 
           <div className="mt-6 flex items-center gap-2 text-sm text-white/75">

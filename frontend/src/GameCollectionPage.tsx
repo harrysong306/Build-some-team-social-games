@@ -2,36 +2,67 @@ import { useState } from 'react'
 import GameCard from './components/GameCard'
 
 type GameCollectionPageProps = {
-  onPlay: () => void
+  onPlaySketchRecall: () => void
+  onPlayStoryChain: () => void
 }
 
 function GameCollectionPage({
-  onPlay,
+  onPlaySketchRecall,
+  onPlayStoryChain,
 }: GameCollectionPageProps) {
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState('all')
   const [players, setPlayers] = useState('all')
 
-  const matchesSearch =
-    'sketch recall'.includes(search.toLowerCase())
+  const games = [
+    {
+      id: 'sketch-recall',
+      title: 'Sketch Recall',
+      description:
+        'Draw fast, get distracted, then work together to remember the original words.',
+      players: '3 - 8 players',
+      category: 'drawing',
+      tags: ['Drawing', 'Memory'],
+      onPlay: onPlaySketchRecall,
+    },
+    {
+      id: 'story-chain',
+      title: 'Story Chain',
+      description:
+        'A judge starts a story, contestants add one sentence at a time, then the judge scores the chain from 1 to 10.',
+      players: '3 - 8 players',
+      category: 'story',
+      tags: ['Story', 'Co-op'],
+      onPlay: onPlayStoryChain,
+    },
+  ]
 
-  const matchesCategory =
-    category === 'all' ||
-    category === 'drawing' ||
-    category === 'memory'
+  const filteredGames = games.filter((game) => {
+    const query = search.toLowerCase().trim()
+    const matchesSearch =
+      !query ||
+      game.title.toLowerCase().includes(query) ||
+      game.description.toLowerCase().includes(query) ||
+      game.category.toLowerCase().includes(query)
 
-  const matchesPlayers =
-    players === 'all' || players === '3-8'
+    const matchesCategory =
+      category === 'all' ||
+      game.category === category
 
-  const showSketchRecall =
-    matchesSearch &&
-    matchesCategory &&
-    matchesPlayers
+    const matchesPlayers =
+      players === 'all' ||
+      game.players === players
+
+    return (
+      matchesSearch &&
+      matchesCategory &&
+      matchesPlayers
+    )
+  })
 
   return (
     <main className="relative min-h-[calc(100vh-80px)] overflow-hidden bg-[#0d0704] px-6 py-14 text-white">
 
-      {/* Background glows */}
       <div className="pointer-events-none absolute -left-40 top-16 h-[500px] w-[500px] rounded-full bg-orange-600/10 blur-[130px]" />
 
       <div className="pointer-events-none absolute -right-40 top-48 h-[500px] w-[500px] rounded-full bg-amber-500/10 blur-[140px]" />
@@ -98,6 +129,10 @@ function GameCollectionPage({
             <option value="memory">
               Memory
             </option>
+
+            <option value="story">
+              Story
+            </option>
           </select>
 
           <select
@@ -111,7 +146,7 @@ function GameCollectionPage({
               All Players
             </option>
 
-            <option value="3-8">
+            <option value="3 - 8 players">
               3 - 8 Players
             </option>
           </select>
@@ -120,14 +155,18 @@ function GameCollectionPage({
 
         <section className="mt-10 grid gap-6 lg:grid-cols-[3fr_1.15fr]">
 
-          <div>
-            {showSketchRecall ? (
-              <GameCard
-                title="Sketch Recall"
-                players="3 - 8 players"
-                description="Draw fast, get distracted, then work together to remember the original words."
-                onPlay={onPlay}
-              />
+          <div className="space-y-6">
+            {filteredGames.length > 0 ? (
+              filteredGames.map((game) => (
+                <GameCard
+                  key={game.id}
+                  title={game.title}
+                  players={game.players}
+                  description={game.description}
+                  tags={game.tags}
+                  onPlay={game.onPlay}
+                />
+              ))
             ) : (
               <div className="flex min-h-[360px] items-center justify-center rounded-2xl border border-amber-500/20 bg-[#160b06]">
 
