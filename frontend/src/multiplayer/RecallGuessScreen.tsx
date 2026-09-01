@@ -15,6 +15,7 @@ type RecallGuessScreenProps = {
 // Each player sees only their own drawing and types their own guess -
 // once submitted, the guess is hidden even from this player's own screen
 // until the backend reveals everyone's answers together.
+// Players can still edit their guess before the reveal happens.
 function RecallGuessScreen({
   room,
   drawing,
@@ -24,12 +25,16 @@ function RecallGuessScreen({
   onSubmitted,
 }: RecallGuessScreenProps) {
   const [guess, setGuess] = useState("");
-  const { submitted, error, submitGuess } = useSubmitGuess(room);
+  const { submitted, error, submitGuess, resetSubmission } = useSubmitGuess(room);
 
   const handleSubmit = () => {
     if (!guess.trim()) return;
     submitGuess(word, guess.trim());
     onSubmitted?.();
+  };
+
+  const handleEdit = () => {
+    resetSubmission();
   };
 
   return (
@@ -83,6 +88,13 @@ function RecallGuessScreen({
                 <p className="mt-2 text-sm text-white/60">
                   Waiting for other players…
                 </p>
+                <button
+                  type="button"
+                  onClick={handleEdit}
+                  className="mt-4 text-sm font-semibold text-amber-400 underline hover:text-amber-300"
+                >
+                  Edit answer
+                </button>
               </div>
             ) : (
               <>
