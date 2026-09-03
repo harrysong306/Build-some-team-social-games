@@ -2,35 +2,58 @@ import { useState } from "react";
 import type { Room } from "@colyseus/sdk";
 import { useSubmitGuess } from "./useSubmitGuess";
 
+// FE-36: each drawing carries who drew it, but that field is intentionally
+// never rendered anywhere below - keeping it anonymous during recall.
+export type AnonymousDrawing = {
+  imageData: string;
+  word: string;
+  drawnBy: string;
+};
+
 type RecallGuessScreenProps = {
   room: Room | null;
-  drawing: string | null;
-  word: string;
-  drawingIndex: number;
-  totalDrawings: number;
-  onSubmitted?: () => void;
+  drawings: AnonymousDrawing[];
+  onAllSubmitted?: () => void;
 };
 
 // FE-37: Implement private guess submission for cooperative mode.
-// Each player sees only their own drawing and types their own guess -
-// once submitted, the guess is hidden even from this player's own screen
-// until the backend reveals everyone's answers together.
-function RecallGuessScreen({
-  room,
-  drawing,
-  word,
-  drawingIndex,
-  totalDrawings,
-  onSubmitted,
-}: RecallGuessScreenProps) {
+// FE-36: Display anonymous drawing during cooperative recall.
+function RecallGuessScreen({ room, drawings, onAllSubmitted }: RecallGuessScreenProps) {
+  const [index, setIndex] = useState(0);
   const [guess, setGuess] = useState("");
-  const { submitted, error, submitGuess } = useSubmitGuess(room);
+  const { submitted, error, submitGuess, resetSubmission } = useSubmitGuess(room);
+
+  const current = drawings[index];
+  const isLast = index >= drawings.length - 1;
 
   const handleSubmit = () => {
-    if (!guess.trim()) return;
-    submitGuess(word, guess.trim());
-    onSubmitted?.();
+    if (!guess.trim() || !current) return;
+    // NOTE: current.drawnBy is available here but deliberately not sent to
+    // the UI or used for display - only the word/guess matter for scoring.
+    submitGuess(current.word, guess.trim());
   };
+
+  const handleNext = () => {
+    setGuess("");
+    resetSubmission();
+    if (isLast) {
+      onAllSubmitted?.();
+    } else {
+      setIndex((i) => i + 1);
+    }
+  };
+
+  const handleEdit = () => {
+    resetSubmission();
+  };
+
+  if (!current) {
+    return (
+      <main className="flex min-h-[calc(100vh-80px)] items-center justify-center bg-[#0d0704] text-white">
+        <p className="text-white/50">No drawings to recall.</p>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-[calc(100vh-80px)] bg-[#0d0704] px-6 py-10 text-white">
@@ -39,31 +62,29 @@ function RecallGuessScreen({
           <p className="text-sm font-semibold uppercase tracking-widest text-amber-400">
             Recall Phase
           </p>
-          <h1 className="mt-3 text-4xl font-bold">What did you draw?</h1>
+          <h1 className="mt-3 text-4xl font-bold">What was drawn?</h1>
           <p className="mt-3 text-white/50">
             Your guess stays private until everyone has answered.
           </p>
         </section>
 
         <div className="mt-8 text-center text-white/50">
-          Drawing {drawingIndex + 1} of {totalDrawings}
+          Drawing {index + 1} of {drawings.length}
         </div>
 
         <section className="mt-6 grid gap-6 md:grid-cols-[1.2fr_1fr]">
           <div className="rounded-2xl border border-amber-500/30 bg-[#160b06] p-6">
-                        <div className="mb-4 flex items-center justify-between">
-              <p className="text-sm font-semibold text-amber-300">
-                YOUR DRAWING
-              </p>
-              {/* FE-36: never reveal who drew this - keeps recall guessing fair */}
+            <div className="mb-4 flex items-center justify-between">
+              <p className="text-sm font-semibold text-amber-300">DRAWING</p>
+              {/* FE-36: identity is never shown - only this static label */}
               <span className="text-xs text-white/40">Drawn anonymously</span>
             </div>
 
             <div className="flex min-h-[380px] items-center justify-center overflow-hidden rounded-xl bg-[#fffdf7]">
-              {drawing ? (
+              {current.imageData ? (
                 <img
-                  src={drawing}
-                  alt={`Drawing ${drawingIndex + 1}`}
+                  src={current.imageData}
+                  alt={`Drawing ${index + 1}`}
                   className="max-h-[430px] w-full object-contain"
                 />
               ) : (
@@ -87,6 +108,20 @@ function RecallGuessScreen({
                 <p className="mt-2 text-sm text-white/60">
                   Waiting for other players…
                 </p>
+                <button
+                  type="button"
+                  onClick={handleEdit}
+                  className="mt-4 text-sm font-semibold text-amber-400 underline hover:text-amber-300"
+                >
+                  Edit answer
+                </button>
+                <button
+                  type="button"
+                  onClick={handleNext}
+                  className="mt-4 block w-full rounded-xl bg-gradient-to-r from-amber-500 to-yellow-400 py-3 font-bold text-black"
+                >
+                  {isLast ? "FINISH" : "NEXT DRAWING"}
+                </button>
               </div>
             ) : (
               <>
