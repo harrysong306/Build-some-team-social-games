@@ -101,6 +101,11 @@ describe('DrawingPhase component tests', () => {
   it('counts the drawing timer down every second', () => {
     vi.useFakeTimers()
 
+    vi.spyOn(
+      Math,
+      'random',
+    ).mockReturnValue(0.99)
+
     render(
       <DrawingPhase
         words={['Apple', 'Tree']}
@@ -110,7 +115,7 @@ describe('DrawingPhase component tests', () => {
     )
 
     expect(
-      screen.getByText('15s'),
+      screen.getByText('10s'),
     ).toBeInTheDocument()
 
     act(() => {
@@ -118,7 +123,7 @@ describe('DrawingPhase component tests', () => {
     })
 
     expect(
-      screen.getByText('14s'),
+      screen.getByText('9s'),
     ).toBeInTheDocument()
 
     act(() => {
@@ -126,7 +131,7 @@ describe('DrawingPhase component tests', () => {
     })
 
     expect(
-      screen.getByText('12s'),
+      screen.getByText('7s'),
     ).toBeInTheDocument()
   })
 

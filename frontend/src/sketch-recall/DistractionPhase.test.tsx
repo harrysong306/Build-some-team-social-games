@@ -23,18 +23,18 @@ describe('DistractionPhase component tests', () => {
       />,
     )
 
-    const nextButton =
+    const submitButton =
       screen.getByRole('button', {
-        name: /next question/i,
+        name: /submit answer/i,
       })
 
-    expect(nextButton).toBeDisabled()
+    expect(submitButton).toBeDisabled()
 
     const answerButtons =
       screen.getAllByRole('button')
         .filter(
           (button) =>
-            button !== nextButton,
+            button !== submitButton,
         )
 
     expect(answerButtons.length).toBe(4)
@@ -47,6 +47,6 @@ describe('DistractionPhase component tests', () => {
       'border-amber-400',
     )
 
-    expect(nextButton).toBeEnabled()
+    expect(submitButton).toBeEnabled()
   })
 })

@@ -1,10 +1,31 @@
-import assert from 'node:assert/strict'
+import {
+  describe,
+  expect,
+  it,
+} from 'vitest'
 
 import { scoreGuess } from './scoreUtils'
 
-assert.equal(scoreGuess('Cake', 'Cake'), 4)
-assert.equal(scoreGuess('Kake', 'Cake'), 3)
-assert.equal(scoreGuess('Kacke', 'Cake'), 2)
-assert.equal(scoreGuess('Dog', 'Cake'), 0)
+describe('scoreGuess', () => {
+  it('awards 4 marks for an exact answer', () => {
+    expect(
+      scoreGuess('Cake', 'Cake'),
+    ).toBe(4)
+  })
 
-console.log('score tests passed')
+  it('awards partial marks for a close answer', () => {
+    expect(
+      scoreGuess('Kake', 'Cake'),
+    ).toBe(3)
+
+    expect(
+      scoreGuess('Kacke', 'Cake'),
+    ).toBe(2)
+  })
+
+  it('awards zero marks for an unrelated answer', () => {
+    expect(
+      scoreGuess('Dog', 'Cake'),
+    ).toBe(0)
+  })
+})

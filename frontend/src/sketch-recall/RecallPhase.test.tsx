@@ -41,16 +41,21 @@ describe('RecallPhase component tests', () => {
 
     expect(answerInput).toHaveValue('Apple')
 
-    const checkButton =
+    fireEvent.click(
       screen.getByRole('button', {
         name: /check answer/i,
-      })
-
-    expect(checkButton).toBeEnabled()
-
-    fireEvent.click(checkButton)
+      }),
+    )
 
     expect(answerInput).toBeDisabled()
+
+    expect(
+      screen.getByText('Correct! +4/4'),
+    ).toBeInTheDocument()
+
+    expect(
+      screen.getByText('Score: 4 / 8'),
+    ).toBeInTheDocument()
 
     expect(
       screen.getByRole('button', {
@@ -61,19 +66,18 @@ describe('RecallPhase component tests', () => {
     expect(onComplete).not.toHaveBeenCalled()
   })
 
-  it('matches answers ignoring case and spaces and shows correct or incorrect feedback', () => {
+  it('awards full marks ignoring case and spaces', () => {
     render(
       <RecallPhase
         drawings={[
           'data:image/png;base64,drawing-one',
-          'data:image/png;base64,drawing-two',
         ]}
-        words={['Apple', 'Tree']}
+        words={['Apple']}
         onComplete={vi.fn()}
       />,
     )
 
-    let answerInput =
+    const answerInput =
       screen.getByPlaceholderText(
         /enter your answer/i,
       )
@@ -91,23 +95,74 @@ describe('RecallPhase component tests', () => {
     )
 
     expect(
-      screen.getByText('Correct!'),
+      screen.getByText('Correct! +4/4'),
     ).toBeInTheDocument()
 
-    fireEvent.click(
-      screen.getByRole('button', {
-        name: /next drawing/i,
-      }),
+    expect(
+      screen.getByText('Score: 4 / 4'),
+    ).toBeInTheDocument()
+  })
+
+  it('awards partial marks for a close answer', () => {
+    render(
+      <RecallPhase
+        drawings={[
+          'data:image/png;base64,drawing-one',
+        ]}
+        words={['Cake']}
+        onComplete={vi.fn()}
+      />,
     )
 
-    answerInput =
+    const answerInput =
       screen.getByPlaceholderText(
         /enter your answer/i,
       )
 
     fireEvent.change(answerInput, {
       target: {
-        value: 'Wrong answer',
+        value: 'Kake',
+      },
+    })
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: /check answer/i,
+      }),
+    )
+
+    expect(
+      screen.getByText('Close! +3/4'),
+    ).toBeInTheDocument()
+
+    expect(
+      screen.getByText('Score: 3 / 4'),
+    ).toBeInTheDocument()
+
+    expect(
+      screen.getByText('Cake'),
+    ).toBeInTheDocument()
+  })
+
+  it('awards zero marks for an unrelated answer', () => {
+    render(
+      <RecallPhase
+        drawings={[
+          'data:image/png;base64,drawing-one',
+        ]}
+        words={['Cake']}
+        onComplete={vi.fn()}
+      />,
+    )
+
+    const answerInput =
+      screen.getByPlaceholderText(
+        /enter your answer/i,
+      )
+
+    fireEvent.change(answerInput, {
+      target: {
+        value: 'Dog',
       },
     })
 
@@ -122,25 +177,23 @@ describe('RecallPhase component tests', () => {
     ).toBeInTheDocument()
 
     expect(
-      screen.getByText('Tree'),
+      screen.getByText('Score: 0 / 4'),
     ).toBeInTheDocument()
   })
 
-  it('updates the score for correct answers and keeps it unchanged for incorrect answers', () => {
+  it('keeps the accumulated score across drawings', () => {
+    const onComplete = vi.fn()
+
     render(
       <RecallPhase
         drawings={[
           'data:image/png;base64,drawing-one',
           'data:image/png;base64,drawing-two',
         ]}
-        words={['Apple', 'Tree']}
-        onComplete={vi.fn()}
+        words={['Cake', 'Tree']}
+        onComplete={onComplete}
       />,
     )
-
-    expect(
-      screen.getByText('Score: 0'),
-    ).toBeInTheDocument()
 
     let answerInput =
       screen.getByPlaceholderText(
@@ -149,7 +202,7 @@ describe('RecallPhase component tests', () => {
 
     fireEvent.change(answerInput, {
       target: {
-        value: 'Apple',
+        value: 'Cake',
       },
     })
 
@@ -160,7 +213,7 @@ describe('RecallPhase component tests', () => {
     )
 
     expect(
-      screen.getByText('Score: 1'),
+      screen.getByText('Score: 4 / 8'),
     ).toBeInTheDocument()
 
     fireEvent.click(
@@ -169,10 +222,6 @@ describe('RecallPhase component tests', () => {
       }),
     )
 
-    expect(
-      screen.getByText('Score: 1'),
-    ).toBeInTheDocument()
-
     answerInput =
       screen.getByPlaceholderText(
         /enter your answer/i,
@@ -180,7 +229,7 @@ describe('RecallPhase component tests', () => {
 
     fireEvent.change(answerInput, {
       target: {
-        value: 'Wrong answer',
+        value: 'Dog',
       },
     })
 
@@ -191,8 +240,16 @@ describe('RecallPhase component tests', () => {
     )
 
     expect(
-      screen.getByText('Score: 1'),
+      screen.getByText('Score: 4 / 8'),
     ).toBeInTheDocument()
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: /view results/i,
+      }),
+    )
+
+    expect(onComplete).toHaveBeenCalledWith(4)
   })
 
   it('does not submit a blank recall answer', () => {
@@ -236,17 +293,15 @@ describe('RecallPhase component tests', () => {
     expect(answerInput).toBeEnabled()
 
     expect(
-      screen.queryByText('Correct!'),
+      screen.queryByText(/correct!/i),
+    ).not.toBeInTheDocument()
+
+    expect(
+      screen.queryByText(/close!/i),
     ).not.toBeInTheDocument()
 
     expect(
       screen.queryByText('Not quite'),
-    ).not.toBeInTheDocument()
-
-    expect(
-      screen.queryByRole('button', {
-        name: /view results/i,
-      }),
     ).not.toBeInTheDocument()
 
     expect(onComplete).not.toHaveBeenCalled()
