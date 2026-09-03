@@ -51,9 +51,13 @@ function RecallGuessScreen({
 
         <section className="mt-6 grid gap-6 md:grid-cols-[1.2fr_1fr]">
           <div className="rounded-2xl border border-amber-500/30 bg-[#160b06] p-6">
-            <p className="mb-4 text-sm font-semibold text-amber-300">
-              YOUR DRAWING
-            </p>
+                        <div className="mb-4 flex items-center justify-between">
+              <p className="text-sm font-semibold text-amber-300">
+                YOUR DRAWING
+              </p>
+              {/* FE-36: never reveal who drew this - keeps recall guessing fair */}
+              <span className="text-xs text-white/40">Drawn anonymously</span>
+            </div>
 
             <div className="flex min-h-[380px] items-center justify-center overflow-hidden rounded-xl bg-[#fffdf7]">
               {drawing ? (
