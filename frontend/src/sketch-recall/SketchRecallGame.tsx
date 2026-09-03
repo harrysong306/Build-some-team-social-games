@@ -119,7 +119,7 @@ function SketchRecallGame({
     return (
       <ResultsScreen
         score={recallScore}
-        total={gameWords.length}
+        total={gameWords.length * 4}
         onPlayAgain={playAgain}
         onExit={onExit}
       />

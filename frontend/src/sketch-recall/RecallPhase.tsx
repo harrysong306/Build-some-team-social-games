@@ -1,5 +1,7 @@
 import { useState } from 'react'
 
+import { scoreGuess } from './scoreUtils'
+
 type RecallPhaseProps = {
   drawings: (string | null)[]
   words: string[]
@@ -18,6 +20,8 @@ function RecallPhase({
   const [score, setScore] = useState(0)
   const [checked, setChecked] = useState(false)
   const [correct, setCorrect] = useState(false)
+  const [pointsAwarded, setPointsAwarded] =
+    useState(0)
 
   const currentDrawing =
     drawings[currentIndex]
@@ -28,16 +32,17 @@ function RecallPhase({
   const checkAnswer = () => {
     if (!answer.trim()) return
 
-    const isCorrect =
-      answer.trim().toLowerCase() ===
-      currentWord.toLowerCase()
+    const awardedPoints = scoreGuess(
+      answer,
+      currentWord,
+    )
 
-    setCorrect(isCorrect)
+    setPointsAwarded(awardedPoints)
+    setCorrect(awardedPoints === 4)
     setChecked(true)
-
-    if (isCorrect) {
-      setScore((current) => current + 1)
-    }
+    setScore(
+      (current) => current + awardedPoints,
+    )
   }
 
   const nextDrawing = () => {
@@ -56,6 +61,7 @@ function RecallPhase({
     setAnswer('')
     setChecked(false)
     setCorrect(false)
+    setPointsAwarded(0)
   }
 
   return (
@@ -88,7 +94,7 @@ function RecallPhase({
           </span>
 
           <span className="font-bold text-amber-400">
-            Score: {score}
+            Score: {score} / {words.length * 4}
           </span>
 
         </div>
@@ -159,12 +165,14 @@ function RecallPhase({
 
                 {correct ? (
                   <p className="font-bold text-green-400">
-                    Correct!
+                    Correct! +4/4
                   </p>
                 ) : (
                   <>
                     <p className="font-bold text-red-400">
-                      Not quite
+                      {pointsAwarded > 0
+                        ? `Close! +${pointsAwarded}/4`
+                        : 'Not quite'}
                     </p>
 
                     <p className="mt-2 text-white/60">
