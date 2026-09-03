@@ -3,10 +3,12 @@ import { useState } from 'react'
 import Header from './components/Header'
 import GameCollectionPage from './GameCollectionPage'
 import SketchRecallGame from './sketch-recall/SketchRecallGame'
+import StoryChainGame from './story-chain/StoryChainGame'
 
 type Screen =
   | 'collection'
   | 'sketch-recall'
+  | 'story-chain'
 
 function App() {
   const [screen, setScreen] =
@@ -19,10 +21,19 @@ function App() {
 
       {screen === 'collection' ? (
         <GameCollectionPage
-          onPlay={() => setScreen('sketch-recall')}
+          onPlaySketchRecall={() =>
+            setScreen('sketch-recall')
+          }
+          onPlayStoryChain={() =>
+            setScreen('story-chain')
+          }
+        />
+      ) : screen === 'sketch-recall' ? (
+        <SketchRecallGame
+          onExit={() => setScreen('collection')}
         />
       ) : (
-        <SketchRecallGame
+        <StoryChainGame
           onExit={() => setScreen('collection')}
         />
       )}
