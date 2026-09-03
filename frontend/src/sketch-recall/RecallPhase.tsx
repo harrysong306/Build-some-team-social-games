@@ -7,16 +7,16 @@ import CompetitiveLeaderboard, {
   type LeaderboardPlayer,
 } from './CompetitiveLeaderboard'
 
+import RoundResultScreen, {
+  type RoundSubmittedAnswer,
+} from './RoundResultScreen'
+
 import { scoreGuess } from './scoreUtils'
 
 type RecallPhaseProps = {
   drawings: (string | null)[]
   words: string[]
   onComplete: (score: number) => void
-
-  // Optional multiplayer data.
-  // Later the backend can provide the
-  // real players and scores here.
   leaderboardPlayers?: LeaderboardPlayer[]
 }
 
@@ -45,9 +45,6 @@ function RecallPhase({
   const [checked, setChecked] =
     useState(false)
 
-  const [correct, setCorrect] =
-    useState(false)
-
   const [hasBuzzed, setHasBuzzed] =
     useState(false)
 
@@ -63,6 +60,18 @@ function RecallPhase({
   const [pointsAwarded, setPointsAwarded] =
     useState(0)
 
+  const [
+    showRoundResult,
+    setShowRoundResult,
+  ] = useState(false)
+
+  const [
+    roundAnswers,
+    setRoundAnswers,
+  ] = useState<
+    RoundSubmittedAnswer[]
+  >([])
+
   const currentDrawing =
     drawings[currentIndex]
 
@@ -72,17 +81,6 @@ function RecallPhase({
   const maxScore =
     words.length * 4
 
-  /*
-   * FE-43
-   *
-   * Until multiplayer score data is
-   * connected, the leaderboard displays
-   * the current local player.
-   *
-   * When leaderboardPlayers is supplied
-   * by the multiplayer layer, the same
-   * component will display those players.
-   */
   const playersForLeaderboard:
     LeaderboardPlayer[] =
     leaderboardPlayers &&
@@ -109,16 +107,30 @@ function RecallPhase({
     if (timeLeft <= 0) {
       setAttemptResult('timeout')
       setPointsAwarded(0)
+
+      setRoundAnswers([
+        {
+          id: 'local-player',
+          playerName: 'You',
+          answer: '',
+          points: 0,
+          timedOut: true,
+          isCurrentPlayer: true,
+        },
+      ])
+
       setHasAttempted(true)
       setHasBuzzed(false)
       setAnswer('')
+
       return
     }
 
     const timer =
       window.setTimeout(() => {
         setTimeLeft(
-          (current) => current - 1,
+          (current) =>
+            current - 1,
         )
       }, 1000)
 
@@ -138,9 +150,11 @@ function RecallPhase({
     }
 
     setHasBuzzed(true)
+
     setTimeLeft(
       ANSWER_TIME_SECONDS,
     )
+
     setAttemptResult(null)
     setPointsAwarded(0)
   }
@@ -155,14 +169,30 @@ function RecallPhase({
       return
     }
 
+    const submittedText =
+      answer.trim()
+
     const awardedPoints =
       scoreGuess(
-        answer,
+        submittedText,
         currentWord,
       )
 
     const isCorrect =
       awardedPoints === 4
+
+    const submittedAnswer:
+      RoundSubmittedAnswer = {
+        id: 'local-player',
+        playerName: 'You',
+        answer: submittedText,
+        points: awardedPoints,
+        isCurrentPlayer: true,
+      }
+
+    setRoundAnswers([
+      submittedAnswer,
+    ])
 
     setPointsAwarded(
       awardedPoints,
@@ -176,18 +206,19 @@ function RecallPhase({
     }
 
     if (isCorrect) {
-      setCorrect(true)
       setChecked(true)
       setHasAttempted(true)
       setAttemptResult(null)
 
+      setShowRoundResult(true)
+
       return
     }
 
-    setCorrect(false)
     setAttemptResult(
       'incorrect',
     )
+
     setHasAttempted(true)
     setHasBuzzed(false)
     setAnswer('')
@@ -203,18 +234,65 @@ function RecallPhase({
     }
 
     setCurrentIndex(
-      (current) => current + 1,
+      (current) =>
+        current + 1,
     )
 
     setAnswer('')
     setChecked(false)
-    setCorrect(false)
     setHasBuzzed(false)
     setHasAttempted(false)
+
     setAttemptResult(null)
+
     setPointsAwarded(0)
+
+    setRoundAnswers([])
+
+    setShowRoundResult(false)
+
     setTimeLeft(
       ANSWER_TIME_SECONDS,
+    )
+  }
+
+  if (showRoundResult) {
+    return (
+      <RoundResultScreen
+        roundNumber={
+          currentIndex + 1
+        }
+        totalRounds={
+          words.length
+        }
+        correctWord={
+          currentWord
+        }
+        submittedAnswers={
+          roundAnswers
+        }
+        relatedDrawings={[
+          {
+            id: 'local-drawing',
+            label: 'Your Drawing',
+            image:
+              currentDrawing,
+          },
+        ]}
+        currentScore={
+          score
+        }
+        maxScore={
+          maxScore
+        }
+        isLastRound={
+          currentIndex ===
+          words.length - 1
+        }
+        onContinue={
+          nextDrawing
+        }
+      />
     )
   }
 
@@ -267,9 +345,12 @@ function RecallPhase({
 
               {currentDrawing ? (
                 <img
-                  src={currentDrawing}
+                  src={
+                    currentDrawing
+                  }
                   alt={`Drawing ${
-                    currentIndex + 1
+                    currentIndex +
+                    1
                   }`}
                   className="max-h-[430px] w-full object-contain"
                 />
@@ -298,6 +379,7 @@ function RecallPhase({
             !hasAttempted &&
             !checked ? (
               <>
+
                 <p className="mt-5 text-white/60">
                   Buzz first to answer
                   this question.
@@ -310,6 +392,7 @@ function RecallPhase({
                 >
                   BUZZ
                 </button>
+
               </>
             ) : null}
 
@@ -317,6 +400,7 @@ function RecallPhase({
             !hasAttempted &&
             !checked ? (
               <>
+
                 <p className="mt-5 font-semibold text-amber-300">
                   You buzzed first.
                   Enter your answer.
@@ -376,6 +460,7 @@ function RecallPhase({
                   </button>
 
                 </div>
+
               </>
             ) : null}
 
@@ -388,6 +473,7 @@ function RecallPhase({
                   {attemptResult ===
                   'timeout' ? (
                     <>
+
                       <p className="font-bold text-red-400">
                         Time&apos;s up
                       </p>
@@ -396,20 +482,25 @@ function RecallPhase({
                         Your attempt is
                         over.
                       </p>
+
                     </>
                   ) : (
                     <>
+
                       <p className="font-bold text-red-400">
+
                         {pointsAwarded >
                         0
                           ? `Close! +${pointsAwarded}/4`
                           : 'Incorrect answer'}
+
                       </p>
 
                       <p className="mt-2 text-white/60">
                         Your attempt is
                         over.
                       </p>
+
                     </>
                   )}
 
@@ -434,50 +525,15 @@ function RecallPhase({
               </div>
             ) : null}
 
-            {checked &&
-            correct ? (
-              <>
-                <div className="mt-7 rounded-xl border border-green-500/30 bg-green-500/10 p-5">
-
-                  <p className="font-bold text-green-400">
-                    Correct! +4/4
-                  </p>
-
-                  <p className="mt-2 text-white/60">
-                    The word was{' '}
-                    <strong>
-                      {currentWord}
-                    </strong>.
-                  </p>
-
-                </div>
-
-                <div className="mt-auto pt-7">
-
-                  <button
-                    type="button"
-                    onClick={
-                      nextDrawing
-                    }
-                    className="w-full rounded-xl bg-gradient-to-r from-amber-500 to-yellow-400 py-4 font-bold text-black"
-                  >
-                    {currentIndex ===
-                    words.length - 1
-                      ? 'VIEW RESULTS →'
-                      : 'NEXT DRAWING →'}
-                  </button>
-
-                </div>
-              </>
-            ) : null}
-
           </div>
 
           <CompetitiveLeaderboard
             players={
               playersForLeaderboard
             }
-            maxScore={maxScore}
+            maxScore={
+              maxScore
+            }
           />
 
         </section>
