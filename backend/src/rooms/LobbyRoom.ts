@@ -18,6 +18,7 @@ export class LobbyRoom extends Room {
     },
     markReady: (client: Client, message: { ready: boolean }) => {
       const player = this.state.players.get(client.sessionId);
+      console.log(player.name, "changed ready to", player.ready);
       if (player) player.ready = message.ready;
     },
 
