@@ -44,7 +44,6 @@ export class LobbyRoom extends Room {
     player.name = trimmed;
     },
     
-    
     setGameMode: (client: Client, message: { mode: string }) => {
       const player = this.state.players.get(client.sessionId);
       if (!player?.isHost) return; // only host may change mode
@@ -56,6 +55,14 @@ export class LobbyRoom extends Room {
     
       console.log(this.state.gameMode, "Changed to:", message.mode);
       this.state.gameMode = message.mode;
+    },
+
+    startGame: (client: Client, message: any) => {
+      const player = this.state.players.get(client.sessionId);
+      if (!player?.isHost) return;
+      const allReady = [...this.state.players.values()].every(p => p.ready);
+      if (!allReady) return;
+      this.state.phase = "playing";
     },
   }
 
