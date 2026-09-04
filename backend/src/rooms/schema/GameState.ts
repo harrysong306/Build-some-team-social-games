@@ -10,6 +10,11 @@ export class Player extends Schema {
 export class GameState extends Schema {
   @type({ map: Player }) players = new MapSchema<Player>();
   @type("string") gameMode: string = "sketchRecall"; // Should have this be editable, with some validation after selection from front end menu dropdown.
+<<<<<<< HEAD
 
   @type(Game) game = new Game();
 }
+=======
+  @type("string") phase: string = "lobby";
+}
+>>>>>>> origin/main

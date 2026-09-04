@@ -17,6 +17,7 @@ export class LobbyRoom extends Room {
     },
     markReady: (client: Client, message: { ready: boolean }) => {
       const player = this.state.players.get(client.sessionId);
+      console.log(player.name, "changed ready to", player.ready);
       if (player) player.ready = message.ready;
 
       // BE-8: auto start once at least half the lobby is ready, no more explicit start_game message
@@ -44,7 +45,11 @@ export class LobbyRoom extends Room {
     console.log(player.name, "change to:",trimmed);
     player.name = trimmed;
     },
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> origin/main
     setGameMode: (client: Client, message: { mode: string }) => {
       const player = this.state.players.get(client.sessionId);
       if (!player?.isHost) return; // only host may change mode
@@ -58,9 +63,18 @@ export class LobbyRoom extends Room {
       this.state.gameMode = message.mode;
     },
 
+<<<<<<< HEAD
     // BE-13: just store it server-side, Game class makes sure this doesn't get broadcast until recall
     submitDrawing: (client: Client, message: { imageData: string }) => {
       this.state.game.submitDrawing(message.imageData);
+=======
+    startGame: (client: Client, message: any) => {
+      const player = this.state.players.get(client.sessionId);
+      if (!player?.isHost) return;
+      const allReady = [...this.state.players.values()].every(p => p.ready);
+      if (!allReady) return;
+      this.state.phase = "playing";
+>>>>>>> origin/main
     },
   }
 
