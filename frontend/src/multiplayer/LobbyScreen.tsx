@@ -30,7 +30,7 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
     return <SketchRecallGame onExit={() => setRoundStarted(false)} />;
   }
 
-  if (phase === "playing") {
+  if (phase === "drawing") {
     return (
       <InstructionsScreen
         onStart={() => setRoundStarted(true)}
