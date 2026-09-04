@@ -17,22 +17,6 @@ type RecallGuessScreenProps = {
 };
 
 // FE-37: Implement private guess submission for cooperative mode.
-<<<<<<< HEAD
-// Each player sees only their own drawing and types their own guess -
-// once submitted, the guess is hidden even from this player's own screen
-// until the backend reveals everyone's answers together.
-// Players can still edit their guess before the reveal happens.
-function RecallGuessScreen({
-  room,
-  drawing,
-  word,
-  drawingIndex,
-  totalDrawings,
-  onSubmitted,
-}: RecallGuessScreenProps) {
-  const [guess, setGuess] = useState("");
-  const { submitted, error, submitGuess, resetSubmission } = useSubmitGuess(room);
-=======
 // FE-36: Display anonymous drawing during cooperative recall.
 function RecallGuessScreen({ room, drawings, onAllSubmitted }: RecallGuessScreenProps) {
   const [index, setIndex] = useState(0);
@@ -41,7 +25,6 @@ function RecallGuessScreen({ room, drawings, onAllSubmitted }: RecallGuessScreen
 
   const current = drawings[index];
   const isLast = index >= drawings.length - 1;
->>>>>>> 66cb698 (Rework RecallGuessScreen to properly support multiple anonymous drawings)
 
   const handleSubmit = () => {
     if (!guess.trim() || !current) return;
@@ -50,8 +33,6 @@ function RecallGuessScreen({ room, drawings, onAllSubmitted }: RecallGuessScreen
     submitGuess(current.word, guess.trim());
   };
 
-<<<<<<< HEAD
-=======
   const handleNext = () => {
     setGuess("");
     resetSubmission();
@@ -62,13 +43,10 @@ function RecallGuessScreen({ room, drawings, onAllSubmitted }: RecallGuessScreen
     }
   };
 
->>>>>>> 66cb698 (Rework RecallGuessScreen to properly support multiple anonymous drawings)
   const handleEdit = () => {
     resetSubmission();
   };
 
-<<<<<<< HEAD
-=======
   if (!current) {
     return (
       <main className="flex min-h-[calc(100vh-80px)] items-center justify-center bg-[#0d0704] text-white">
@@ -77,7 +55,6 @@ function RecallGuessScreen({ room, drawings, onAllSubmitted }: RecallGuessScreen
     );
   }
 
->>>>>>> 66cb698 (Rework RecallGuessScreen to properly support multiple anonymous drawings)
   return (
     <main className="min-h-[calc(100vh-80px)] bg-[#0d0704] px-6 py-10 text-white">
       <div className="mx-auto max-w-5xl">
@@ -138,8 +115,6 @@ function RecallGuessScreen({ room, drawings, onAllSubmitted }: RecallGuessScreen
                 >
                   Edit answer
                 </button>
-<<<<<<< HEAD
-=======
                 <button
                   type="button"
                   onClick={handleNext}
@@ -147,7 +122,6 @@ function RecallGuessScreen({ room, drawings, onAllSubmitted }: RecallGuessScreen
                 >
                   {isLast ? "FINISH" : "NEXT DRAWING"}
                 </button>
->>>>>>> 66cb698 (Rework RecallGuessScreen to properly support multiple anonymous drawings)
               </div>
             ) : (
               <>
