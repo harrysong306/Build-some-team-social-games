@@ -11,10 +11,17 @@ export class Game extends Schema {
   // timestamp (ms) for when the current turn ends, so clients can show a countdown (BE-12)
   @type("number") roundEndTime: number = 0;
 
+  // BE-25: shared team score/lives, game is cooperative by default so these live on the
+  // Game itself rather than per-player. not sure STARTING_LIVES is the real value yet,
+  // same situation as TURN_DURATION_MS below - need to confirm with Abbas
+  @type("number") score: number = 0;
+  @type("number") lives: number = Game.STARTING_LIVES;
+
   // 5x5 grid = 25 cells total
   private static readonly GRID_SIZE = 25;
   // how long each turn lasts, not sure if this is the real value yet, need to check with Abbas
   private static readonly TURN_DURATION_MS = 60_000;
+  private static readonly STARTING_LIVES = 3;
 
   private clock: any = null;
   private turnTimer: { clear: () => void } | null = null;
@@ -39,6 +46,9 @@ export class Game extends Schema {
 
     if (phase === "drawing") {
       this.submittedDrawings.clear();
+      // BE-25: fresh game starting (or play again via BE-27), reset shared score/lives
+      this.score = 0;
+      this.lives = Game.STARTING_LIVES;
       this.startTurnTimer();
     }
 
@@ -62,6 +72,23 @@ export class Game extends Schema {
 
     this.currentGridIndex = next;
     this.startTurnTimer();
+  }
+
+  // BE-25: bump shared score. actual point values/rules are BE-23's job, this just
+  // owns the state update so BE-23 doesn't need to touch @type fields directly
+  addScore(amount: number) {
+    this.score += amount;
+  }
+
+  // BE-25: lose a shared life. clamped at 0 so it doesn't go negative -
+  // BE-26 checks this.lives === 0 for the end-of-game condition
+  loseLife() {
+    this.lives = Math.max(0, this.lives - 1);
+  }
+
+  // BE-26 will likely call this to decide when to move to "end" phase
+  isOutOfLives(): boolean {
+    return this.lives <= 0;
   }
 
   // BE-13: store the finished drawing server-side, don't broadcast it to other players yet
