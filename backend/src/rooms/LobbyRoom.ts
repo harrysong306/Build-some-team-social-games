@@ -130,7 +130,12 @@ export class LobbyRoom extends Room {
 
     const readyCount = [...this.state.players.values()].filter(p => p.ready).length;
 
-    if (readyCount >= Math.ceil(total / 2)) {
+        if (readyCount >= Math.ceil(total / 2)) {
+      // BE-25: fresh game, so wipe individual point totals from any previous round
+      // (shared score/lives get reset inside game.setPhase itself)
+      for (const player of this.state.players.values()) {
+        player.points = 0;
+      }
       this.state.game.setPhase("drawing");
     }
   }
