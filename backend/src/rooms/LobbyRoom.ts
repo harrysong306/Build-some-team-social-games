@@ -1,5 +1,6 @@
 import { Room, Client, CloseCode } from "colyseus";
 import { GameState, Player } from "./schema/GameState.js";
+import {generateGameWords} from "../utils/WordGen.js";
 
 const VALID_GAME_MODES = ["sketchRecall", "test"] as const;
 type GameMode = typeof VALID_GAME_MODES[number];
@@ -62,6 +63,9 @@ export class LobbyRoom extends Room {
       if (!player?.isHost) return;
       const allReady = [...this.state.players.values()].every(p => p.ready);
       if (!allReady) return;
+      
+      this.state.gameWords.clear();
+      this.state.gameWords.push(...generateGameWords());
       this.state.phase = "playing";
     },
   }

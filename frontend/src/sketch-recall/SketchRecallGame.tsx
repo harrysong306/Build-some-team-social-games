@@ -64,6 +64,13 @@ function SketchRecallGame({
   const [gameWords, setGameWords] =
     useState<string[]>(() => generateGameWords())
 
+
+  // reminder for later on how to do the same thing with colyseus
+  // const gameWords = useRoomState(
+  // room,
+  // state => state.gameWords
+  // );
+
   const [savedDrawings, setSavedDrawings] =
     useState<(string | null)[]>([])
 
