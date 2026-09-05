@@ -37,7 +37,10 @@ export function useGameProgress(room: Room | null) {
     if (!room) return;
 
     const handleStateChange = (state: any) => {
-      const players = Object.values(state.players ?? {}) as any[];
+      // state.players is a Colyseus MapSchema, not a plain object -
+      // Object.values() on it returns internal implementation details,
+      // not the actual player records. Must go through .values() instead.
+      const players = state.players ? Array.from(state.players.values()) as any[] : [];
 
       setProgress({
         lives: state.sharedLives ?? DEFAULT_PROGRESS.lives,
