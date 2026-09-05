@@ -45,14 +45,9 @@ export function useLobbyState(room: Room | null) {
     room?.send("setGameMode", { mode });
   };
 
-  // FE-10: host starts the game
-  // NOTE: backend "start_game" handler (BE-8) doesn't exist yet.
-  // Sending an unregistered message type disconnects the client (Colyseus
-  // closes with error code 4002), so we hold off sending until BE-8 ships.
+    // FE-10: host starts the game (matches backend BE-8 "startGame" handler)
   const startGame = () => {
-    console.warn("start_game not sent - waiting on backend BE-8");
-    // TODO: uncomment once BE-8 is merged
-    // room?.send("start_game");
+    room?.send("startGame");
   };
 
   return {
