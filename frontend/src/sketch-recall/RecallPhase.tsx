@@ -4,7 +4,7 @@ import { scoreGuess } from './scoreUtils'
 
 type RecallPhaseProps = {
   drawings: (string | null)[]
-  words: string[]
+  words: readonly string[]
   onComplete: (score: number) => void
 }
 

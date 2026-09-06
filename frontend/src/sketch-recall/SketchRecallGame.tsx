@@ -6,13 +6,11 @@ import InstructionsScreen from './InstructionsScreen'
 import RecallPhase from './RecallPhase'
 import ResultsScreen from './ResultsScreen'
 
-import {
-  generalWords,
-  similarWordGroups,
-} from './sketchRecallWords'
 
 type SketchRecallGameProps = {
   onExit: () => void
+  gameWords: readonly string[]
+  onPlayAgain: () => void
 }
 
 type GamePhase =
@@ -22,54 +20,18 @@ type GamePhase =
   | 'recall'
   | 'results'
 
-const shuffle = <T,>(items: T[]) => {
-  const result = [...items]
 
-  for (let i = result.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1))
-
-    ;[result[i], result[j]] = [
-      result[j],
-      result[i],
-    ]
-  }
-
-  return result
-}
-
-const generateGameWords = () => {
-  const selectedGroups =
-    shuffle(similarWordGroups).slice(0, 3)
-
-  const similarWords = selectedGroups.flat()
-
-  const selectedGeneralWords =
-    shuffle(generalWords).slice(
-      0,
-      25 - similarWords.length,
-    )
-
-  return shuffle([
-    ...similarWords,
-    ...selectedGeneralWords,
-  ])
-}
 
 function SketchRecallGame({
   onExit,
+  gameWords,
+  onPlayAgain
 }: SketchRecallGameProps) {
   const [phase, setPhase] =
     useState<GamePhase>('instructions')
 
-  const [gameWords, setGameWords] =
-    useState<string[]>(() => generateGameWords())
 
 
-  // reminder for later on how to do the same thing with colyseus
-  // const gameWords = useRoomState(
-  // room,
-  // state => state.gameWords
-  // );
 
   const [savedDrawings, setSavedDrawings] =
     useState<(string | null)[]>([])
@@ -78,10 +40,10 @@ function SketchRecallGame({
     useState(0)
 
   const playAgain = () => {
-    setGameWords(generateGameWords())
     setSavedDrawings([])
     setRecallScore(0)
     setPhase('instructions')
+    onPlayAgain()
   }
 
   if (phase === 'drawing') {

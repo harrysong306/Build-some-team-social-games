@@ -11,6 +11,7 @@ export function useLobbyState(room: Room | null) {
   const [players, setPlayers] = useState<Record<string, PlayerView>>({});
   const [gameMode, setGameModeState] = useState<string>("sketchRecall");
   const [phase, setPhase] = useState<string>("lobby");
+  const [gameWords, setGameWords] = useState<string[]>([]);
 
   useEffect(() => {
     if (!room) return;
@@ -19,6 +20,7 @@ export function useLobbyState(room: Room | null) {
       setPlayers(Object.fromEntries(state.players.entries()));
       setGameModeState(state.gameMode);
       setPhase(state.phase);
+      setGameWords(Array.from(state.gameWords ?? []));
     };
 
     room.onStateChange(handleStateChange);
@@ -46,6 +48,7 @@ export function useLobbyState(room: Room | null) {
     players,
     gameMode,
     phase,
+    gameWords,
     mySessionId: room?.sessionId ?? "",
     toggleReady,
     setGameMode,

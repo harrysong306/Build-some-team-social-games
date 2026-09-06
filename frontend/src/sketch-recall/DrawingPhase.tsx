@@ -10,7 +10,7 @@ import DrawingCanvas, {
 } from './DrawingCanvas'
 
 type DrawingPhaseProps = {
-  words: string[]
+  words: readonly string[]
   onBack: () => void
   onComplete: (drawings: (string | null)[]) => void
 }

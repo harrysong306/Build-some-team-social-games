@@ -14,7 +14,7 @@ const GAME_MODES = [
 ];
 
 function LobbyScreen({ room, roomId }: LobbyScreenProps) {
-  const { players, gameMode, phase, mySessionId, toggleReady, setGameMode, startGame } =
+  const { players, gameMode, phase, gameWords, mySessionId, toggleReady, setGameMode, startGame } =
     useLobbyState(room);
 
   // once the host starts the round, every player locally moves into
@@ -27,7 +27,10 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
   const allReady = playerList.length > 0 && playerList.every(([, p]) => p.ready);
 
   if (roundStarted) {
-    return <SketchRecallGame onExit={() => setRoundStarted(false)} />;
+    return <SketchRecallGame onExit={() => setRoundStarted(false)} 
+    gameWords={gameWords}
+    onPlayAgain={startGame}
+     />;
   }
 
   if (phase === "playing") {
