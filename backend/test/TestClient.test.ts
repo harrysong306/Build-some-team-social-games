@@ -6,6 +6,13 @@ import { ColyseusTestServer, boot } from "@colyseus/testing";
 import appConfig from "../src/app.config.js";
 import { GameState } from "../src/rooms/schema/GameState.js";
 
+import { generateGameWords } from "../src/utils/WordGen.js";
+import {
+  generalWords,
+  similarWordGroups,
+} from "../src/utils/sketchRecallWords.js";
+
+
 describe("LobbyRoom", () => {
   let colyseus: ColyseusTestServer<typeof appConfig>;
 
@@ -155,4 +162,54 @@ describe("LobbyRoom", () => {
     await room.waitForNextPatch();
     assert.strictEqual(client1.state.gameMode, "test"); // host's change succeeded
   });
+
+  describe("generateGameWords", () => {
+  it("returns 25 words from the configured word pools", () => {
+    const words = generateGameWords();
+
+    const allowedWords = new Set([
+      ...generalWords,
+      ...similarWordGroups.flat(),
+    ]);
+
+    assert.strictEqual(words.length, 25);
+    assert.ok(words.every(word => allowedWords.has(word)));
+  });
+
+  it("includes exactly three complete similar-word groups", () => {
+    const words = generateGameWords();
+    const wordSet = new Set(words);
+
+    const includedGroups = similarWordGroups.filter(group =>
+      group.every(word => wordSet.has(word))
+    );
+
+    assert.strictEqual(includedGroups.length, 3);
+  });
+
+  it("startGame stores generated words in the room game state", async () => {
+  const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
+  const client1 = await colyseus.connectTo(room, { name: "Jordan" });
+  const client2 = await colyseus.connectTo(room, { name: "Sam" });
+
+  client1.send("markReady", { ready: true });
+  client2.send("markReady", { ready: true });
+  await room.waitForNextPatch();
+
+  client1.send("startGame", {});
+  await room.waitForNextPatch();
+
+  assert.strictEqual(client1.state.phase, "playing");
+  assert.strictEqual(client1.state.gameWords.length, 25);
+  assert.strictEqual(room.state.gameWords.length, 25);
+  assert.deepStrictEqual(
+    [...client1.state.gameWords],
+    [...room.state.gameWords],
+  );
+});
+
+
+
+});
+
 });
