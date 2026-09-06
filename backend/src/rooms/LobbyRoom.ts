@@ -9,7 +9,10 @@ type GameMode = typeof VALID_GAME_MODES[number];
 export class LobbyRoom extends Room {
   maxClients = 8;
   state = new GameState();
+  // drawings don't need to be constantly synced, not in schema
   private drawings = new Map<string, Uint8Array>();
+  // pairs the next binary drawing message from each client with its word index.
+  private pendingDrawingIndexes = new Map<string, number>();
 
   messages = {
     yourMessageType: (client: Client, message: any) => {
@@ -69,6 +72,17 @@ export class LobbyRoom extends Room {
       this.state.gameWords.push(...generateGameWords());
       this.state.phase = "playing";
     },
+
+
+    // metadata sent separately to image
+    "submit-drawing-meta": (
+      client: Client,
+      message: { index: number },
+    ) => {
+      this.pendingDrawingIndexes.set(client.sessionId, message.index);
+    },
+
+
   }
 
   onCreate (options: any) {
@@ -76,25 +90,22 @@ export class LobbyRoom extends Room {
      * Called when a new room is created.
      */
     this.onMessageBytes("submit-drawing", (client, bytes) => {
-    const drawingId = `${client.sessionId}:${Date.now()}`;
-    this.drawings.set(drawingId, bytes);
+      const index =
+        this.pendingDrawingIndexes.get(client.sessionId) ?? -1;
 
-    // later can send drawing to individual players using
-    // client.sendBytes("drawing", bytes);
-    // or to everyone using
-    // this.broadcastBytes("drawing", bytes);
+      this.pendingDrawingIndexes.delete(client.sessionId);
 
-    console.log(
-      client.sessionId,
-      "submitted drawing",
-      drawingId,
-      bytes.length,
-      "bytes"
-    );
+      const drawingId = `${client.sessionId}:${index}`;
+      this.drawings.set(drawingId, bytes);
 
-
-  // update only metadata in this.state.drawingSlots
-});
+      console.log(
+        client.sessionId,
+        "submitted drawing",
+        drawingId,
+        bytes.length,
+        "bytes"
+      );
+    });
   }
 
   onJoin (client: Client, options: any) {

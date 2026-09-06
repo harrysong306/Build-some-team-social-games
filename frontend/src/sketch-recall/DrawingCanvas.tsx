@@ -5,6 +5,8 @@ import {
   useRef,
 } from 'react'
 
+
+// bytes sent to colyseus, url is for local
 export type SavedDrawing = {
   bytes: Uint8Array
   url: string

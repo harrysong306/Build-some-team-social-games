@@ -163,53 +163,117 @@ describe("LobbyRoom", () => {
     assert.strictEqual(client1.state.gameMode, "test"); // host's change succeeded
   });
 
-  describe("generateGameWords", () => {
-  it("returns 25 words from the configured word pools", () => {
-    const words = generateGameWords();
-
-    const allowedWords = new Set([
-      ...generalWords,
-      ...similarWordGroups.flat(),
-    ]);
-
-    assert.strictEqual(words.length, 25);
-    assert.ok(words.every(word => allowedWords.has(word)));
-  });
-
-  it("includes exactly three complete similar-word groups", () => {
-    const words = generateGameWords();
-    const wordSet = new Set(words);
-
-    const includedGroups = similarWordGroups.filter(group =>
-      group.every(word => wordSet.has(word))
-    );
-
-    assert.strictEqual(includedGroups.length, 3);
-  });
-
   it("startGame stores generated words in the room game state", async () => {
-  const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
-  const client1 = await colyseus.connectTo(room, { name: "Jordan" });
-  const client2 = await colyseus.connectTo(room, { name: "Sam" });
+    const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
+    const client1 = await colyseus.connectTo(room, { name: "Jordan" });
+    const client2 = await colyseus.connectTo(room, { name: "Sam" });
 
-  client1.send("markReady", { ready: true });
-  client2.send("markReady", { ready: true });
-  await room.waitForNextPatch();
+    client1.send("markReady", { ready: true });
+    client2.send("markReady", { ready: true });
+    await room.waitForNextPatch();
 
-  client1.send("startGame", {});
-  await room.waitForNextPatch();
+    client1.send("startGame", {});
+    await room.waitForNextPatch();
 
-  assert.strictEqual(client1.state.phase, "playing");
-  assert.strictEqual(client1.state.gameWords.length, 25);
-  assert.strictEqual(room.state.gameWords.length, 25);
-  assert.deepStrictEqual(
-    [...client1.state.gameWords],
-    [...room.state.gameWords],
-  );
-});
+    assert.strictEqual(client1.state.phase, "playing");
+    assert.strictEqual(client1.state.gameWords.length, 25);
+    assert.strictEqual(room.state.gameWords.length, 25);
+    assert.deepStrictEqual(
+      [...client1.state.gameWords],
+      [...room.state.gameWords],
+    );
+  });
 
+  describe("generateGameWords", () => {
+    it("returns 25 words from the configured word pools", () => {
+      const words = generateGameWords();
 
+      const allowedWords = new Set([
+        ...generalWords,
+        ...similarWordGroups.flat(),
+      ]);
 
-});
+      assert.strictEqual(words.length, 25);
+      assert.ok(words.every(word => allowedWords.has(word)));
+    });
+
+    it("includes exactly three complete similar-word groups", () => {
+      const words = generateGameWords();
+      const wordSet = new Set(words);
+
+      const includedGroups = similarWordGroups.filter(group =>
+        group.every(word => wordSet.has(word))
+      );
+
+      assert.strictEqual(includedGroups.length, 3);
+    });
+  });
+
+  describe("drawing uploads", () => {
+    it("stores submitted drawing bytes with the submitted drawing index", async () => {
+      const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
+      const client1 = await colyseus.connectTo(room, { name: "Jordan" });
+      const bytes = new Uint8Array([1, 2, 3, 4]);
+
+      client1.send("submit-drawing-meta", { index: 2 });
+      client1.sendBytes("submit-drawing", bytes);
+      await new Promise(resolve => setTimeout(resolve, 20));
+
+      const drawings = (room as any).drawings as Map<string, Uint8Array>;
+      const stored = drawings.get(`${client1.sessionId}:2`);
+
+      assert.ok(stored);
+      assert.deepStrictEqual([...stored], [...bytes]);
+    });
+
+    it("stores submitted drawing bytes with fallback index when metadata is missing", async () => {
+      const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
+      const client1 = await colyseus.connectTo(room, { name: "Jordan" });
+      const bytes = new Uint8Array([5, 6, 7]);
+
+      client1.sendBytes("submit-drawing", bytes);
+      await new Promise(resolve => setTimeout(resolve, 20));
+
+      const drawings = (room as any).drawings as Map<string, Uint8Array>;
+      const stored = drawings.get(`${client1.sessionId}:-1`);
+
+      assert.ok(stored);
+      assert.deepStrictEqual([...stored], [...bytes]);
+    });
+
+    it("clears pending drawing metadata after a drawing is submitted", async () => {
+      const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
+      const client1 = await colyseus.connectTo(room, { name: "Jordan" });
+
+      client1.send("submit-drawing-meta", { index: 3 });
+      client1.sendBytes("submit-drawing", new Uint8Array([8]));
+      await new Promise(resolve => setTimeout(resolve, 20));
+
+      client1.sendBytes("submit-drawing", new Uint8Array([9]));
+      await new Promise(resolve => setTimeout(resolve, 20));
+
+      const drawings = (room as any).drawings as Map<string, Uint8Array>;
+
+      assert.deepStrictEqual([...drawings.get(`${client1.sessionId}:3`)!], [8]);
+      assert.deepStrictEqual([...drawings.get(`${client1.sessionId}:-1`)!], [9]);
+    });
+
+    it("keeps submitted drawings separate for each player", async () => {
+      const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
+      const client1 = await colyseus.connectTo(room, { name: "Jordan" });
+      const client2 = await colyseus.connectTo(room, { name: "Sam" });
+
+      client1.send("submit-drawing-meta", { index: 0 });
+      client1.sendBytes("submit-drawing", new Uint8Array([1]));
+      client2.send("submit-drawing-meta", { index: 0 });
+      client2.sendBytes("submit-drawing", new Uint8Array([2]));
+      await new Promise(resolve => setTimeout(resolve, 20));
+
+      const drawings = (room as any).drawings as Map<string, Uint8Array>;
+
+      assert.deepStrictEqual([...drawings.get(`${client1.sessionId}:0`)!], [1]);
+      assert.deepStrictEqual([...drawings.get(`${client2.sessionId}:0`)!], [2]);
+    });
+  });
 
 });

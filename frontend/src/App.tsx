@@ -2,7 +2,6 @@ import { useState } from 'react'
 
 import Header from './components/Header'
 import GameCollectionPage from './GameCollectionPage'
-import SketchRecallGame from './sketch-recall/SketchRecallGame'
 import CreateRoomScreen from './multiplayer/CreateRoomScreen'
 import JoinRoomScreen from './multiplayer/JoinRoomScreen'
 
@@ -11,7 +10,6 @@ type Screen =
   | 'room-choice'
   | 'create-room'
   | 'join-room'
-  | 'sketch-recall'
 
 function App() {
   const [screen, setScreen] =
@@ -49,8 +47,8 @@ function App() {
       ) : screen === 'join-room' ? (
         <JoinRoomScreen />
       ) : (
-        <SketchRecallGame
-          onExit={() => setScreen('collection')}
+        <GameCollectionPage
+          onPlay={() => setScreen('room-choice')}
         />
       )}
 

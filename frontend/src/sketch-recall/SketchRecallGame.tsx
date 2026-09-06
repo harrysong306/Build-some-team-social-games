@@ -11,6 +11,10 @@ type SketchRecallGameProps = {
   onExit: () => void
   gameWords: readonly string[]
   onPlayAgain: () => void
+  onSubmitDrawing?: (
+    bytes: Uint8Array,
+    index: number,
+  ) => void
 }
 
 type GamePhase =
@@ -25,7 +29,8 @@ type GamePhase =
 function SketchRecallGame({
   onExit,
   gameWords,
-  onPlayAgain
+  onPlayAgain,
+  onSubmitDrawing,
 }: SketchRecallGameProps) {
   const [phase, setPhase] =
     useState<GamePhase>('instructions')
@@ -39,8 +44,18 @@ function SketchRecallGame({
   const [recallScore, setRecallScore] =
     useState(0)
 
-  const playAgain = () => {
+  const clearSavedDrawings = () => {
+    savedDrawings.forEach((drawing) => {
+      if (drawing) {
+        URL.revokeObjectURL(drawing)
+      }
+    })
+
     setSavedDrawings([])
+  }
+
+  const playAgain = () => {
+    clearSavedDrawings()
     setRecallScore(0)
     setPhase('instructions')
     onPlayAgain()
@@ -51,9 +66,7 @@ function SketchRecallGame({
       <DrawingPhase
         words={gameWords}
         onBack={() => setPhase('instructions')}
-        onSubmitDrawing={(bytes, index) => {
-          console.log('drawing ready to submit', index, bytes.length)
-        }}
+        onSubmitDrawing={onSubmitDrawing}
         onComplete={(drawings) => {
           setSavedDrawings(drawings)
           setPhase('distraction')
@@ -91,7 +104,10 @@ function SketchRecallGame({
         score={recallScore}
         total={gameWords.length * 4}
         onPlayAgain={playAgain}
-        onExit={onExit}
+        onExit={() => {
+          clearSavedDrawings()
+          onExit()
+        }}
       />
     )
   }

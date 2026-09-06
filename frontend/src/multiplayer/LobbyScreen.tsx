@@ -27,10 +27,18 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
   const allReady = playerList.length > 0 && playerList.every(([, p]) => p.ready);
 
   if (roundStarted) {
-    return <SketchRecallGame onExit={() => setRoundStarted(false)} 
-    gameWords={gameWords}
-    onPlayAgain={startGame}
-     />;
+    return (
+      <SketchRecallGame
+        onExit={() => setRoundStarted(false)}
+        gameWords={gameWords}
+        onPlayAgain={startGame}
+        // send bytes for image, and meta for image index
+        onSubmitDrawing={(bytes, index) => {
+          room?.send('submit-drawing-meta', { index })
+          room?.sendBytes('submit-drawing', bytes)
+        }}
+      />
+    )
   }
 
   if (phase === "playing") {

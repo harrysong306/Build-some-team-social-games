@@ -48,23 +48,24 @@ function DrawingPhase({
 
 
 
-    const saveAndNext = useCallback(async () => {
-  if (isAdvancingRef.current) return
+  const saveAndNext = useCallback(async () => {
+    if (isAdvancingRef.current) return
 
-  isAdvancingRef.current = true
+    isAdvancingRef.current = true
 
-  const drawing =
-    await canvasRef.current?.getDrawing() ?? null
+    const drawing =
+      await canvasRef.current?.getDrawing() ?? null
 
-  if (drawing) {
-    onSubmitDrawing?.(drawing.bytes, currentIndex)
-  }
+    // submits bytes to colyseus while keeping url
+    if (drawing) {
+      onSubmitDrawing?.(drawing.bytes, currentIndex)
+    }
 
-  setDrawings((previous) => {
-    const updated = [...previous]
-    updated[currentIndex] = drawing?.url ?? null
-    return updated
-  })
+    setDrawings((previous) => {
+      const updated = [...previous]
+      updated[currentIndex] = drawing?.url ?? null
+      return updated
+    })
 
     if (currentIndex >= words.length - 1) {
       setFinished(true)
