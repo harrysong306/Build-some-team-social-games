@@ -5,9 +5,14 @@ import {
   useRef,
 } from 'react'
 
+export type SavedDrawing = {
+  bytes: Uint8Array
+  url: string
+}
+
 export type DrawingCanvasHandle = {
   clear: () => void
-  getImage: () => string
+  getDrawing: () => Promise<SavedDrawing | null>
 }
 
 type DrawingCanvasProps = {
@@ -37,9 +42,20 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(
     useImperativeHandle(ref, () => ({
       clear: clearCanvas,
 
-      getImage: () => {
+      getDrawing: async () => {
         const canvas = canvasRef.current
-        return canvas ? canvas.toDataURL('image/png') : ''
+        if (!canvas) return null
+
+        const blob = await new Promise<Blob | null>((resolve) => {
+          canvas.toBlob(resolve, 'image/png')
+        })
+
+        if (!blob) return null
+
+        return {
+          bytes: new Uint8Array(await blob.arrayBuffer()),
+          url: URL.createObjectURL(blob),
+        }
       },
     }))
 

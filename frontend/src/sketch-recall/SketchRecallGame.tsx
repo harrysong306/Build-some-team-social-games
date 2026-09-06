@@ -50,14 +50,15 @@ function SketchRecallGame({
     return (
       <DrawingPhase
         words={gameWords}
-        onBack={() =>
-          setPhase('instructions')
-        }
+        onBack={() => setPhase('instructions')}
+        onSubmitDrawing={(bytes, index) => {
+          console.log('drawing ready to submit', index, bytes.length)
+        }}
         onComplete={(drawings) => {
           setSavedDrawings(drawings)
           setPhase('distraction')
         }}
-      />
+/>
     )
   }
 

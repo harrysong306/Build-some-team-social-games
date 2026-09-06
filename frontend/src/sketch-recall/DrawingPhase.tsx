@@ -12,6 +12,10 @@ import DrawingCanvas, {
 type DrawingPhaseProps = {
   words: readonly string[]
   onBack: () => void
+  onSubmitDrawing?: (
+    bytes: Uint8Array,
+    index: number,
+  ) => void
   onComplete: (drawings: (string | null)[]) => void
 }
 
@@ -22,6 +26,7 @@ function getRandomDrawingTime() {
 function DrawingPhase({
   words,
   onBack,
+  onSubmitDrawing,
   onComplete,
 }: DrawingPhaseProps) {
   const canvasRef = useRef<DrawingCanvasHandle>(null)
@@ -41,19 +46,25 @@ function DrawingPhase({
 
   const [finished, setFinished] = useState(false)
 
-  const saveAndNext = useCallback(() => {
-    if (isAdvancingRef.current) return
 
-    isAdvancingRef.current = true
 
-    const image =
-      canvasRef.current?.getImage() ?? ''
+    const saveAndNext = useCallback(async () => {
+  if (isAdvancingRef.current) return
 
-    setDrawings((previous) => {
-      const updated = [...previous]
-      updated[currentIndex] = image
-      return updated
-    })
+  isAdvancingRef.current = true
+
+  const drawing =
+    await canvasRef.current?.getDrawing() ?? null
+
+  if (drawing) {
+    onSubmitDrawing?.(drawing.bytes, currentIndex)
+  }
+
+  setDrawings((previous) => {
+    const updated = [...previous]
+    updated[currentIndex] = drawing?.url ?? null
+    return updated
+  })
 
     if (currentIndex >= words.length - 1) {
       setFinished(true)
@@ -68,7 +79,7 @@ function DrawingPhase({
     window.setTimeout(() => {
       isAdvancingRef.current = false
     }, 500)
-  }, [currentIndex, words.length])
+  }, [currentIndex, words.length, onSubmitDrawing])
 
   useEffect(() => {
     if (finished) return

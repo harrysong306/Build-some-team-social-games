@@ -9,6 +9,7 @@ type GameMode = typeof VALID_GAME_MODES[number];
 export class LobbyRoom extends Room {
   maxClients = 8;
   state = new GameState();
+  private drawings = new Map<string, Uint8Array>();
 
   messages = {
     yourMessageType: (client: Client, message: any) => {
@@ -74,6 +75,26 @@ export class LobbyRoom extends Room {
     /**
      * Called when a new room is created.
      */
+    this.onMessageBytes("submit-drawing", (client, bytes) => {
+    const drawingId = `${client.sessionId}:${Date.now()}`;
+    this.drawings.set(drawingId, bytes);
+
+    // later can send drawing to individual players using
+    // client.sendBytes("drawing", bytes);
+    // or to everyone using
+    // this.broadcastBytes("drawing", bytes);
+
+    console.log(
+      client.sessionId,
+      "submitted drawing",
+      drawingId,
+      bytes.length,
+      "bytes"
+    );
+
+
+  // update only metadata in this.state.drawingSlots
+});
   }
 
   onJoin (client: Client, options: any) {
