@@ -17,6 +17,12 @@ export class Game extends Schema {
   @type("number") score: number = 0;
   @type("number") lives: number = Game.STARTING_LIVES;
 
+  // BE-26: why the game ended. "" while still playing, then "lives_exhausted" or
+  // "rounds_complete" once phase flips to "end". score/lives are already @type fields
+  // so clients get those for free from the normal state sync - this is the one extra
+  // bit of info they need to know *why* it ended
+  @type("string") endReason: string = "";
+
   // 5x5 grid = 25 cells total
   private static readonly GRID_SIZE = 25;
   // how long each turn lasts, not sure if this is the real value yet, need to check with Abbas
@@ -49,6 +55,8 @@ export class Game extends Schema {
       // BE-25: fresh game starting (or play again via BE-27), reset shared score/lives
       this.score = 0;
       this.lives = Game.STARTING_LIVES;
+      // BE-26: also clear the previous game's end reason
+      this.endReason = "";
       this.startTurnTimer();
     }
 
@@ -80,15 +88,37 @@ export class Game extends Schema {
     this.score += amount;
   }
 
-  // BE-25: lose a shared life. clamped at 0 so it doesn't go negative -
-  // BE-26 checks this.lives === 0 for the end-of-game condition
+  // BE-25: lose a shared life. clamped at 0 so it doesn't go negative.
+  // BE-26: if that was the last life, end the game right here - no other ticket
+  // needs to remember to check this after calling loseLife()
   loseLife() {
+    if (this.phase === "end") return; // game's already over, nothing left to lose
     this.lives = Math.max(0, this.lives - 1);
+    if (this.isOutOfLives()) {
+      this.endGame("lives_exhausted");
+    }
   }
 
-  // BE-26 will likely call this to decide when to move to "end" phase
+  // helper, still useful on its own for anything that wants to check without
+  // triggering a state change (e.g. UI showing "last life!" warnings)
   isOutOfLives(): boolean {
     return this.lives <= 0;
+  }
+
+  // BE-26: call this once every grid cell has been through recall/guessing
+  // (that loop itself is BE-18/24's job, not built yet - this is just the hook
+  // for "we made it through the whole game without running out of lives")
+  finishAllRounds() {
+    if (this.phase === "end") return;
+    this.endGame("rounds_complete");
+  }
+
+  // BE-26: the actual end-of-game transition. reason is "lives_exhausted" or
+  // "rounds_complete" - score/lives are already final @type values at this point,
+  // clients get those from normal state sync, no separate broadcast needed
+  private endGame(reason: string) {
+    this.endReason = reason;
+    this.setPhase("end");
   }
 
   // BE-13: store the finished drawing server-side, don't broadcast it to other players yet
