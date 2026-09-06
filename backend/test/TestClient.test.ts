@@ -8,7 +8,8 @@ import { GameState } from "../src/rooms/schema/GameState.js";
 describe("LobbyRoom", () => {
   let colyseus: ColyseusTestServer<typeof appConfig>;
 
-  before(async () => colyseus = await boot(appConfig));
+    // own port, see the comment in GridIndex.test.ts for why
+  before(async () => colyseus = await boot(appConfig, 2570));
   after(async () => colyseus.shutdown());
 
   beforeEach(async () => await colyseus.cleanup());
