@@ -7,7 +7,10 @@ import { GameState } from "../src/rooms/schema/GameState.js";
 describe("BE-8 / BE-10 / BE-12 / BE-13 / BE-14 with a real local room", () => {
   let colyseus: ColyseusTestServer<typeof appConfig>;
 
-  before(async () => (colyseus = await boot(appConfig)));
+    // give this file its own port so it doesn't collide with other test files
+  // that also call boot(appConfig) - see @colyseus/testing's boot(), it defaults
+  // to a shared hardcoded port (2568) if you don't pass one
+  before(async () => (colyseus = await boot(appConfig, 2569)));
   after(async () => colyseus.shutdown());
   beforeEach(async () => await colyseus.cleanup());
 
