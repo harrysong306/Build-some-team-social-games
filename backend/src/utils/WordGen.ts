@@ -39,8 +39,6 @@ const generateGameWords = () => {
 }
 
 
-// const [gameWords, setGameWords] =
-//     useState<string[]>(() => generateGameWords())
 
 
 
