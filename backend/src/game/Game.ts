@@ -121,6 +121,15 @@ export class Game extends Schema {
     this.setPhase("end");
   }
 
+    // BE-24: broadcast the correct answer + everyone's submitted guesses for a round.
+  // this doesn't own guess storage or word data itself - guess storage is BE-17's job
+  // and the correct answer comes from word-gen (Aidin's backend_word_gen branch),
+  // neither of which exist yet. this is just the broadcast mechanism, so whoever wires
+  // those in later has one clear place to call into instead of reinventing it
+  broadcastRoundResult(gridIndex: number, correctAnswer: string, guesses: Record<string, string>) {
+    this.broadcast?.("round_result", { gridIndex, correctAnswer, guesses });
+  }
+
   // BE-13: store the finished drawing server-side, don't broadcast it to other players yet
   submitDrawing(imageData: string) {
     if (this.phase !== "drawing") return;
