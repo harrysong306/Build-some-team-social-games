@@ -55,6 +55,7 @@ describe('DrawingPhase component tests', () => {
 
   afterEach(() => {
     vi.useRealTimers()
+    vi.restoreAllMocks()
   })
 
   it('saves the current drawing and moves to the next word', () => {
@@ -240,6 +241,53 @@ describe('DrawingPhase component tests', () => {
         name: /continue/i,
       }),
     ).toBeInTheDocument()
+
+    expect(onComplete).not.toHaveBeenCalled()
+  })
+
+  it('automatically saves and finishes when the drawing timer reaches zero', () => {
+    vi.useFakeTimers()
+
+    vi.spyOn(
+      Math,
+      'random',
+    ).mockReturnValue(0)
+
+    const onComplete = vi.fn()
+
+    const { container } = render(
+      <DrawingPhase
+        words={['Apple']}
+        onBack={vi.fn()}
+        onComplete={onComplete}
+      />,
+    )
+
+    expect(
+      screen.getByText('3s'),
+    ).toBeInTheDocument()
+
+    expect(
+      container.querySelector('canvas'),
+    ).toBeInTheDocument()
+
+    act(() => {
+      vi.advanceTimersByTime(3000)
+    })
+
+    expect(
+      HTMLCanvasElement.prototype.toDataURL,
+    ).toHaveBeenCalledTimes(1)
+
+    expect(
+      screen.getByText(
+        'Drawing phase complete',
+      ),
+    ).toBeInTheDocument()
+
+    expect(
+      container.querySelector('canvas'),
+    ).not.toBeInTheDocument()
 
     expect(onComplete).not.toHaveBeenCalled()
   })

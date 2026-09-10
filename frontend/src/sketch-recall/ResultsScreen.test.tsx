@@ -15,15 +15,12 @@ import ResultsScreen from './ResultsScreen'
 
 describe('ResultsScreen component tests', () => {
   it('shows the final score and result information', () => {
-    const onPlayAgain = vi.fn()
-    const onExit = vi.fn()
-
     render(
       <ResultsScreen
         score={3}
         total={5}
-        onPlayAgain={onPlayAgain}
-        onExit={onExit}
+        onPlayAgain={vi.fn()}
+        onExit={vi.fn()}
       />,
     )
 
@@ -42,17 +39,69 @@ describe('ResultsScreen component tests', () => {
     expect(
       screen.getByText('60%'),
     ).toBeInTheDocument()
+  })
+
+  it('shows the correct message for different result percentages', () => {
+    const { rerender } = render(
+      <ResultsScreen
+        score={5}
+        total={5}
+        onPlayAgain={vi.fn()}
+        onExit={vi.fn()}
+      />,
+    )
 
     expect(
-      screen.getByRole('button', {
-        name: /play again/i,
-      }),
+      screen.getByText('Perfect memory!'),
+    ).toBeInTheDocument()
+
+    rerender(
+      <ResultsScreen
+        score={2}
+        total={5}
+        onPlayAgain={vi.fn()}
+        onExit={vi.fn()}
+      />,
+    )
+
+    expect(
+      screen.getByText('Nice try!'),
+    ).toBeInTheDocument()
+
+    rerender(
+      <ResultsScreen
+        score={1}
+        total={5}
+        onPlayAgain={vi.fn()}
+        onExit={vi.fn()}
+      />,
+    )
+
+    expect(
+      screen.getByText('Keep practising!'),
+    ).toBeInTheDocument()
+  })
+
+  it('handles a zero total safely', () => {
+    render(
+      <ResultsScreen
+        score={0}
+        total={0}
+        onPlayAgain={vi.fn()}
+        onExit={vi.fn()}
+      />,
+    )
+
+    expect(
+      screen.getByText('0%'),
     ).toBeInTheDocument()
 
     expect(
-      screen.getByRole('button', {
-        name: /back to games/i,
-      }),
+      screen.getByText('out of 0'),
+    ).toBeInTheDocument()
+
+    expect(
+      screen.getByText('Keep practising!'),
     ).toBeInTheDocument()
   })
 
@@ -68,10 +117,6 @@ describe('ResultsScreen component tests', () => {
         onExit={onExit}
       />,
     )
-
-    expect(
-      screen.getByText('Perfect memory!'),
-    ).toBeInTheDocument()
 
     fireEvent.click(
       screen.getByRole('button', {
