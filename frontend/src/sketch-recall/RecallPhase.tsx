@@ -22,11 +22,6 @@ type RecallPhaseProps = {
 
 const ANSWER_TIME_SECONDS = 5
 
-type AttemptResult =
-  | 'incorrect'
-  | 'timeout'
-  | null
-
 function RecallPhase({
   drawings,
   words,
@@ -42,23 +37,11 @@ function RecallPhase({
   const [score, setScore] =
     useState(0)
 
-  const [checked, setChecked] =
-    useState(false)
-
   const [hasBuzzed, setHasBuzzed] =
-    useState(false)
-
-  const [hasAttempted, setHasAttempted] =
     useState(false)
 
   const [timeLeft, setTimeLeft] =
     useState(ANSWER_TIME_SECONDS)
-
-  const [attemptResult, setAttemptResult] =
-    useState<AttemptResult>(null)
-
-  const [pointsAwarded, setPointsAwarded] =
-    useState(0)
 
   const [
     showRoundResult,
@@ -98,39 +81,36 @@ function RecallPhase({
   useEffect(() => {
     if (
       !hasBuzzed ||
-      checked ||
-      hasAttempted
+      showRoundResult
     ) {
-      return
-    }
-
-    if (timeLeft <= 0) {
-      setAttemptResult('timeout')
-      setPointsAwarded(0)
-
-      setRoundAnswers([
-        {
-          id: 'local-player',
-          playerName: 'You',
-          answer: '',
-          points: 0,
-          timedOut: true,
-          isCurrentPlayer: true,
-        },
-      ])
-
-      setHasAttempted(true)
-      setHasBuzzed(false)
-      setAnswer('')
-
       return
     }
 
     const timer =
       window.setTimeout(() => {
+        if (timeLeft <= 1) {
+          setTimeLeft(0)
+
+          setRoundAnswers([
+            {
+              id: 'local-player',
+              playerName: 'You',
+              answer: '',
+              points: 0,
+              timedOut: true,
+              isCurrentPlayer: true,
+            },
+          ])
+
+          setAnswer('')
+          setHasBuzzed(false)
+          setShowRoundResult(true)
+
+          return
+        }
+
         setTimeLeft(
-          (current) =>
-            current - 1,
+          timeLeft - 1,
         )
       }, 1000)
 
@@ -139,31 +119,30 @@ function RecallPhase({
     }
   }, [
     hasBuzzed,
-    checked,
-    hasAttempted,
+    showRoundResult,
     timeLeft,
   ])
 
   const buzz = () => {
-    if (hasAttempted) {
+    if (showRoundResult) {
       return
     }
 
-    setHasBuzzed(true)
+    setAnswer('')
+
+    setRoundAnswers([])
 
     setTimeLeft(
       ANSWER_TIME_SECONDS,
     )
 
-    setAttemptResult(null)
-    setPointsAwarded(0)
+    setHasBuzzed(true)
   }
 
   const checkAnswer = () => {
     if (
       !hasBuzzed ||
-      checked ||
-      hasAttempted ||
+      showRoundResult ||
       !answer.trim()
     ) {
       return
@@ -178,9 +157,6 @@ function RecallPhase({
         currentWord,
       )
 
-    const isCorrect =
-      awardedPoints === 4
-
     const submittedAnswer:
       RoundSubmittedAnswer = {
         id: 'local-player',
@@ -194,34 +170,17 @@ function RecallPhase({
       submittedAnswer,
     ])
 
-    setPointsAwarded(
-      awardedPoints,
-    )
-
     if (awardedPoints > 0) {
       setScore(
         (current) =>
-          current + awardedPoints,
+          current +
+          awardedPoints,
       )
     }
 
-    if (isCorrect) {
-      setChecked(true)
-      setHasAttempted(true)
-      setAttemptResult(null)
-
-      setShowRoundResult(true)
-
-      return
-    }
-
-    setAttemptResult(
-      'incorrect',
-    )
-
-    setHasAttempted(true)
     setHasBuzzed(false)
-    setAnswer('')
+
+    setShowRoundResult(true)
   }
 
   const nextDrawing = () => {
@@ -239,13 +198,8 @@ function RecallPhase({
     )
 
     setAnswer('')
-    setChecked(false)
+
     setHasBuzzed(false)
-    setHasAttempted(false)
-
-    setAttemptResult(null)
-
-    setPointsAwarded(0)
 
     setRoundAnswers([])
 
@@ -349,8 +303,7 @@ function RecallPhase({
                     currentDrawing
                   }
                   alt={`Drawing ${
-                    currentIndex +
-                    1
+                    currentIndex + 1
                   }`}
                   className="max-h-[430px] w-full object-contain"
                 />
@@ -375,9 +328,7 @@ function RecallPhase({
               word?
             </h2>
 
-            {!hasBuzzed &&
-            !hasAttempted &&
-            !checked ? (
+            {!hasBuzzed ? (
               <>
 
                 <p className="mt-5 text-white/60">
@@ -394,11 +345,7 @@ function RecallPhase({
                 </button>
 
               </>
-            ) : null}
-
-            {hasBuzzed &&
-            !hasAttempted &&
-            !checked ? (
+            ) : (
               <>
 
                 <p className="mt-5 font-semibold text-amber-300">
@@ -462,68 +409,7 @@ function RecallPhase({
                 </div>
 
               </>
-            ) : null}
-
-            {hasAttempted &&
-            !checked ? (
-              <div className="mt-7">
-
-                <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-5">
-
-                  {attemptResult ===
-                  'timeout' ? (
-                    <>
-
-                      <p className="font-bold text-red-400">
-                        Time&apos;s up
-                      </p>
-
-                      <p className="mt-2 text-white/60">
-                        Your attempt is
-                        over.
-                      </p>
-
-                    </>
-                  ) : (
-                    <>
-
-                      <p className="font-bold text-red-400">
-
-                        {pointsAwarded >
-                        0
-                          ? `Close! +${pointsAwarded}/4`
-                          : 'Incorrect answer'}
-
-                      </p>
-
-                      <p className="mt-2 text-white/60">
-                        Your attempt is
-                        over.
-                      </p>
-
-                    </>
-                  )}
-
-                </div>
-
-                <div className="mt-5 rounded-xl border border-amber-500/30 bg-amber-500/10 p-5">
-
-                  <p className="font-semibold text-amber-300">
-                    Waiting for another
-                    player
-                  </p>
-
-                  <p className="mt-2 text-white/60">
-                    Another eligible
-                    player can now buzz
-                    and attempt this
-                    question.
-                  </p>
-
-                </div>
-
-              </div>
-            ) : null}
+            )}
 
           </div>
 
