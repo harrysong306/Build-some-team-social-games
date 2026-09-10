@@ -1,35 +1,19 @@
 # BACKEND
 
-
+## Starting Colyseus Server
 To start backend colyseus service;
 
-`npm ci`
+1. Ensure nvm is at minimum version 22+.
 
-`npm install`
+2. ```npm start``` after install. Colyseus server should
 
-`npm start`
+2. If bugged ```npm ci``` then start service.
 
-
-
-
+3. End service, do not suspend process.
 
 ---
 
-# TO BE REMOVED
-
-# Welcome to Colyseus!
-
-This project has been created using [⚔️ `create-colyseus-app`](https://github.com/colyseus/create-colyseus-app/) - an npm init template for kick starting a Colyseus project in TypeScript.
-
-[Documentation](http://docs.colyseus.io/)
-
-## :crossed_swords: Usage
-
-```
-npm start
-```
-
-## Structure
+## Structure - Template from generation - TO BE EDITED
 
 - `index.ts`: main entry point, register an empty room handler and attach [`@colyseus/monitor`](https://github.com/colyseus/colyseus-monitor)
 - `src/rooms/MyRoom.ts`: an empty room handler for you to implement your logic
@@ -42,7 +26,4 @@ npm start
         - `npm run loadtest`: runs the [`@colyseus/loadtest`](https://github.com/colyseus/colyseus-loadtest/) tool for testing the connection, using the `loadtest/example.ts` script.
 - `tsconfig.json`: TypeScript configuration file
 
-
-## License
-
-MIT
+---
