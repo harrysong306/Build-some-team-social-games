@@ -37,6 +37,14 @@ export class Game extends Schema {
   // this way colyseus never auto-syncs it to clients while drawing is happening (BE-13)
   private submittedDrawings = new Map<number, string>();
 
+  // BE-17: guesses submitted during recall, kept private (not @type) so nobody sees
+  // anyone else's guess before reveal - same reasoning as submittedDrawings above.
+  // keyed by grid index -> sessionId -> { word, guess }, so BE-18/24 can pull
+  // "everyone's guess for this round" later to compute majority / broadcast results.
+  // "word" is whatever the frontend sent (the target word for that drawing) - can't
+  // validate it against anything server-side yet since word-gen isn't wired in
+  private submittedGuesses = new Map<number, Map<string, { word: string; guess: string }>>();
+
   // room calls this once after creating the game, so we can use the room's clock + broadcast
   init(clock: any, broadcast: (type: string, message?: any) => void) {
     this.clock = clock;
@@ -52,6 +60,8 @@ export class Game extends Schema {
 
     if (phase === "drawing") {
       this.submittedDrawings.clear();
+      // BE-17: also clear any leftover guesses from a previous game
+      this.submittedGuesses.clear();
       // BE-25: fresh game starting (or play again via BE-27), reset shared score/lives
       this.score = 0;
       this.lives = Game.STARTING_LIVES;
@@ -134,6 +144,24 @@ export class Game extends Schema {
   submitDrawing(imageData: string) {
     if (this.phase !== "drawing") return;
     this.submittedDrawings.set(this.currentGridIndex, imageData);
+  }
+
+  // BE-17: store a player's guess server-side, without broadcasting it to anyone
+  // until reveal (BE-24's broadcastRoundResult is what actually sends it out later).
+  // only accepted during recall - a guess sent at any other time is silently dropped
+  submitGuess(sessionId: string, word: string, guess: string) {
+    if (this.phase !== "recall") return;
+
+    if (!this.submittedGuesses.has(this.currentGridIndex)) {
+      this.submittedGuesses.set(this.currentGridIndex, new Map());
+    }
+    this.submittedGuesses.get(this.currentGridIndex)!.set(sessionId, { word, guess });
+  }
+
+  // BE-18/24 will call this to get everyone's guesses for a round (majority calc,
+  // then broadcasting via broadcastRoundResult). empty map if nobody's guessed yet
+  getGuessesForRound(gridIndex: number): Map<string, { word: string; guess: string }> {
+    return this.submittedGuesses.get(gridIndex) ?? new Map();
   }
 
   // called once we move to "recall", sends everything that was submitted during drawing
