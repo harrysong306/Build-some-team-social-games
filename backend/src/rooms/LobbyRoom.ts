@@ -4,7 +4,6 @@ import { GameState, Player } from "./schema/GameState.js";
 const VALID_GAME_MODES = ["sketchRecall", "test"] as const;
 type GameMode = typeof VALID_GAME_MODES[number];
 
-
 export class LobbyRoom extends Room {
   maxClients = 8;
   state = new GameState();
@@ -18,8 +17,10 @@ export class LobbyRoom extends Room {
     },
     markReady: (client: Client, message: { ready: boolean }) => {
       const player = this.state.players.get(client.sessionId);
-      console.log(player.name, "changed ready to", player.ready);
       if (player) player.ready = message.ready;
+
+      // BE-8: auto start once at least half the lobby is ready, no more explicit start_game message
+      this.checkAutoStart();
     },
 
     changeName: (client: Client, message: { name: string }) => {
@@ -43,7 +44,7 @@ export class LobbyRoom extends Room {
     console.log(player.name, "change to:",trimmed);
     player.name = trimmed;
     },
-    
+
     setGameMode: (client: Client, message: { mode: string }) => {
       const player = this.state.players.get(client.sessionId);
       if (!player?.isHost) return; // only host may change mode
@@ -57,12 +58,22 @@ export class LobbyRoom extends Room {
       this.state.gameMode = message.mode;
     },
 
+    // BE-13: just store it server-side, Game class makes sure this doesn't get broadcast until recall
+    submitDrawing: (client: Client, message: { imageData: string }) => {
+      this.state.game.submitDrawing(message.imageData);
+    },
+
+    // host can manually start early instead of waiting for the half-ready auto start,
+    // still requires everyone ready so it can't skip the drawing phase setup
     startGame: (client: Client, message: any) => {
       const player = this.state.players.get(client.sessionId);
       if (!player?.isHost) return;
+      if (this.state.game.phase !== "lobby") return;
+
       const allReady = [...this.state.players.values()].every(p => p.ready);
       if (!allReady) return;
-      this.state.phase = "playing";
+
+      this.state.game.setPhase("drawing");
     },
   }
 
@@ -70,6 +81,7 @@ export class LobbyRoom extends Room {
     /**
      * Called when a new room is created.
      */
+    this.state.game.init(this.clock, this.broadcast.bind(this));
   }
 
   onJoin (client: Client, options: any) {
@@ -109,11 +121,25 @@ export class LobbyRoom extends Room {
     console.log(client.sessionId, "left!", code);
   }
 
+  // BE-8: start the game once at least half the players in the lobby are ready
+  private checkAutoStart() {
+    if (this.state.game.phase !== "lobby") return;
+
+    const total = this.state.players.size;
+    if (total === 0) return;
+
+    const readyCount = [...this.state.players.values()].filter(p => p.ready).length;
+
+    if (readyCount >= Math.ceil(total / 2)) {
+      this.state.game.setPhase("drawing");
+    }
+  }
+
   onDispose() {
     /**
      * Called when the room is disposed.
      */
-
+    this.state.game.clearTurnTimer();
     console.log("room", this.roomId, "disposing...");
   }
 }
