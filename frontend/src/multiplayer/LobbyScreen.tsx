@@ -32,6 +32,9 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
         onExit={() => setRoundStarted(false)}
         gameWords={gameWords}
         onPlayAgain={startGame}
+        // the InstructionsScreen below already ran its countdown
+        // before roundStarted flipped to true, so don't show it again
+        skipInstructions
         // send bytes for image, and meta for image index
         onSubmitDrawing={(bytes, index) => {
           room?.send('submit-drawing-meta', { index })
