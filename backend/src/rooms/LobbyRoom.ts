@@ -57,6 +57,11 @@ export class LobbyRoom extends Room {
       console.log(this.state.gameMode, "Changed to:", message.mode);
       this.state.gameMode = message.mode;
     },
+    
+    // BE-13: just store it server-side, Game class makes sure this doesn't get broadcast until recall
+    submitDrawing: (client: Client, message: { imageData: string }) => {
+      this.state.game.submitDrawing(message.imageData);
+    },
 
         // BE-17: matches the payload useSubmitGuess.ts (FE-37) sends - { word, guess }.
     // Game class makes sure this doesn't get broadcast to anyone until reveal
