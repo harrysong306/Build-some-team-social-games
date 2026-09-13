@@ -164,6 +164,45 @@ export class Game extends Schema {
     return this.submittedGuesses.get(gridIndex) ?? new Map();
   }
 
+    // BE-18: call this once all eligible guesses for a round are in, or the guessing
+  // timer runs out - neither trigger exists yet, since recall doesn't have its own
+  // timer or round-advancement built (that overlaps BE-19/20/21/22, still unbuilt).
+  // "eligible" here just means "everyone who actually submitted a guess" - excluding
+  // the artist isn't possible yet since drawnBy isn't tracked server-side (BE-16)
+  computeMajorityResult(gridIndex: number, correctAnswer: string): {
+    correctCount: number;
+    totalGuesses: number;
+    majorityCorrect: boolean;
+  } {
+    const guesses = this.getGuessesForRound(gridIndex);
+    const normalizedAnswer = correctAnswer.trim().toLowerCase();
+
+    let correctCount = 0;
+    const guessesRecord: Record<string, string> = {};
+    for (const [sessionId, { guess }] of guesses) {
+      guessesRecord[sessionId] = guess;
+      if (guess.trim().toLowerCase() === normalizedAnswer) {
+        correctCount++;
+      }
+    }
+
+    const totalGuesses = guesses.size;
+    // strict majority - a tie (e.g. 2 correct out of 4) does NOT count, and nobody
+    // guessing at all counts as a fail. not 100% sure this is the right call for
+    // either case, worth confirming with the team like STARTING_LIVES above
+    const majorityCorrect = totalGuesses > 0 && correctCount > totalGuesses / 2;
+
+    if (majorityCorrect) {
+      this.addScore(1); // point value per round isn't settled yet either
+    } else {
+      this.loseLife();
+    }
+
+    this.broadcastRoundResult(gridIndex, correctAnswer, guessesRecord);
+
+    return { correctCount, totalGuesses, majorityCorrect };
+  }
+
   // called once we move to "recall", sends everything that was submitted during drawing
   private revealDrawings() {
     return Array.from(this.submittedDrawings.entries()).map(([gridIndex, imageData]) => ({
