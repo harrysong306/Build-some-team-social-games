@@ -35,7 +35,12 @@ export class Game extends Schema {
 
   // finished drawings, keyed by grid index. NOT a @type field on purpose -
   // this way colyseus never auto-syncs it to clients while drawing is happening (BE-13)
-  private submittedDrawings = new Map<number, string>();
+  //
+  // each grid index can get more than one submission (everyone draws the same
+  // word at once, see FE-18 discussion) so this has to store all of them, not
+  // just whoever's message arrived last - otherwise earlier submissions just
+  // get silently overwritten and lost
+  private submittedDrawings = new Map<number, string[]>();
 
   // room calls this once after creating the game, so we can use the room's clock + broadcast
   init(clock: any, broadcast: (type: string, message?: any) => void) {
@@ -130,17 +135,23 @@ export class Game extends Schema {
     this.broadcast?.("round_result", { gridIndex, correctAnswer, guesses });
   }
 
-  // BE-13: store the finished drawing server-side, don't broadcast it to other players yet
+  // BE-13: store the finished drawing server-side, don't broadcast it to other players yet.
+  // everyone drawing the same word submits here independently, so append rather than
+  // overwrite - picking which one "counts" happens later, at reveal time
   submitDrawing(imageData: string) {
     if (this.phase !== "drawing") return;
-    this.submittedDrawings.set(this.currentGridIndex, imageData);
+    const existing = this.submittedDrawings.get(this.currentGridIndex) ?? [];
+    existing.push(imageData);
+    this.submittedDrawings.set(this.currentGridIndex, existing);
   }
 
-  // called once we move to "recall", sends everything that was submitted during drawing
+  // called once we move to "recall", sends everything that was submitted during drawing.
+  // picks one submission per grid cell at random from whoever submitted for it -
+  // matches the original design (take one image from one random player per word)
   private revealDrawings() {
-    return Array.from(this.submittedDrawings.entries()).map(([gridIndex, imageData]) => ({
+    return Array.from(this.submittedDrawings.entries()).map(([gridIndex, images]) => ({
       gridIndex,
-      imageData,
+      imageData: images[Math.floor(Math.random() * images.length)],
     }));
   }
 
