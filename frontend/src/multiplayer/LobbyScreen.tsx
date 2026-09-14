@@ -1,8 +1,6 @@
-import { useState } from "react";
 import type { Room } from "@colyseus/sdk";
 import { useLobbyState } from "./useLobbyState";
-import InstructionsScreen from "../sketch-recall/InstructionsScreen";
-import SketchRecallGame from "../sketch-recall/SketchRecallGame";
+import MultiplayerDrawingPhase from "./MultiplayerDrawingPhase";
 
 type LobbyScreenProps = {
   room: Room | null;
@@ -13,28 +11,37 @@ const GAME_MODES = [
   { value: "sketchRecall", label: "Sketch Recall" },
 ];
 
+// FE-7: Display lobby player list and ready status in real time
+// FE-8: Implement Ready / Not Ready controls in lobby
+// FE-9: Implement host game-mode selection controls
+// FE-10: Implement host Start Game button and start-state handling
+// FE-18: once phase flips to "drawing", hand off to the server-synced
+// multiplayer drawing board instead of the old local-only placeholder
 function LobbyScreen({ room, roomId }: LobbyScreenProps) {
-  const { players, gameMode, phase, mySessionId, toggleReady, setGameMode, startGame } =
-    useLobbyState(room);
-
-  // once the host starts the round, every player locally moves into
-  // the existing single-player game (not yet actually multiplayer-synced)
-  const [roundStarted, setRoundStarted] = useState(false);
+  const {
+    players,
+    gameMode,
+    phase,
+    currentGridIndex,
+    roundEndTime,
+    mySessionId,
+    toggleReady,
+    setGameMode,
+    startGame,
+  } = useLobbyState(room);
 
   const playerList = Object.entries(players);
   const me = players[mySessionId];
   const isHost = me?.isHost ?? false;
   const allReady = playerList.length > 0 && playerList.every(([, p]) => p.ready);
 
-  if (roundStarted) {
-    return <SketchRecallGame onExit={() => setRoundStarted(false)} />;
-  }
-
   if (phase === "drawing") {
     return (
-      <InstructionsScreen
-        onStart={() => setRoundStarted(true)}
-        onBack={() => console.log("Back clicked")}
+      <MultiplayerDrawingPhase
+        room={room}
+        roomId={roomId}
+        currentGridIndex={currentGridIndex}
+        roundEndTime={roundEndTime}
       />
     );
   }
@@ -69,6 +76,7 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
           {me?.ready ? "Cancel Ready" : "Ready"}
         </button>
 
+        {/* FE-9: only the host can change the game mode */}
         {isHost ? (
           <div className="mt-6">
             <label className="mb-2 block text-sm text-white/60">Game mode</label>
@@ -88,13 +96,11 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
           <p className="mt-6 text-sm text-white/60">Mode: {gameMode}</p>
         )}
 
+        {/* FE-10: only the host can start the game, and only once everyone is ready */}
         {isHost ? (
           <button
             disabled={!allReady}
-            onClick={() => {
-              console.log("Start Game clicked, allReady:", allReady);
-              startGame();
-            }}
+            onClick={startGame}
             className="mt-4 w-full rounded-lg bg-gradient-to-r from-amber-500 to-yellow-400 px-6 py-3 font-bold text-black transition hover:brightness-110 disabled:opacity-40 disabled:hover:brightness-100"
           >
             Start Game
