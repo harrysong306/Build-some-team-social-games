@@ -74,4 +74,36 @@ describe("BE-8 / BE-10 / BE-12 / BE-13 / BE-14 with a real local room", () => {
     assert.strictEqual(revealed[0].gridIndex, 0);
     assert.strictEqual(revealed[0].imageData, "fake_base64");
   });
+
+  it("keeps every submission for a cell instead of only the last one (FE-18 follow-up)", async () => {
+    const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
+    const c1 = await colyseus.connectTo(room);
+    const c2 = await colyseus.connectTo(room);
+    const c3 = await colyseus.connectTo(room);
+    c1.send("markReady", { ready: true });
+    c2.send("markReady", { ready: true });
+    await room.waitForNextPatch();
+
+    // everyone draws the same word (same shared gridIndex) and submits their own version
+    c1.send("submitDrawing", { imageData: "drawing_from_c1" });
+    c2.send("submitDrawing", { imageData: "drawing_from_c2" });
+    c3.send("submitDrawing", { imageData: "drawing_from_c3" });
+    await room.waitForNextPatch();
+
+    let revealed: any = null;
+    c1.onMessage("reveal_drawings", (data: any) => (revealed = data));
+
+    for (let i = 0; i < 25; i++) {
+      (room as any).state.game.advanceGridIndex();
+    }
+    await room.waitForNextPatch();
+
+    assert.ok(revealed, "expected reveal_drawings broadcast after recall transition");
+    assert.strictEqual(revealed.length, 1, "all three submissions were for the same grid cell");
+    // the picked image should be one of the three - not a fourth value, and not
+    // silently dropped down to whichever arrived last
+    assert.ok(
+      ["drawing_from_c1", "drawing_from_c2", "drawing_from_c3"].includes(revealed[0].imageData),
+    );
+  });
 });
