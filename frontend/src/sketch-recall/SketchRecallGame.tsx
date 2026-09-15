@@ -6,13 +6,15 @@ import InstructionsScreen from './InstructionsScreen'
 import RecallPhase from './RecallPhase'
 import ResultsScreen from './ResultsScreen'
 
-import {
-  generalWords,
-  similarWordGroups,
-} from './sketchRecallWords'
 
 type SketchRecallGameProps = {
   onExit: () => void
+  gameWords: readonly string[]
+  onPlayAgain: () => void
+  onSubmitDrawing?: (
+    bytes: Uint8Array,
+    index: number,
+  ) => void
 }
 
 type GamePhase =
@@ -22,47 +24,19 @@ type GamePhase =
   | 'recall'
   | 'results'
 
-const shuffle = <T,>(items: T[]) => {
-  const result = [...items]
 
-  for (let i = result.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1))
-
-    ;[result[i], result[j]] = [
-      result[j],
-      result[i],
-    ]
-  }
-
-  return result
-}
-
-const generateGameWords = () => {
-  const selectedGroups =
-    shuffle(similarWordGroups).slice(0, 3)
-
-  const similarWords = selectedGroups.flat()
-
-  const selectedGeneralWords =
-    shuffle(generalWords).slice(
-      0,
-      25 - similarWords.length,
-    )
-
-  return shuffle([
-    ...similarWords,
-    ...selectedGeneralWords,
-  ])
-}
 
 function SketchRecallGame({
   onExit,
+  gameWords,
+  onPlayAgain,
+  onSubmitDrawing,
 }: SketchRecallGameProps) {
   const [phase, setPhase] =
     useState<GamePhase>('instructions')
 
-  const [gameWords, setGameWords] =
-    useState<string[]>(() => generateGameWords())
+
+
 
   const [savedDrawings, setSavedDrawings] =
     useState<(string | null)[]>([])
@@ -70,25 +44,34 @@ function SketchRecallGame({
   const [recallScore, setRecallScore] =
     useState(0)
 
-  const playAgain = () => {
-    setGameWords(generateGameWords())
+  const clearSavedDrawings = () => {
+    savedDrawings.forEach((drawing) => {
+      if (drawing) {
+        URL.revokeObjectURL(drawing)
+      }
+    })
+
     setSavedDrawings([])
+  }
+
+  const playAgain = () => {
+    clearSavedDrawings()
     setRecallScore(0)
     setPhase('instructions')
+    onPlayAgain()
   }
 
   if (phase === 'drawing') {
     return (
       <DrawingPhase
         words={gameWords}
-        onBack={() =>
-          setPhase('instructions')
-        }
+        onBack={() => setPhase('instructions')}
+        onSubmitDrawing={onSubmitDrawing}
         onComplete={(drawings) => {
           setSavedDrawings(drawings)
           setPhase('distraction')
         }}
-      />
+/>
     )
   }
 
@@ -121,7 +104,10 @@ function SketchRecallGame({
         score={recallScore}
         total={gameWords.length * 4}
         onPlayAgain={playAgain}
-        onExit={onExit}
+        onExit={() => {
+          clearSavedDrawings()
+          onExit()
+        }}
       />
     )
   }

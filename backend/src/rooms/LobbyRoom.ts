@@ -1,5 +1,6 @@
 import { Room, Client, CloseCode } from "colyseus";
 import { GameState, Player } from "./schema/GameState.js";
+import {generateGameWords} from "../utils/WordGen.js";
 
 const VALID_GAME_MODES = ["sketchRecall", "test"] as const;
 type GameMode = typeof VALID_GAME_MODES[number];
@@ -8,6 +9,10 @@ type GameMode = typeof VALID_GAME_MODES[number];
 export class LobbyRoom extends Room {
   maxClients = 8;
   state = new GameState();
+  // drawings don't need to be constantly synced, not in schema
+  private drawings = new Map<string, Uint8Array>();
+  // pairs the next binary drawing message from each client with its word index.
+  private pendingDrawingIndexes = new Map<string, number>();
 
   messages = {
     yourMessageType: (client: Client, message: any) => {
@@ -62,14 +67,45 @@ export class LobbyRoom extends Room {
       if (!player?.isHost) return;
       const allReady = [...this.state.players.values()].every(p => p.ready);
       if (!allReady) return;
+      
+      this.state.gameWords.clear();
+      this.state.gameWords.push(...generateGameWords());
       this.state.phase = "playing";
     },
+
+
+    // metadata sent separately to image
+    "submit-drawing-meta": (
+      client: Client,
+      message: { index: number },
+    ) => {
+      this.pendingDrawingIndexes.set(client.sessionId, message.index);
+    },
+
+
   }
 
   onCreate (options: any) {
     /**
      * Called when a new room is created.
      */
+    this.onMessageBytes("submit-drawing", (client, bytes) => {
+      const index =
+        this.pendingDrawingIndexes.get(client.sessionId) ?? -1;
+
+      this.pendingDrawingIndexes.delete(client.sessionId);
+
+      const drawingId = `${client.sessionId}:${index}`;
+      this.drawings.set(drawingId, bytes);
+
+      console.log(
+        client.sessionId,
+        "submitted drawing",
+        drawingId,
+        bytes.length,
+        "bytes"
+      );
+    });
   }
 
   onJoin (client: Client, options: any) {

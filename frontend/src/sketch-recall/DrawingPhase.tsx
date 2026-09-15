@@ -10,8 +10,12 @@ import DrawingCanvas, {
 } from './DrawingCanvas'
 
 type DrawingPhaseProps = {
-  words: string[]
+  words: readonly string[]
   onBack: () => void
+  onSubmitDrawing?: (
+    bytes: Uint8Array,
+    index: number,
+  ) => void
   onComplete: (drawings: (string | null)[]) => void
 }
 
@@ -22,6 +26,7 @@ function getRandomDrawingTime() {
 function DrawingPhase({
   words,
   onBack,
+  onSubmitDrawing,
   onComplete,
 }: DrawingPhaseProps) {
   const canvasRef = useRef<DrawingCanvasHandle>(null)
@@ -41,17 +46,24 @@ function DrawingPhase({
 
   const [finished, setFinished] = useState(false)
 
-  const saveAndNext = useCallback(() => {
+
+
+  const saveAndNext = useCallback(async () => {
     if (isAdvancingRef.current) return
 
     isAdvancingRef.current = true
 
-    const image =
-      canvasRef.current?.getImage() ?? ''
+    const drawing =
+      await canvasRef.current?.getDrawing() ?? null
+
+    // submits bytes to colyseus while keeping url
+    if (drawing) {
+      onSubmitDrawing?.(drawing.bytes, currentIndex)
+    }
 
     setDrawings((previous) => {
       const updated = [...previous]
-      updated[currentIndex] = image
+      updated[currentIndex] = drawing?.url ?? null
       return updated
     })
 
@@ -68,7 +80,7 @@ function DrawingPhase({
     window.setTimeout(() => {
       isAdvancingRef.current = false
     }, 500)
-  }, [currentIndex, words.length])
+  }, [currentIndex, words.length, onSubmitDrawing])
 
   useEffect(() => {
     if (finished) return
