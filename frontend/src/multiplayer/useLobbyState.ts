@@ -12,6 +12,8 @@ export function useLobbyState(room: Room | null) {
   const [gameMode, setGameModeState] = useState<string>("sketchRecall");
   const [phase, setPhase] = useState<string>("lobby");
   const [gameWords, setGameWords] = useState<string[]>([]);
+  // set when the backend rejects a changeName request (empty or taken name)
+  const [nameError, setNameError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!room) return;
@@ -25,8 +27,16 @@ export function useLobbyState(room: Room | null) {
 
     room.onStateChange(handleStateChange);
 
+    const unsubscribeNameError = room.onMessage(
+      "name_error",
+      (message: { reason: string }) => {
+        setNameError(message.reason);
+      },
+    );
+
     return () => {
       room.onStateChange.remove(handleStateChange);
+      unsubscribeNameError();
     };
   }, [room]);
 
@@ -44,14 +54,22 @@ export function useLobbyState(room: Room | null) {
     room?.send("startGame");
   };
 
+  const changeName = (name: string) => {
+    if (!room) return;
+    setNameError(null);
+    room.send("changeName", { name });
+  };
+
   return {
     players,
     gameMode,
     phase,
     gameWords,
     mySessionId: room?.sessionId ?? "",
+    nameError,
     toggleReady,
     setGameMode,
     startGame,
+    changeName,
   };
 }
