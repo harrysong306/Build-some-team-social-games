@@ -37,6 +37,9 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
   // draft name typed while editing, before it's submitted
   const [nameDraft, setNameDraft] = useState("");
 
+  // Briefly true right after the room code is copied, to show feedback
+  const [codeCopied, setCodeCopied] = useState(false);
+
   // mirrors isEditingName but updates synchronously (unlike the state
   // value), so a stray blur fired by the input unmounting - which can
   // happen an unpredictable amount of time after Enter/Escape already
@@ -74,6 +77,20 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
     changeName(trimmed);
   };
 
+  // Copy room code to clipboard, will fail if not allowed by
+  // browser.
+  const copyRoomCode = async () => {
+    if (!roomId) return;
+
+    try {
+      await navigator.clipboard.writeText(roomId);
+      setCodeCopied(true);
+      setTimeout(() => setCodeCopied(false), 1500);
+    } catch {
+
+    }
+  };
+
   if (roundStarted) {
     return (
       <SketchRecallGame
@@ -105,7 +122,19 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
     <main className="min-h-[calc(100vh-80px)] bg-[#0d0704] px-6 py-12 text-white">
       <div className="mx-auto max-w-md">
         <h2 className="text-2xl font-extrabold">Lobby</h2>
-        <p className="mt-1 text-sm text-white/60">Room code: {roomId}</p>
+
+        <div className="mt-1 flex items-center gap-2">
+          <p className="text-sm text-white/60">Room code: {roomId}</p>
+
+          <button
+            type="button"
+            onClick={copyRoomCode}
+            disabled={!roomId}
+            className="rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-xs font-semibold text-amber-300 transition hover:border-amber-400 hover:bg-amber-500/20 disabled:opacity-40"
+          >
+            {codeCopied ? "Copied" : "📋 Copy"}
+          </button>
+        </div>
 
         <ul className="mt-6 space-y-2">
           {playerList.map(([sessionId, player]) => {
@@ -138,7 +167,7 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
                         type="button"
                         onClick={startEditingName}
                         aria-label="Edit your name"
-                        className="text-xs text-amber-300/70 transition hover:text-amber-200"
+                        className="flex h-6 w-6 items-center justify-center rounded-full border border-amber-500/30 bg-amber-500/10 text-xs transition hover:border-amber-400 hover:bg-amber-500/20"
                       >
                         ✏️
                       </button>
