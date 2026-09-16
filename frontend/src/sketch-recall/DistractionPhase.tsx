@@ -1,16 +1,65 @@
 import {
   useCallback,
   useEffect,
+  useRef,
   useState,
 } from 'react'
+import type { Room } from '@colyseus/sdk'
 
 import {
   distractionQuestions,
   type DistractionQuestion,
 } from './DistractionQuestions'
+import { useLobbyState } from '../multiplayer/useLobbyState'
 
 type DistractionPhaseProps = {
   onComplete: () => void
+  // when set, entering and leaving this phase waits for every player
+  // in the room to reach the same point before anyone moves on
+  room?: Room | null
+}
+
+type WaitingScreenProps = {
+  title: string
+  subtitle: string
+  readyCount: number
+  totalCount: number
+}
+
+// shared "waiting for other players" screen - used identically before
+// the questions start (waiting on everyone to finish drawing) and
+// after they end (waiting on everyone to finish answering)
+function WaitingScreen({
+  title,
+  subtitle,
+  readyCount,
+  totalCount,
+}: WaitingScreenProps) {
+  return (
+    <main className="flex min-h-[calc(100vh-80px)] items-center justify-center bg-[#0d0704] px-6 text-white">
+
+      <section className="w-full max-w-xl rounded-2xl border border-amber-500/30 bg-[#160b06] p-10 text-center">
+
+        <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-amber-400/10 text-4xl text-amber-400">
+          ⏳
+        </div>
+
+        <h1 className="mt-6 text-3xl font-bold">
+          {title}
+        </h1>
+
+        <p className="mt-3 text-white/55">
+          {subtitle}
+        </p>
+
+        <p className="mt-6 text-lg font-bold text-amber-300">
+          {readyCount} / {totalCount} players ready
+        </p>
+
+      </section>
+
+    </main>
+  )
 }
 
 const INITIAL_QUESTIONS = 5
@@ -39,7 +88,32 @@ function shuffleArray<T>(items: T[]): T[] {
 
 function DistractionPhase({
   onComplete,
+  room = null,
 }: DistractionPhaseProps) {
+  const { players } = useLobbyState(room)
+
+  const playerList = Object.values(players)
+  const totalPlayers = playerList.length
+  const readyCount = playerList.filter((p) => p.distractionReady).length
+  const doneCount = playerList.filter((p) => p.distractionDone).length
+
+  // no room (e.g. standalone use) => nothing to sync against, proceed freely
+  const allReadyToStart =
+    !room || (totalPlayers > 0 && readyCount >= totalPlayers)
+  const allDone =
+    !room || (totalPlayers > 0 && doneCount >= totalPlayers)
+
+  // guard each message so it's only ever sent once per phase, even
+  // across StrictMode's double-invoked effects
+  const sentReadyRef = useRef(false)
+  const sentDoneRef = useRef(false)
+
+  useEffect(() => {
+    if (!room || sentReadyRef.current) return
+    sentReadyRef.current = true
+    room.send('distractionReady')
+  }, [room])
+
   const [questions, setQuestions] =
     useState<DistractionQuestion[]>(() =>
       shuffleArray(distractionQuestions).map(
@@ -117,7 +191,9 @@ function DistractionPhase({
   }
 
   useEffect(() => {
-    if (finished) return
+    // don't burn down the question timer while still waiting on other
+    // players to finish drawing and reach the distraction phase
+    if (finished || !allReadyToStart) return
 
     if (timeLeft === 0) {
       // Treat timeout as an incorrect answer
@@ -148,45 +224,46 @@ function DistractionPhase({
   }, [
     timeLeft,
     finished,
+    allReadyToStart,
     answeredCount,
     score,
     moveToNextQuestion,
   ])
 
+  // sync point leaving the phase: once this player finishes answering,
+  // tell the room and wait for everyone else before actually completing
+  useEffect(() => {
+    if (!finished || !room || sentDoneRef.current) return
+    sentDoneRef.current = true
+    room.send('distractionDone')
+  }, [finished, room])
+
+  useEffect(() => {
+    if (finished && allDone) onComplete()
+  }, [finished, allDone, onComplete])
+
   if (finished) {
+    // same wait screen used before the phase starts, now waiting for
+    // everyone else to finish answering before moving on to recall
     return (
-      <main className="flex min-h-[calc(100vh-80px)] items-center justify-center bg-[#0d0704] px-6 text-white">
+      <WaitingScreen
+        title="Waiting for other players"
+        subtitle={`You answered ${score} out of ${answeredCount} correctly. Hang tight while everyone else finishes up.`}
+        readyCount={doneCount}
+        totalCount={totalPlayers}
+      />
+    )
+  }
 
-        <section className="w-full max-w-xl rounded-2xl border border-amber-500/30 bg-[#160b06] p-10 text-center">
-
-          <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-amber-400/10 text-4xl text-amber-400">
-            ✓
-          </div>
-
-          <p className="mt-6 text-sm font-semibold uppercase tracking-widest text-amber-400">
-            Distraction Complete
-          </p>
-
-          <h1 className="mt-3 text-3xl font-bold">
-            Time to remember
-          </h1>
-
-          <p className="mt-4 text-white/55">
-            You answered {score} out of{' '}
-            {answeredCount} questions correctly.
-          </p>
-
-          <button
-            type="button"
-            onClick={onComplete}
-            className="mt-8 w-full rounded-xl bg-gradient-to-r from-amber-500 to-yellow-400 py-4 font-bold text-black transition hover:brightness-110"
-          >
-            START RECALL →
-          </button>
-
-        </section>
-
-      </main>
+  if (!allReadyToStart) {
+    // waiting for everyone to finish drawing before the questions start
+    return (
+      <WaitingScreen
+        title="Waiting for other players"
+        subtitle="Everyone needs to finish drawing before the distraction questions start."
+        readyCount={readyCount}
+        totalCount={totalPlayers}
+      />
     )
   }
 

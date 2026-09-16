@@ -4,6 +4,12 @@ export class Player extends Schema {
   @type("string") name: string = "";
   @type("boolean") ready: boolean = false;
   @type("boolean") isHost: boolean = false;
+  // sync points for the distraction phase: set once this player has
+  // finished drawing and is ready to start the distraction questions,
+  // and once they've finished answering them - the room only lets
+  // everyone move on together once every player has each flag set
+  @type("boolean") distractionReady: boolean = false;
+  @type("boolean") distractionDone: boolean = false;
 }
 
 
@@ -25,4 +31,3 @@ export class GameState extends Schema {
   drawingSlots = new ArraySchema<DrawingSlot>();
 
 }
-

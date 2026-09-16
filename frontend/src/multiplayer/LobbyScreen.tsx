@@ -37,7 +37,7 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
   // draft name typed while editing, before it's submitted
   const [nameDraft, setNameDraft] = useState("");
 
-  // Briefly true right after the room code is copied, to show feedback
+  // briefly true right after the room code is copied, to show feedback
   const [codeCopied, setCodeCopied] = useState(false);
 
   // mirrors isEditingName but updates synchronously (unlike the state
@@ -77,8 +77,6 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
     changeName(trimmed);
   };
 
-  // Copy room code to clipboard, will fail if not allowed by
-  // browser.
   const copyRoomCode = async () => {
     if (!roomId) return;
 
@@ -87,7 +85,8 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
       setCodeCopied(true);
       setTimeout(() => setCodeCopied(false), 1500);
     } catch {
-
+      // clipboard access can be blocked (permissions, insecure context, etc.) -
+      // fail quietly, the room code is still visible as plain text either way
     }
   };
 
@@ -97,6 +96,7 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
         onExit={() => setRoundStarted(false)}
         gameWords={gameWords}
         onPlayAgain={startGame}
+        room={room}
         // the InstructionsScreen below already ran its countdown
         // before roundStarted flipped to true, so don't show it again
         skipInstructions
@@ -132,7 +132,7 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
             disabled={!roomId}
             className="rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-xs font-semibold text-amber-300 transition hover:border-amber-400 hover:bg-amber-500/20 disabled:opacity-40"
           >
-            {codeCopied ? "Copied" : "📋 Copy"}
+            {codeCopied ? "✅ Copied" : "📋 Copy"}
           </button>
         </div>
 
