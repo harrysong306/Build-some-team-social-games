@@ -68,6 +68,29 @@ describe('ResultsScreen component tests', () => {
     ).toBeInTheDocument()
   })
 
+  it('shows a perfect result for all 25 prompts worth four marks each', () => {
+    render(
+      <ResultsScreen
+        score={100}
+        total={100}
+        onPlayAgain={vi.fn()}
+        onExit={vi.fn()}
+      />,
+    )
+
+    expect(
+      screen.getByText('100%'),
+    ).toBeInTheDocument()
+
+    expect(
+      screen.getByText('Perfect memory!'),
+    ).toBeInTheDocument()
+
+    expect(
+      screen.getByText('out of 100'),
+    ).toBeInTheDocument()
+  })
+
   it('shows the correct message for different result percentages', () => {
     const { rerender } = render(
       <ResultsScreen
