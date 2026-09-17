@@ -181,6 +181,42 @@ describe('RecallPhase component tests', () => {
     ).toBeInTheDocument()
   })
 
+  it('submits a partial-credit answer when Enter is pressed', () => {
+    render(
+      <RecallPhase
+        drawings={[
+          'data:image/png;base64,drawing-one',
+        ]}
+        words={['Cake']}
+        onComplete={vi.fn()}
+      />,
+    )
+
+    const answerInput =
+      screen.getByPlaceholderText(
+        /enter your answer/i,
+      )
+
+    fireEvent.change(answerInput, {
+      target: {
+        value: 'Kake',
+      },
+    })
+
+    fireEvent.keyDown(answerInput, {
+      key: 'Enter',
+      code: 'Enter',
+    })
+
+    expect(
+      screen.getByText('Close! +3/4'),
+    ).toBeInTheDocument()
+
+    expect(
+      screen.getByText('Score: 3 / 4'),
+    ).toBeInTheDocument()
+  })
+
   it('awards zero marks for an unrelated answer', () => {
     render(
       <RecallPhase
