@@ -144,6 +144,43 @@ describe('RecallPhase component tests', () => {
     ).toBeInTheDocument()
   })
 
+  it('awards fewer partial marks for a more noticeable spelling mistake', () => {
+    render(
+      <RecallPhase
+        drawings={[
+          'data:image/png;base64,drawing-one',
+        ]}
+        words={['Cake']}
+        onComplete={vi.fn()}
+      />,
+    )
+
+    const answerInput =
+      screen.getByPlaceholderText(
+        /enter your answer/i,
+      )
+
+    fireEvent.change(answerInput, {
+      target: {
+        value: 'Kacke',
+      },
+    })
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: /check answer/i,
+      }),
+    )
+
+    expect(
+      screen.getByText('Close! +2/4'),
+    ).toBeInTheDocument()
+
+    expect(
+      screen.getByText('Score: 2 / 4'),
+    ).toBeInTheDocument()
+  })
+
   it('awards zero marks for an unrelated answer', () => {
     render(
       <RecallPhase
