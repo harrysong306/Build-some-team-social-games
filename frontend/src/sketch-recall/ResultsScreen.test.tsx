@@ -41,6 +41,33 @@ describe('ResultsScreen component tests', () => {
     ).toBeInTheDocument()
   })
 
+  it('calculates partial-credit accuracy from the four-mark prompt total', () => {
+    render(
+      <ResultsScreen
+        score={9}
+        total={12}
+        onPlayAgain={vi.fn()}
+        onExit={vi.fn()}
+      />,
+    )
+
+    expect(
+      screen.getByText('9'),
+    ).toBeInTheDocument()
+
+    expect(
+      screen.getByText('out of 12'),
+    ).toBeInTheDocument()
+
+    expect(
+      screen.getByText('75%'),
+    ).toBeInTheDocument()
+
+    expect(
+      screen.getByText('Great job!'),
+    ).toBeInTheDocument()
+  })
+
   it('shows the correct message for different result percentages', () => {
     const { rerender } = render(
       <ResultsScreen
