@@ -289,6 +289,74 @@ describe('RecallPhase component tests', () => {
     expect(onComplete).toHaveBeenCalledWith(4)
   })
 
+  it('combines partial marks from several drawings', () => {
+    const onComplete = vi.fn()
+
+    render(
+      <RecallPhase
+        drawings={[
+          'data:image/png;base64,drawing-one',
+          'data:image/png;base64,drawing-two',
+          'data:image/png;base64,drawing-three',
+        ]}
+        words={['Cake', 'Cake', 'Cake']}
+        onComplete={onComplete}
+      />,
+    )
+
+    const submitAnswer = (value: string) => {
+      const answerInput =
+        screen.getByPlaceholderText(
+          /enter your answer/i,
+        )
+
+      fireEvent.change(answerInput, {
+        target: { value },
+      })
+
+      fireEvent.click(
+        screen.getByRole('button', {
+          name: /check answer/i,
+        }),
+      )
+    }
+
+    submitAnswer('Kake')
+    expect(
+      screen.getByText('Score: 3 / 12'),
+    ).toBeInTheDocument()
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: /next drawing/i,
+      }),
+    )
+
+    submitAnswer('Kacke')
+    expect(
+      screen.getByText('Score: 5 / 12'),
+    ).toBeInTheDocument()
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: /next drawing/i,
+      }),
+    )
+
+    submitAnswer('Cake')
+    expect(
+      screen.getByText('Score: 9 / 12'),
+    ).toBeInTheDocument()
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: /view results/i,
+      }),
+    )
+
+    expect(onComplete).toHaveBeenCalledWith(9)
+  })
+
   it('does not submit a blank recall answer', () => {
     const onComplete = vi.fn()
 
