@@ -170,9 +170,25 @@ describe('DrawingCanvas component tests', () => {
     ).toHaveBeenCalledTimes(1)
   })
 
-  it('returns the drawing as an image', () => {
+  it('returns the drawing as saved drawing data', async () => {
     const ref =
       createRef<DrawingCanvasHandle>()
+    const blob = new Blob(
+      [new Uint8Array([1, 2, 3])],
+      { type: 'image/png' },
+    )
+
+    vi.spyOn(
+      HTMLCanvasElement.prototype,
+      'toBlob',
+    ).mockImplementation((callback) => {
+      callback(blob)
+    })
+
+    vi.spyOn(
+      URL,
+      'createObjectURL',
+    ).mockReturnValue('blob:test-image')
 
     render(
       <DrawingCanvas
@@ -182,11 +198,14 @@ describe('DrawingCanvas component tests', () => {
       />,
     )
 
-    const image =
-      ref.current?.getImage()
+    const drawing =
+      await ref.current?.getDrawing()
 
-    expect(image).toBe(
-      'data:image/png;base64,test-image',
+    expect(drawing).toEqual(
+      {
+        bytes: new Uint8Array([1, 2, 3]),
+        url: 'blob:test-image',
+      },
     )
   })
 
