@@ -18,7 +18,7 @@ function App() {
   return (
     <div className="min-h-screen bg-[#100a06]">
 
-      <Header />
+      <Header onJoinGame={() => setScreen('join-room')} />
 
       {screen === 'collection' ? (
         <GameCollectionPage

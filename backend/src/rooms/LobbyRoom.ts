@@ -66,11 +66,40 @@ export class LobbyRoom extends Room {
       const player = this.state.players.get(client.sessionId);
       if (!player?.isHost) return;
       const allReady = [...this.state.players.values()].every(p => p.ready);
-      if (!allReady) return;
-      
+      if (!allReady) return;      
       this.state.gameWords.clear();
       this.state.gameWords.push(...generateGameWords());
       this.state.phase = "playing";
+
+      // reset per-round sync flags so a replayed round waits fresh,
+      // instead of instantly "everyone ready" from the previous round
+      for (const p of this.state.players.values()) {
+        p.distractionReady = false;
+        p.distractionDone = false;
+      }
+    },
+
+
+    // metadata sent separately to image
+    "submit-drawing-meta": (
+      client: Client,
+      message: { index: number },
+    ) => {
+      this.pendingDrawingIndexes.set(client.sessionId, message.index);
+    },
+
+    // sync point entering the distraction phase: this player has
+    // finished drawing and is waiting for everyone else to catch up
+    distractionReady: (client: Client, message: any) => {
+      const player = this.state.players.get(client.sessionId);
+      if (player) player.distractionReady = true;
+    },
+
+    // sync point leaving the distraction phase: this player has
+    // finished answering and is waiting for everyone else to finish
+    distractionDone: (client: Client, message: any) => {
+      const player = this.state.players.get(client.sessionId);
+      if (player) player.distractionDone = true;
     },
 
 

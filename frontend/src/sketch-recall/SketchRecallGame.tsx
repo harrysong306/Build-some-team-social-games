@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import type { Room } from '@colyseus/sdk'
 
 import DistractionPhase from './DistractionPhase'
 import DrawingPhase from './DrawingPhase'
@@ -15,6 +16,12 @@ type SketchRecallGameProps = {
     bytes: Uint8Array,
     index: number,
   ) => void
+  // set when the caller already showed the instructions/countdown
+  // screen itself, so this game shouldn't show it a second time
+  skipInstructions?: boolean
+  // used by the distraction phase to sync entering/leaving it so every
+  // player moves on together instead of at their own pace
+  room?: Room | null
 }
 
 type GamePhase =
@@ -31,9 +38,12 @@ function SketchRecallGame({
   gameWords,
   onPlayAgain,
   onSubmitDrawing,
+  skipInstructions = false,
+  room = null,
 }: SketchRecallGameProps) {
-  const [phase, setPhase] =
-    useState<GamePhase>('instructions')
+  const [phase, setPhase] = useState<GamePhase>(
+    skipInstructions ? 'drawing' : 'instructions',
+  )
 
 
 
@@ -78,6 +88,7 @@ function SketchRecallGame({
   if (phase === 'distraction') {
     return (
       <DistractionPhase
+        room={room}
         onComplete={() =>
           setPhase('recall')
         }
