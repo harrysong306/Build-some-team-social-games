@@ -6,6 +6,7 @@ import {
     createRouter,
     createEndpoint,
 } from "colyseus";
+import { WebSocketTransport } from "@colyseus/ws-transport";
 
 /**
  * Import your Room files
@@ -13,6 +14,13 @@ import {
 import { LobbyRoom } from "./rooms/LobbyRoom.js";
 
 const server = defineServer({
+    /**
+     * Allow drawing uploads larger than the default 4 KB WebSocket limit.
+     */
+    transport: new WebSocketTransport({
+        maxPayload: 1024 * 1024,
+    }),
+
     /**
      * Define your room handlers:
      */
@@ -22,10 +30,9 @@ const server = defineServer({
 
     /**
      * Experimental: Define API routes. Built-in integration with the "playground" and SDK.
-     * 
-     * Usage from SDK: 
+     *
+     * Usage from SDK:
      *   client.http.get("/api/hello").then((response) => {})
-     * 
      */
     routes: createRouter({
         api_hello: createEndpoint("/api/hello", { method: "GET", }, async (ctx) => {
