@@ -5,6 +5,7 @@ import {
     playground,
     createRouter,
     createEndpoint,
+    WebSocketTransport,
 } from "colyseus";
 
 /**
@@ -13,6 +14,10 @@ import {
 import { LobbyRoom } from "./rooms/LobbyRoom.js";
 
 const server = defineServer({
+    // higher max payload size for images
+    transport: new WebSocketTransport({
+        maxPayload: 5* 1024 * 1024, // 5 MB
+    }),
     /**
      * Define your room handlers:
      */

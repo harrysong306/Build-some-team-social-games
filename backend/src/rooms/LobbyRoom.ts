@@ -66,8 +66,7 @@ export class LobbyRoom extends Room {
       const player = this.state.players.get(client.sessionId);
       if (!player?.isHost) return;
       const allReady = [...this.state.players.values()].every(p => p.ready);
-      if (!allReady) return;
-
+      if (!allReady) return;      
       this.state.gameWords.clear();
       this.state.gameWords.push(...generateGameWords());
       this.state.phase = "playing";
@@ -102,6 +101,16 @@ export class LobbyRoom extends Room {
       const player = this.state.players.get(client.sessionId);
       if (player) player.distractionDone = true;
     },
+
+
+    // metadata sent separately to image
+    "submit-drawing-meta": (
+      client: Client,
+      message: { index: number },
+    ) => {
+      this.pendingDrawingIndexes.set(client.sessionId, message.index);
+    },
+
 
   }
 
