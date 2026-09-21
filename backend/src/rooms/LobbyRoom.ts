@@ -69,6 +69,14 @@ export class LobbyRoom extends Room {
       this.state.game.submitGuess(client.sessionId, message.word, message.guess);
     },
 
+        // BE-19: player votes yes on a proposed team ability. Game tallies it and
+    // figures out on its own whether that's enough to pass - this handler's
+    // only job is supplying the current player count, since Game doesn't own
+    // the players map
+    vote_ability: (client: Client, message: { abilityId: string }) => {
+      this.state.game.voteAbility(client.sessionId, message.abilityId, this.state.players.size);
+    },
+
     // host can manually start early instead of waiting for the half-ready auto start,
     // still requires everyone ready so it can't skip the drawing phase setup
     startGame: (client: Client, message: any) => {
@@ -118,6 +126,8 @@ export class LobbyRoom extends Room {
 
     const wasHost = this.state.players.get(client.sessionId)?.isHost;
     this.state.players.delete(client.sessionId);
+    // BE-19: don't let a departed player's vote keep counting toward a threshold
+    this.state.game.removeVoter(client.sessionId);
 
     // reassign host if the host left and players remain
     if (wasHost && this.state.players.size > 0) {
