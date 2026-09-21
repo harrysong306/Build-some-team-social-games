@@ -45,6 +45,14 @@ export class Game extends Schema {
   // validate it against anything server-side yet since word-gen isn't wired in
   private submittedGuesses = new Map<number, Map<string, { word: string; guess: string }>>();
 
+  // BE-19: votes for a currently-proposed ability, keyed by abilityId -> set of
+  // sessionIds who voted yes. an abilityId's entry clears once the vote passes,
+  // so it can be proposed and voted on again later (BE-20 enforces how many
+  // times an ability can actually activate per game, not this). there's no
+  // explicit "vote no" here - not sure if that's needed, worth asking the team;
+  // for now this only tracks yes votes and checks whether enough are in yet
+  private abilityVotes = new Map<string, Set<string>>();
+
   // room calls this once after creating the game, so we can use the room's clock + broadcast
   init(clock: any, broadcast: (type: string, message?: any) => void) {
     this.clock = clock;
@@ -62,6 +70,8 @@ export class Game extends Schema {
       this.submittedDrawings.clear();
       // BE-17: also clear any leftover guesses from a previous game
       this.submittedGuesses.clear();
+      // BE-19: also clear any pending ability votes from a previous game
+      this.abilityVotes.clear();
       // BE-25: fresh game starting (or play again via BE-27), reset shared score/lives
       this.score = 0;
       this.lives = Game.STARTING_LIVES;
@@ -201,6 +211,47 @@ export class Game extends Schema {
     this.broadcastRoundResult(gridIndex, correctAnswer, guessesRecord);
 
     return { correctCount, totalGuesses, majorityCorrect };
+  }
+
+  // BE-19: record this player's yes vote for an ability, then check if the team
+  // has hit the threshold to activate it. threshold is "more than half of
+  // everyone currently in the room" - same majority style as BE-18's guesses,
+  // but NOT confirmed with the team, worth checking like the other magic
+  // numbers in this file. totalPlayers is passed in rather than owned here,
+  // same reasoning as computeMajorityResult - Game doesn't have the players map
+  voteAbility(sessionId: string, abilityId: string, totalPlayers: number): {
+    votes: number;
+    totalPlayers: number;
+    passed: boolean;
+  } {
+    if (!this.abilityVotes.has(abilityId)) {
+      this.abilityVotes.set(abilityId, new Set());
+    }
+    const voters = this.abilityVotes.get(abilityId)!;
+    voters.add(sessionId);
+
+    const votes = voters.size;
+    const passed = totalPlayers > 0 && votes > totalPlayers / 2;
+
+    if (passed) {
+      // resolved - clear so this ability can be proposed and voted on again
+      // later in the game (BE-20 decides whether it's actually allowed to
+      // fire again, based on its own usage-limit tracking)
+      this.abilityVotes.delete(abilityId);
+    }
+
+    this.broadcast?.("ability_vote_result", { abilityId, votes, totalPlayers, passed });
+
+    return { votes, totalPlayers, passed };
+  }
+
+  // BE-19: call this when a player disconnects, so their vote doesn't keep
+  // counting toward a threshold they're no longer part of. LobbyRoom's onLeave
+  // should call this for every ability the player might have voted on
+  removeVoter(sessionId: string) {
+    for (const voters of this.abilityVotes.values()) {
+      voters.delete(sessionId);
+    }
   }
 
   // called once we move to "recall", sends everything that was submitted during drawing
