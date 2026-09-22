@@ -144,6 +144,79 @@ describe('RecallPhase component tests', () => {
     ).toBeInTheDocument()
   })
 
+  it('awards fewer partial marks for a more noticeable spelling mistake', () => {
+    render(
+      <RecallPhase
+        drawings={[
+          'data:image/png;base64,drawing-one',
+        ]}
+        words={['Cake']}
+        onComplete={vi.fn()}
+      />,
+    )
+
+    const answerInput =
+      screen.getByPlaceholderText(
+        /enter your answer/i,
+      )
+
+    fireEvent.change(answerInput, {
+      target: {
+        value: 'Kacke',
+      },
+    })
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: /check answer/i,
+      }),
+    )
+
+    expect(
+      screen.getByText('Close! +2/4'),
+    ).toBeInTheDocument()
+
+    expect(
+      screen.getByText('Score: 2 / 4'),
+    ).toBeInTheDocument()
+  })
+
+  it('submits a partial-credit answer when Enter is pressed', () => {
+    render(
+      <RecallPhase
+        drawings={[
+          'data:image/png;base64,drawing-one',
+        ]}
+        words={['Cake']}
+        onComplete={vi.fn()}
+      />,
+    )
+
+    const answerInput =
+      screen.getByPlaceholderText(
+        /enter your answer/i,
+      )
+
+    fireEvent.change(answerInput, {
+      target: {
+        value: 'Kake',
+      },
+    })
+
+    fireEvent.keyDown(answerInput, {
+      key: 'Enter',
+      code: 'Enter',
+    })
+
+    expect(
+      screen.getByText('Close! +3/4'),
+    ).toBeInTheDocument()
+
+    expect(
+      screen.getByText('Score: 3 / 4'),
+    ).toBeInTheDocument()
+  })
+
   it('awards zero marks for an unrelated answer', () => {
     render(
       <RecallPhase
@@ -250,6 +323,74 @@ describe('RecallPhase component tests', () => {
     )
 
     expect(onComplete).toHaveBeenCalledWith(4)
+  })
+
+  it('combines partial marks from several drawings', () => {
+    const onComplete = vi.fn()
+
+    render(
+      <RecallPhase
+        drawings={[
+          'data:image/png;base64,drawing-one',
+          'data:image/png;base64,drawing-two',
+          'data:image/png;base64,drawing-three',
+        ]}
+        words={['Cake', 'Cake', 'Cake']}
+        onComplete={onComplete}
+      />,
+    )
+
+    const submitAnswer = (value: string) => {
+      const answerInput =
+        screen.getByPlaceholderText(
+          /enter your answer/i,
+        )
+
+      fireEvent.change(answerInput, {
+        target: { value },
+      })
+
+      fireEvent.click(
+        screen.getByRole('button', {
+          name: /check answer/i,
+        }),
+      )
+    }
+
+    submitAnswer('Kake')
+    expect(
+      screen.getByText('Score: 3 / 12'),
+    ).toBeInTheDocument()
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: /next drawing/i,
+      }),
+    )
+
+    submitAnswer('Kacke')
+    expect(
+      screen.getByText('Score: 5 / 12'),
+    ).toBeInTheDocument()
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: /next drawing/i,
+      }),
+    )
+
+    submitAnswer('Cake')
+    expect(
+      screen.getByText('Score: 9 / 12'),
+    ).toBeInTheDocument()
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: /view results/i,
+      }),
+    )
+
+    expect(onComplete).toHaveBeenCalledWith(9)
   })
 
   it('does not submit a blank recall answer', () => {
