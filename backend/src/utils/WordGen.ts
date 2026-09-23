@@ -20,7 +20,7 @@ const shuffle = <T,>(items: T[]) => {
 }
 
 
-const generateGameWords = () => {
+const generateGameWords = (wordCount: number = 25) => {
   const selectedGroups =
     shuffle(similarWordGroups).slice(0, 3)
 
@@ -29,7 +29,7 @@ const generateGameWords = () => {
   const selectedGeneralWords =
     shuffle(generalWords).slice(
       0,
-      25 - similarWords.length,
+      wordCount - similarWords.length,
     )
 
   return shuffle([

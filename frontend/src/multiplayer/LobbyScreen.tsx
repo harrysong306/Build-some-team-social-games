@@ -50,6 +50,7 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
         room={room}
         onExit={() => setRoundStarted(false)}
         gameWords={gameWords}
+        drawingSpeed={drawingSpeed}
         onPlayAgain={startGame}
         onSubmitDrawing={(bytes, index) => {
           room?.send("submit-drawing-meta", {
@@ -152,6 +153,35 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
         ) : (
           <p className="mt-6 text-sm text-white/60">
             Mode: {gameMode}
+          </p>
+        )}
+
+        {isHost ? (
+          <div className="mt-4">
+            <label className="mb-2 block text-sm text-white/60">
+              Drawing speed
+            </label>
+
+            <select
+              value={drawingSpeed}
+              onChange={(event) =>
+                setDrawingSpeed(event.target.value)
+              }
+              className="w-full rounded-lg border border-amber-500/30 bg-[#211006] px-4 py-3 text-white focus:border-amber-400 focus:outline-none"
+            >
+              {DRAWING_SPEEDS.map((speed) => (
+                <option
+                  key={speed.value}
+                  value={speed.value}
+                >
+                  {speed.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : (
+          <p className="mt-4 text-sm text-white/60">
+            Drawing speed: {drawingSpeed}
           </p>
         )}
 

@@ -11,6 +11,7 @@ type SketchRecallGameProps = {
   room: Room | null
   onExit: () => void
   gameWords: readonly string[]
+  drawingSpeed: string
   onPlayAgain: () => void
   onSubmitDrawing?: (
     bytes: Uint8Array,
@@ -29,6 +30,7 @@ function SketchRecallGame({
   room,
   onExit,
   gameWords,
+  drawingSpeed,
   onPlayAgain,
   onSubmitDrawing,
 }: SketchRecallGameProps) {
@@ -62,6 +64,7 @@ function SketchRecallGame({
     return (
       <DrawingPhase
         words={gameWords}
+        drawingSpeed={drawingSpeed}
         onBack={() =>
           setPhase('instructions')
         }

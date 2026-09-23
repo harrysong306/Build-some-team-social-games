@@ -255,9 +255,11 @@ export class LobbyRoom extends Room {
 
       if (!allReady) return;
 
+      const wordCount = this.state.drawingSpeed === "easy" ? 20 : 25
+
       this.state.gameWords.clear();
       this.state.gameWords.push(
-        ...generateGameWords(),
+        ...generateGameWords(wordCount),
       );
 
       this.state.phase = "playing";
