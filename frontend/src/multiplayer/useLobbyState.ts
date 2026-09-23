@@ -23,7 +23,7 @@ export function useLobbyState(room: Room | null) {
 
       // Synced from the backend GameState schema
       setDrawingSpeedState(state.drawingSpeed ?? "normal");
-      
+
       setPhase(state.phase);
       setGameWords(Array.from(state.gameWords ?? []));
     };
@@ -45,7 +45,7 @@ export function useLobbyState(room: Room | null) {
     room?.send("setGameMode", { mode });
   };
 
-  // Sends the host's drawing speed selection to LobbyRoom.ts
+  // Sends { speed } to LobbyRoom.ts using "setDrawingSpeed"
   const setDrawingSpeed = (speed: string) => {
     room?.send("setDrawingSpeed", { speed });
   };
