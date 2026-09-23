@@ -13,15 +13,23 @@ const GAME_MODES = [
   { value: "sketchRecall", label: "Sketch Recall" },
 ];
 
+const DRAWING_SPEEDS = [
+  { value: "easy", label: "Easy" },
+  { value: "normal", label: "Normal" },
+  { value: "hard", label: "Hard" },
+]
+
 function LobbyScreen({ room, roomId }: LobbyScreenProps) {
   const {
     players,
     gameMode,
+    drawingSpeed,
     phase,
     gameWords,
     mySessionId,
     toggleReady,
     setGameMode,
+    setDrawingSpeed,
     startGame,
   } = useLobbyState(room);
 
