@@ -1,0 +1,45 @@
+name: Deploy main
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: team-games-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Install cloudflared
+        run: |
+          curl -fsSL \
+            https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 \
+            -o cloudflared
+
+          sudo install -m 0755 cloudflared /usr/local/bin/cloudflared
+          cloudflared --version
+
+      - name: Configure SSH key
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/team-games-deploy
+          chmod 600 ~/.ssh/team-games-deploy
+
+      - name: Deploy main
+        run: |
+          ssh -T \
+            -i ~/.ssh/team-games-deploy \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=accept-new \
+            -o "ProxyCommand=cloudflared access ssh --hostname %h" \
+            teamgames-deploy@cits3200.ivins.id.au
