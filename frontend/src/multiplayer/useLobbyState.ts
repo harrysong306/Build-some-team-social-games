@@ -5,6 +5,12 @@ export type PlayerView = {
   name: string;
   ready: boolean;
   isHost: boolean;
+  questions?: PlayerQuestionView[];
+};
+
+export type PlayerQuestionView = {
+  prompt: string;
+  options: string[];
 };
 
 export function useLobbyState(room: Room | null) {
@@ -50,6 +56,19 @@ export function useLobbyState(room: Room | null) {
     room?.send("setDrawingSpeed", { speed });
   };
 
+  // Correct answers are intentionally not sent to the client in this message.
+  const submitPlayerQuestion = (
+    prompt: string,
+    options: string[],
+    correctOption: number,
+  ) => {
+    room?.send("submitPlayerQuestion", {
+      prompt,
+      options,
+      correctOption,
+    });
+  };
+
   const startGame = () => {
     room?.send("startGame");
   };
@@ -64,6 +83,7 @@ export function useLobbyState(room: Room | null) {
     toggleReady,
     setGameMode,
     setDrawingSpeed,
+    submitPlayerQuestion,
     startGame,
   };
 }
