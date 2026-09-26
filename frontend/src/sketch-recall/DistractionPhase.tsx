@@ -144,17 +144,7 @@ function DistractionPhase({
       })
     })
 
-  const nextQuestion = async () => {
-    if (submitting) return
-    setSubmitting(true)
-
-    const displayedIndex = currentQuestion.options.indexOf(selectedAnswer)
-    const selectedIndex =
-      currentQuestion.optionIndexes?.[displayedIndex] ?? displayedIndex
-    const isCorrect = currentQuestion.ownerSessionId
-      ? await checkPlayerAnswer(currentQuestion, selectedIndex)
-      : selectedAnswer === currentQuestion.answer
-
+  const finishQuestion = (isCorrect: boolean) => {
     const nextScore =
       score + (isCorrect ? 1 : 0)
 
@@ -176,25 +166,26 @@ function DistractionPhase({
     setSubmitting(false)
   }
 
+  const nextQuestion = async () => {
+    if (submitting || !selectedAnswer) return
+    setSubmitting(true)
+
+    const displayedIndex = currentQuestion.options.indexOf(selectedAnswer)
+    const selectedIndex =
+      currentQuestion.optionIndexes?.[displayedIndex] ?? displayedIndex
+    const isCorrect = currentQuestion.ownerSessionId
+      ? await checkPlayerAnswer(currentQuestion, selectedIndex)
+      : selectedAnswer === currentQuestion.answer
+
+    finishQuestion(isCorrect)
+  }
+
   useEffect(() => {
     if (finished) return
 
     if (timeLeft === 0) {
       // Treat timeout as an incorrect answer
-      const nextAnsweredCount =
-        answeredCount + 1
-
-      setAnsweredCount(nextAnsweredCount)
-
-      if (
-        nextAnsweredCount >= INITIAL_QUESTIONS &&
-        score >= REQUIRED_CORRECT
-      ) {
-        setFinished(true)
-        return
-      }
-
-      void nextQuestion()
+      if (!submitting) finishQuestion(false)
 
       return
     }
