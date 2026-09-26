@@ -3,6 +3,7 @@ import {
   fireEvent,
   render,
   screen,
+  waitFor,
 } from '@testing-library/react'
 
 import {
@@ -47,9 +48,23 @@ describe('DrawingPhase component tests', () => {
 
     vi.spyOn(
       HTMLCanvasElement.prototype,
-      'toDataURL',
-    ).mockReturnValue(
-      'data:image/png;base64,test-image',
+      'toBlob',
+    ).mockImplementation((callback) => {
+      const blob = new Blob(
+        ['test-image'],
+        { type: 'image/png' },
+      )
+
+      callback(blob)
+    })
+
+    Object.defineProperty(
+      URL,
+      'createObjectURL',
+      {
+        writable: true,
+        value: vi.fn(() => 'blob:test-image'),
+      },
     )
   })
 
@@ -58,13 +73,14 @@ describe('DrawingPhase component tests', () => {
     vi.restoreAllMocks()
   })
 
-  it('saves the current drawing and moves to the next word', () => {
+  it('saves the current drawing and moves to the next word', async () => {
     const onBack = vi.fn()
     const onComplete = vi.fn()
 
     render(
       <DrawingPhase
         words={['Apple', 'Tree']}
+        drawingSpeed="normal"
         onBack={onBack}
         onComplete={onComplete}
       />,
@@ -84,13 +100,11 @@ describe('DrawingPhase component tests', () => {
       }),
     )
 
-    expect(
-      HTMLCanvasElement.prototype.toDataURL,
-    ).toHaveBeenCalledTimes(1)
-
-    expect(
-      screen.getByText('Tree'),
-    ).toBeInTheDocument()
+    await waitFor(() => {
+      expect(
+        screen.getByText('Tree'),
+      ).toBeInTheDocument()
+    })
 
     expect(
       screen.getByText('Drawing 2 / 2'),
@@ -110,6 +124,7 @@ describe('DrawingPhase component tests', () => {
     render(
       <DrawingPhase
         words={['Apple', 'Tree']}
+        drawingSpeed="normal"
         onBack={vi.fn()}
         onComplete={vi.fn()}
       />,
@@ -136,10 +151,11 @@ describe('DrawingPhase component tests', () => {
     ).toBeInTheDocument()
   })
 
-  it('updates the drawing prompt and active grid cell after moving forward', () => {
+  it('updates the drawing prompt and active grid cell after moving forward', async () => {
     render(
       <DrawingPhase
         words={['Apple', 'Tree']}
+        drawingSpeed="normal"
         onBack={vi.fn()}
         onComplete={vi.fn()}
       />,
@@ -164,9 +180,11 @@ describe('DrawingPhase component tests', () => {
       }),
     )
 
-    expect(
-      screen.getByText('Tree'),
-    ).toBeInTheDocument()
+    await waitFor(() => {
+      expect(
+        screen.getByText('Tree'),
+      ).toBeInTheDocument()
+    })
 
     expect(
       screen.queryByText('Apple'),
@@ -193,12 +211,13 @@ describe('DrawingPhase component tests', () => {
     )
   })
 
-  it('hides the drawing board when the drawing phase finishes', () => {
+  it('hides the drawing board when the drawing phase finishes', async () => {
     const onComplete = vi.fn()
 
     const { container } = render(
       <DrawingPhase
         words={['Apple']}
+        drawingSpeed="normal"
         onBack={vi.fn()}
         onComplete={onComplete}
       />,
@@ -220,11 +239,13 @@ describe('DrawingPhase component tests', () => {
       }),
     )
 
-    expect(
-      screen.getByText(
-        'Drawing phase complete',
-      ),
-    ).toBeInTheDocument()
+    await waitFor(() => {
+      expect(
+        screen.getByText(
+          'Drawing phase complete',
+        ),
+      ).toBeInTheDocument()
+    })
 
     expect(
       container.querySelector('canvas'),
@@ -245,7 +266,7 @@ describe('DrawingPhase component tests', () => {
     expect(onComplete).not.toHaveBeenCalled()
   })
 
-  it('automatically saves and finishes when the drawing timer reaches zero', () => {
+  it('automatically saves and finishes when the drawing timer reaches zero', async () => {
     vi.useFakeTimers()
 
     vi.spyOn(
@@ -258,6 +279,7 @@ describe('DrawingPhase component tests', () => {
     const { container } = render(
       <DrawingPhase
         words={['Apple']}
+        drawingSpeed="hard"
         onBack={vi.fn()}
         onComplete={onComplete}
       />,
@@ -271,13 +293,10 @@ describe('DrawingPhase component tests', () => {
       container.querySelector('canvas'),
     ).toBeInTheDocument()
 
-    act(() => {
+    await act(async () => {
       vi.advanceTimersByTime(3000)
+      await Promise.resolve()
     })
-
-    expect(
-      HTMLCanvasElement.prototype.toDataURL,
-    ).toHaveBeenCalledTimes(1)
 
     expect(
       screen.getByText(

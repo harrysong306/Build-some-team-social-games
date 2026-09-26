@@ -5,6 +5,13 @@ import { generateGameWords } from "../utils/WordGen.js";
 const VALID_GAME_MODES = ["sketchRecall", "test"] as const;
 type GameMode = typeof VALID_GAME_MODES[number];
 
+const VALID_DRAWING_SPEEDS = [
+  "easy",
+  "normal",
+  "hard",
+] as const;
+type DrawingSpeed = typeof VALID_DRAWING_SPEEDS[number];
+
 type RecallAnswer = {
   sessionId: string;
   answer: string;
@@ -195,6 +202,39 @@ export class LobbyRoom extends Room {
       this.state.gameMode = message.mode;
     },
 
+    setDrawingSpeed: (
+      client: Client,
+      message: { speed: string },
+    ) => {
+      const player =
+        this.state.players.get(
+          client.sessionId,
+        );
+
+      // Only the host can change the drawing speed.
+      if (!player?.isHost) return;
+
+      if (
+        !VALID_DRAWING_SPEEDS.includes(
+          message.speed as DrawingSpeed,
+        )
+      ) {
+        client.send("drawing_speed_error", {
+          reason: `Invalid drawing speed: ${message.speed}`,
+        });
+
+        return;
+      }
+
+      console.log(
+        this.state.drawingSpeed,
+        "Changed to:",
+        message.speed,
+      );
+
+      this.state.drawingSpeed = message.speed;
+    },
+
     startGame: (
       client: Client,
       _message: any,
@@ -215,9 +255,11 @@ export class LobbyRoom extends Room {
 
       if (!allReady) return;
 
+      const wordCount = this.state.drawingSpeed === "easy" ? 20 : 25
+
       this.state.gameWords.clear();
       this.state.gameWords.push(
-        ...generateGameWords(),
+        ...generateGameWords(wordCount),
       );
 
       this.state.phase = "playing";

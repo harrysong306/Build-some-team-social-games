@@ -11,6 +11,7 @@ import DrawingCanvas, {
 
 type DrawingPhaseProps = {
   words: readonly string[]
+  drawingSpeed: string
   onBack: () => void
   onSubmitDrawing?: (
     bytes: Uint8Array,
@@ -19,12 +20,24 @@ type DrawingPhaseProps = {
   onComplete: (drawings: (string | null)[]) => void
 }
 
-function getRandomDrawingTime() {
-  return Math.floor(Math.random() * 8) + 3
+function getDrawingTime(drawingSpeed: string) {
+  if (drawingSpeed === 'hard') {
+    // 3–6 seconds
+    return Math.floor(Math.random() * 4) + 3
+  }
+
+  if (drawingSpeed === 'easy') {
+    // 8–12 seconds
+    return Math.floor(Math.random() * 5) + 8
+  }
+
+  // Normal: 6–10 seconds
+  return Math.floor(Math.random() * 5) + 6
 }
 
 function DrawingPhase({
   words,
+  drawingSpeed,
   onBack,
   onSubmitDrawing,
   onComplete,
@@ -37,7 +50,7 @@ function DrawingPhase({
     useState<'brush' | 'eraser'>('brush')
   const [brushSize, setBrushSize] = useState(8)
   const [timeLeft, setTimeLeft] =
-    useState(() => getRandomDrawingTime())
+    useState(() => getDrawingTime(drawingSpeed))
 
   const [drawings, setDrawings] =
     useState<(string | null)[]>(
@@ -73,14 +86,14 @@ function DrawingPhase({
     }
 
     setCurrentIndex((current) => current + 1)
-    setTimeLeft(getRandomDrawingTime())
+    setTimeLeft(getDrawingTime(drawingSpeed))
 
     canvasRef.current?.clear()
 
     window.setTimeout(() => {
       isAdvancingRef.current = false
     }, 500)
-  }, [currentIndex, words.length, onSubmitDrawing])
+  }, [currentIndex, words.length, onSubmitDrawing, drawingSpeed])
 
   useEffect(() => {
     if (finished) return
@@ -271,7 +284,7 @@ function DrawingPhase({
 
             <div className="mt-5 grid grid-cols-5 gap-2">
 
-              {Array.from({ length: 25 }).map(
+              {Array.from({ length: words.length }).map(
                 (_, index) => {
                   const drawing = drawings[index]
 
