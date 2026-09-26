@@ -48,6 +48,36 @@ function shuffleArray<T>(items: T[]): T[] {
   return shuffled
 }
 
+function randomizeOptions(
+  options: string[],
+  correctIndex: number,
+) {
+  const shuffled = shuffleArray(
+    options.map((option, optionIndex) => ({
+      option,
+      optionIndex,
+    })),
+  )
+
+  const displayedCorrectIndex =
+    shuffled.findIndex(
+      ({ optionIndex }) => optionIndex === correctIndex,
+    )
+
+  // Prevent a stable first-option answer when the random source repeats 0.
+  if (displayedCorrectIndex === 0 && shuffled.length > 1) {
+    const swapIndex =
+      Math.floor(Math.random() * (shuffled.length - 1)) + 1
+
+    ;[shuffled[0], shuffled[swapIndex]] = [
+      shuffled[swapIndex],
+      shuffled[0],
+    ]
+  }
+
+  return shuffled
+}
+
 function DistractionPhase({
   room = null,
   playerQuestions = [],
@@ -72,10 +102,17 @@ function DistractionPhase({
         ownerName: question.ownerName,
       }
     }),
-    ...shuffleArray(distractionQuestions).map((question) => ({
-      ...question,
-      options: shuffleArray(question.options),
-    })),
+    ...shuffleArray(distractionQuestions).map((question) => {
+      const options = randomizeOptions(
+        question.options,
+        question.options.indexOf(question.answer),
+      )
+
+      return {
+        ...question,
+        options: options.map(({ option }) => option),
+      }
+    }),
   ])
 
   const [questionIndex, setQuestionIndex] =
@@ -99,12 +136,17 @@ function DistractionPhase({
   const moveToNextQuestion = useCallback(() => {
     if (questionIndex >= questions.length - 1) {
       setQuestions(
-        shuffleArray(distractionQuestions).map(
-          (question) => ({
+        shuffleArray(distractionQuestions).map((question) => {
+          const options = randomizeOptions(
+            question.options,
+            question.options.indexOf(question.answer),
+          )
+
+          return {
             ...question,
-            options: shuffleArray(question.options),
-          }),
-        ),
+            options: options.map(({ option }) => option),
+          }
+        }),
       )
 
       setQuestionIndex(0)
