@@ -12,6 +12,15 @@ const VALID_DRAWING_SPEEDS = [
 ] as const;
 type DrawingSpeed = typeof VALID_DRAWING_SPEEDS[number];
 
+const REQUIRED_PLAYER_QUESTIONS = 2;
+const QUESTION_OPTION_COUNT = 4;
+
+type PlayerQuestion = {
+  prompt: string;
+  options: string[];
+  correctOption: number;
+};
+
 type RecallAnswer = {
   sessionId: string;
   answer: string;
@@ -88,6 +97,10 @@ export class LobbyRoom extends Room {
   private recallDeadline = 0;
   private recallStarted = false;
 
+  // Correct options stay private on the server; only prompts and options are
+  // synchronized to the lobby through the Player schema.
+  private playerQuestions = new Map<string, PlayerQuestion[]>();
+
   messages = {
     yourMessageType: (
       client: Client,
@@ -110,6 +123,17 @@ export class LobbyRoom extends Room {
         );
 
       if (player) {
+        if (
+          message.ready &&
+          (this.playerQuestions.get(client.sessionId)?.length ?? 0) !==
+            REQUIRED_PLAYER_QUESTIONS
+        ) {
+          client.send("questions_required", {
+            reason: `Submit ${REQUIRED_PLAYER_QUESTIONS} questions before readying up.`,
+          });
+          return;
+        }
+
         console.log(
           player.name,
           "changed ready to",
@@ -118,6 +142,49 @@ export class LobbyRoom extends Room {
 
         player.ready = message.ready;
       }
+    },
+
+    submitPlayerQuestion: (
+      client: Client,
+      message: {
+        prompt: string;
+        options: string[];
+        correctOption: number;
+      },
+    ) => {
+      const player = this.state.players.get(client.sessionId);
+      if (!player || player.ready) return;
+
+      const prompt = message.prompt?.trim().slice(0, 120);
+      const options = Array.isArray(message.options)
+        ? message.options.map((option) => option?.trim().slice(0, 60))
+        : [];
+      const correctOption = message.correctOption;
+
+      if (
+        !prompt ||
+        options.length !== QUESTION_OPTION_COUNT ||
+        options.some((option) => !option) ||
+        !Number.isInteger(correctOption) ||
+        correctOption < 0 ||
+        correctOption >= QUESTION_OPTION_COUNT
+      ) {
+        client.send("question_error", {
+          reason: "Each question needs a prompt, four options, and one correct option.",
+        });
+        return;
+      }
+
+      const questions = this.playerQuestions.get(client.sessionId) ?? [];
+      if (questions.length >= REQUIRED_PLAYER_QUESTIONS) return;
+
+      questions.push({ prompt, options, correctOption });
+      this.playerQuestions.set(client.sessionId, questions);
+
+      const publicQuestion = new PlayerQuestion();
+      publicQuestion.prompt = prompt;
+      publicQuestion.options.push(...options);
+      player.questions.push(publicQuestion);
     },
 
     changeName: (
@@ -534,6 +601,7 @@ export class LobbyRoom extends Room {
       client.sessionId,
       player,
     );
+    this.playerQuestions.set(client.sessionId, []);
 
     console.log(
       client.sessionId,
@@ -554,6 +622,7 @@ export class LobbyRoom extends Room {
     this.state.players.delete(
       client.sessionId,
     );
+    this.playerQuestions.delete(client.sessionId);
 
     this.recallReady.delete(
       client.sessionId,
