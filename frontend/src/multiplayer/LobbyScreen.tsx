@@ -154,7 +154,7 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
             </p>
 
             <p className="mt-2 text-xs leading-5 text-white/55">
-              Write two questions about yourself. Each question needs four options and one correct answer.
+              Write two factual questions about yourself. Each question needs four options and one correct answer. Make them recognisable and unambiguous, so players know who the question is about. Avoid questions like “What is my name?” when several players are in the room. For example: “What year was Alex born?” or “How old is Alex’s wife?”
             </p>
 
             <input
