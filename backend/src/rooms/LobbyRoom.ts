@@ -1,5 +1,9 @@
 import { Room, Client, CloseCode } from "colyseus";
-import { GameState, Player } from "./schema/GameState.js";
+import {
+  GameState,
+  Player,
+  PlayerQuestion,
+} from "./schema/GameState.js";
 import { generateGameWords } from "../utils/WordGen.js";
 
 const VALID_GAME_MODES = ["sketchRecall", "test"] as const;
@@ -15,7 +19,7 @@ type DrawingSpeed = typeof VALID_DRAWING_SPEEDS[number];
 const REQUIRED_PLAYER_QUESTIONS = 2;
 const QUESTION_OPTION_COUNT = 4;
 
-type PlayerQuestion = {
+type ServerPlayerQuestion = {
   prompt: string;
   options: string[];
   correctOption: number;
@@ -99,7 +103,7 @@ export class LobbyRoom extends Room {
 
   // Correct options stay private on the server; only prompts and options are
   // synchronized to the lobby through the Player schema.
-  private playerQuestions = new Map<string, PlayerQuestion[]>();
+  private playerQuestions = new Map<string, ServerPlayerQuestion[]>();
 
   messages = {
     yourMessageType: (

@@ -12,6 +12,19 @@ import {
   similarWordGroups,
 } from "../src/utils/sketchRecallWords.js";
 
+async function submitQuestions(
+  client: any,
+  room: any,
+) {
+  for (let index = 0; index < 2; index += 1) {
+    client.send("submitPlayerQuestion", {
+      prompt: `Question ${index + 1}`,
+      options: ["One", "Two", "Three", "Four"],
+      correctOption: index,
+    });
+    await room.waitForNextPatch();
+  }
+}
 
 describe("LobbyRoom", () => {
   let colyseus: ColyseusTestServer<typeof appConfig>;
@@ -67,6 +80,7 @@ describe("LobbyRoom", () => {
     const client1 = await colyseus.connectTo(room, { name: "Jordan" });
     const client2 = await colyseus.connectTo(room, { name: "Sam" });
 
+    await submitQuestions(client2, room);
     client2.send("markReady", { ready: true });
     await room.waitForNextPatch();
 
@@ -75,6 +89,56 @@ describe("LobbyRoom", () => {
 
     assert.strictEqual(p1?.ready, false);
     assert.strictEqual(p2?.ready, true);
+  });
+
+  it("requires two questions before a player can ready up", async () => {
+    const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
+    const client = await colyseus.connectTo(room, { name: "Jordan" });
+
+    client.send("markReady", { ready: true });
+    await room.waitForNextPatch();
+
+    assert.strictEqual(
+      client.state.players.get(client.sessionId)?.ready,
+      false,
+    );
+
+    await submitQuestions(client, room);
+    client.send("markReady", { ready: true });
+    await room.waitForNextPatch();
+
+    assert.strictEqual(
+      client.state.players.get(client.sessionId)?.ready,
+      true,
+    );
+  });
+
+  it("publishes question text and options without exposing the answer", async () => {
+    const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
+    const client = await colyseus.connectTo(room, { name: "Jordan" });
+
+    client.send("submitPlayerQuestion", {
+      prompt: "What is my favourite colour?",
+      options: ["Red", "Blue", "Green", "Yellow"],
+      correctOption: 1,
+    });
+    await room.waitForNextPatch();
+
+    const question = client.state.players
+      .get(client.sessionId)
+      ?.questions[0];
+
+    assert.strictEqual(question?.prompt, "What is my favourite colour?");
+    assert.deepStrictEqual([...question!.options], [
+      "Red",
+      "Blue",
+      "Green",
+      "Yellow",
+    ]);
+    assert.strictEqual(
+      "correctOption" in (question ?? {}),
+      false,
+    );
   });
 
   it("changeName rejects an empty name and leaves state unchanged", async () => {
@@ -168,6 +232,8 @@ describe("LobbyRoom", () => {
     const client1 = await colyseus.connectTo(room, { name: "Jordan" });
     const client2 = await colyseus.connectTo(room, { name: "Sam" });
 
+    await submitQuestions(client1, room);
+    await submitQuestions(client2, room);
     client1.send("markReady", { ready: true });
     client2.send("markReady", { ready: true });
     await room.waitForNextPatch();
