@@ -147,7 +147,6 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
           )}
         </ul>
 
-        <button
         {!questionsComplete && !me?.ready && (
           <section className="mt-6 rounded-lg border border-amber-500/30 bg-[#160b06] p-4">
             <p className="text-sm font-semibold text-amber-300">
