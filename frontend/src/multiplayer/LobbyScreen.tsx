@@ -1,6 +1,9 @@
 import { useState } from "react";
 import type { Room } from "@colyseus/sdk";
-import { useLobbyState } from "./useLobbyState";
+import {
+  type PlayerQuestionForGame,
+  useLobbyState,
+} from "./useLobbyState";
 import InstructionsScreen from "../sketch-recall/InstructionsScreen";
 import SketchRecallGame from "../sketch-recall/SketchRecallGame";
 
@@ -19,6 +22,20 @@ const DRAWING_SPEEDS = [
   { value: "hard", label: "Hard" },
 ]
 
+function shuffleQuestions<T>(items: T[]) {
+  const shuffled = [...items]
+
+  for (let index = shuffled.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1))
+    ;[shuffled[index], shuffled[swapIndex]] = [
+      shuffled[swapIndex],
+      shuffled[index],
+    ]
+  }
+
+  return shuffled
+}
+
 function LobbyScreen({ room, roomId }: LobbyScreenProps) {
   const {
     players,
@@ -26,6 +43,7 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
     drawingSpeed,
     phase,
     gameWords,
+    assignedPlayerQuestions,
     mySessionId,
     toggleReady,
     setGameMode,
@@ -50,6 +68,18 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
   const isHost = me?.isHost ?? false;
   const questionCount = me?.questions?.length ?? 0;
   const questionsComplete = questionCount === 2;
+  const playerQuestions: PlayerQuestionForGame[] = shuffleQuestions(
+    playerList.flatMap(([sessionId, player]) =>
+      sessionId === mySessionId
+        ? []
+        : (player.questions ?? []).map((question, questionIndex) => ({
+            ...question,
+            ownerSessionId: sessionId,
+            questionIndex,
+            ownerName: player.name,
+          })),
+    ),
+  );
 
   const allReady =
     playerList.length > 0 &&
@@ -81,6 +111,7 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
         room={room}
         onExit={() => setRoundStarted(false)}
         gameWords={gameWords}
+        playerQuestions={assignedPlayerQuestions}
         drawingSpeed={drawingSpeed}
         onPlayAgain={startGame}
         onSubmitDrawing={(bytes, index) => {

@@ -8,8 +8,19 @@ import {
   distractionQuestions,
   type DistractionQuestion,
 } from './DistractionQuestions'
+import type { Room } from '@colyseus/sdk'
+import type { PlayerQuestionForGame } from '../multiplayer/useLobbyState'
+
+type GameQuestion = DistractionQuestion & {
+  ownerSessionId?: string
+  questionIndex?: number
+  ownerName?: string
+  optionIndexes?: number[]
+}
 
 type DistractionPhaseProps = {
+  room?: Room | null
+  playerQuestions?: readonly PlayerQuestionForGame[]
   onComplete: () => void
 }
 
@@ -38,17 +49,34 @@ function shuffleArray<T>(items: T[]): T[] {
 }
 
 function DistractionPhase({
+  room = null,
+  playerQuestions = [],
   onComplete,
 }: DistractionPhaseProps) {
-  const [questions, setQuestions] =
-    useState<DistractionQuestion[]>(() =>
-      shuffleArray(distractionQuestions).map(
-        (question) => ({
-          ...question,
-          options: shuffleArray(question.options),
-        }),
-      ),
-    )
+  const [questions, setQuestions] = useState<GameQuestion[]>(() => [
+    ...playerQuestions.map((question) => {
+      const options = shuffleArray(
+        question.options.map((option, optionIndex) => ({
+          option,
+          optionIndex,
+        })),
+      )
+
+      return {
+        question: `${question.ownerName}: ${question.prompt}`,
+        options: options.map(({ option }) => option),
+        optionIndexes: options.map(({ optionIndex }) => optionIndex),
+        answer: '',
+        ownerSessionId: question.ownerSessionId,
+        questionIndex: question.questionIndex,
+        ownerName: question.ownerName,
+      }
+    }),
+    ...shuffleArray(distractionQuestions).map((question) => ({
+      ...question,
+      options: shuffleArray(question.options),
+    })),
+  ])
 
   const [questionIndex, setQuestionIndex] =
     useState(0)
@@ -63,6 +91,7 @@ function DistractionPhase({
   const [score, setScore] = useState(0)
   const [timeLeft, setTimeLeft] = useState(10)
   const [finished, setFinished] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
 
   const currentQuestion =
     questions[questionIndex]
@@ -92,9 +121,39 @@ function DistractionPhase({
     questions.length,
   ])
 
-  const nextQuestion = () => {
-    const isCorrect =
-      selectedAnswer === currentQuestion.answer
+  const checkPlayerAnswer = (question: GameQuestion, answerIndex: number) =>
+    new Promise<boolean>((resolve) => {
+      if (!room || !question.ownerSessionId || question.questionIndex === undefined) {
+        resolve(false)
+        return
+      }
+
+      const removeListener = room.onMessage(
+        'player_question_result',
+        (message: { questionId: string; correct: boolean }) => {
+          if (message.questionId !== `${question.ownerSessionId}:${question.questionIndex}`) return
+          removeListener?.()
+          resolve(message.correct)
+        },
+      )
+
+      room.send('submitPlayerQuestionAnswer', {
+        ownerSessionId: question.ownerSessionId,
+        questionIndex: question.questionIndex,
+        answerIndex,
+      })
+    })
+
+  const nextQuestion = async () => {
+    if (submitting) return
+    setSubmitting(true)
+
+    const displayedIndex = currentQuestion.options.indexOf(selectedAnswer)
+    const selectedIndex =
+      currentQuestion.optionIndexes?.[displayedIndex] ?? displayedIndex
+    const isCorrect = currentQuestion.ownerSessionId
+      ? await checkPlayerAnswer(currentQuestion, selectedIndex)
+      : selectedAnswer === currentQuestion.answer
 
     const nextScore =
       score + (isCorrect ? 1 : 0)
@@ -114,6 +173,7 @@ function DistractionPhase({
     }
 
     moveToNextQuestion()
+    setSubmitting(false)
   }
 
   useEffect(() => {
@@ -134,7 +194,7 @@ function DistractionPhase({
         return
       }
 
-      moveToNextQuestion()
+      void nextQuestion()
 
       return
     }
@@ -151,6 +211,7 @@ function DistractionPhase({
     answeredCount,
     score,
     moveToNextQuestion,
+    nextQuestion,
   ])
 
   if (finished) {
@@ -283,7 +344,7 @@ function DistractionPhase({
 
           <button
             type="button"
-            disabled={!selectedAnswer}
+            disabled={!selectedAnswer || submitting}
             onClick={nextQuestion}
             className="mt-8 w-full rounded-xl bg-gradient-to-r from-amber-500 to-yellow-400 py-4 text-lg font-bold text-black disabled:cursor-not-allowed disabled:opacity-30"
           >

@@ -120,9 +120,13 @@ describe("LobbyRoom", () => {
     client.send("submitPlayerQuestion", {
       prompt: "What is my favourite colour?",
       options: ["Red", "Blue", "Green", "Yellow"],
-      correctOption: 1,
+      correctOption: 0,
     });
     await room.waitForNextPatch();
+    assert.strictEqual(
+      client.state.players.get(client.sessionId)?.questions.length,
+      1,
+    );
 
     const question = client.state.players
       .get(client.sessionId)
@@ -148,15 +152,26 @@ describe("LobbyRoom", () => {
     client.send("submitPlayerQuestion", {
       prompt: "What is my favourite colour?",
       options: ["Red", "Blue", "Green", "Yellow"],
-      correctOption: 1,
+      correctOption: 0,
     });
     await room.waitForNextPatch();
 
-    await new Promise<void>((resolve) => {
+    const results = new Promise<boolean[]>((resolve) => {
+      const received: boolean[] = [];
+
       client.onMessage("player_question_result", (message) => {
         assert.strictEqual(message.questionId, `${client.sessionId}:0`);
-        assert.strictEqual(message.correct, true);
-        resolve();
+        received.push(message.correct);
+
+        if (received.length === 2) {
+          resolve(received);
+        }
+      });
+
+      client.send("submitPlayerQuestionAnswer", {
+        ownerSessionId: client.sessionId,
+        questionIndex: 0,
+        answerIndex: 0,
       });
 
       client.send("submitPlayerQuestionAnswer", {
@@ -166,21 +181,7 @@ describe("LobbyRoom", () => {
       });
     });
 
-    const wrongAnswer = new Promise<void>((resolve) => {
-      client.onMessage("player_question_result", (message) => {
-        assert.strictEqual(message.questionId, `${client.sessionId}:0`);
-        assert.strictEqual(message.correct, false);
-        resolve();
-      });
-
-      client.send("submitPlayerQuestionAnswer", {
-        ownerSessionId: client.sessionId,
-        questionIndex: 0,
-        answerIndex: 0,
-      });
-    });
-
-    await wrongAnswer;
+    assert.deepStrictEqual(await results, [true, false]);
   });
 
   it("changeName rejects an empty name and leaves state unchanged", async () => {

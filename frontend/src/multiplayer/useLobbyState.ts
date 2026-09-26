@@ -13,12 +13,20 @@ export type PlayerQuestionView = {
   options: string[];
 };
 
+export type PlayerQuestionForGame = PlayerQuestionView & {
+  ownerSessionId: string;
+  questionIndex: number;
+  ownerName: string;
+};
+
 export function useLobbyState(room: Room | null) {
   const [players, setPlayers] = useState<Record<string, PlayerView>>({});
   const [gameMode, setGameModeState] = useState<string>("sketchRecall");
   const [drawingSpeed, setDrawingSpeedState] = useState<string>("normal");
   const [phase, setPhase] = useState<string>("lobby");
   const [gameWords, setGameWords] = useState<string[]>([]);
+  const [assignedPlayerQuestions, setAssignedPlayerQuestions] =
+    useState<PlayerQuestionForGame[]>([]);
 
   useEffect(() => {
     if (!room) return;
@@ -36,8 +44,16 @@ export function useLobbyState(room: Room | null) {
 
     room.onStateChange(handleStateChange);
 
+    const removeAssignedQuestionsListener = room.onMessage(
+      "assigned_player_questions",
+      (questions: PlayerQuestionForGame[]) => {
+        setAssignedPlayerQuestions(questions);
+      },
+    );
+
     return () => {
       room.onStateChange.remove(handleStateChange);
+      removeAssignedQuestionsListener?.();
     };
   }, [room]);
 
@@ -79,6 +95,7 @@ export function useLobbyState(room: Room | null) {
     drawingSpeed,
     phase,
     gameWords,
+    assignedPlayerQuestions,
     mySessionId: room?.sessionId ?? "",
     toggleReady,
     setGameMode,

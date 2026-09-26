@@ -6,11 +6,13 @@ import DrawingPhase from './DrawingPhase'
 import InstructionsScreen from './InstructionsScreen'
 import RecallPhase from './RecallPhase'
 import ResultsScreen from './ResultsScreen'
+import type { PlayerQuestionForGame } from '../multiplayer/useLobbyState'
 
 type SketchRecallGameProps = {
   room: Room | null
   onExit: () => void
   gameWords: readonly string[]
+  playerQuestions: readonly PlayerQuestionForGame[]
   drawingSpeed: string
   onPlayAgain: () => void
   onSubmitDrawing?: (
@@ -30,6 +32,7 @@ function SketchRecallGame({
   room,
   onExit,
   gameWords,
+  playerQuestions,
   drawingSpeed,
   onPlayAgain,
   onSubmitDrawing,
@@ -82,6 +85,8 @@ function SketchRecallGame({
   if (phase === 'distraction') {
     return (
       <DistractionPhase
+        room={room}
+        playerQuestions={playerQuestions}
         onComplete={() =>
           setPhase('recall')
         }

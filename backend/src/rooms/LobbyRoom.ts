@@ -25,6 +25,14 @@ type ServerPlayerQuestion = {
   correctOption: number;
 };
 
+type AssignedPlayerQuestion = {
+  ownerSessionId: string;
+  questionIndex: number;
+  ownerName: string;
+  prompt: string;
+  options: string[];
+};
+
 type RecallAnswer = {
   sessionId: string;
   answer: string;
@@ -163,7 +171,9 @@ export class LobbyRoom extends Room {
       const options = Array.isArray(message.options)
         ? message.options.map((option) => option?.trim().slice(0, 60))
         : [];
-      const correctOption = message.correctOption;
+      const correctOption = Number(
+        message.correctOption,
+      );
 
       if (
         !prompt ||
@@ -201,21 +211,28 @@ export class LobbyRoom extends Room {
           answerIndex: number;
         },
       ) => {
+        const questionIndex = Number(
+          message.questionIndex,
+        );
+        const answerIndex = Number(
+          message.answerIndex,
+        );
+
         if (
-          !Number.isInteger(message.questionIndex) ||
-          !Number.isInteger(message.answerIndex)
+          !Number.isInteger(questionIndex) ||
+          !Number.isInteger(answerIndex)
         ) {
           return;
         }
 
         const question = this.playerQuestions.get(
           message.ownerSessionId,
-        )?.[message.questionIndex];
+        )?.[questionIndex];
 
         if (
           !question ||
-          message.answerIndex < 0 ||
-          message.answerIndex >= QUESTION_OPTION_COUNT
+          answerIndex < 0 ||
+          answerIndex >= QUESTION_OPTION_COUNT
         ) {
           return;
         }
@@ -223,7 +240,7 @@ export class LobbyRoom extends Room {
         client.send("player_question_result", {
           questionId: `${message.ownerSessionId}:${message.questionIndex}`,
           correct:
-            message.answerIndex === question.correctOption,
+          answerIndex === Number(question.correctOption),
         });
       },
 
@@ -368,6 +385,50 @@ export class LobbyRoom extends Room {
       this.state.gameWords.push(
         ...generateGameWords(wordCount),
       );
+
+      // Assign each personal question to one random player other than its
+      // author. The author never receives their own question.
+      const players = [...this.state.players.entries()];
+      const assignedQuestions = new Map<string, AssignedPlayerQuestion[]>();
+
+      for (const [ownerSessionId, owner] of players) {
+        const eligiblePlayers = players.filter(
+          ([sessionId]) => sessionId !== ownerSessionId,
+        );
+
+        for (const [questionIndex, question] of (
+          this.playerQuestions.get(ownerSessionId) ?? []
+        ).entries()) {
+          if (eligiblePlayers.length === 0) continue;
+
+          const [recipientSessionId] = eligiblePlayers[
+            Math.floor(Math.random() * eligiblePlayers.length)
+          ];
+
+          const recipientQuestions =
+            assignedQuestions.get(recipientSessionId) ?? [];
+
+          recipientQuestions.push({
+            ownerSessionId,
+            questionIndex,
+            ownerName: owner.name,
+            prompt: question.prompt,
+            options: question.options,
+          });
+          assignedQuestions.set(
+            recipientSessionId,
+            recipientQuestions,
+          );
+        }
+      }
+
+      for (const [recipientSessionId, questions] of assignedQuestions) {
+        this.clients
+          .find((connectedClient) =>
+            connectedClient.sessionId === recipientSessionId,
+          )
+          ?.send("assigned_player_questions", questions);
+      }
 
       this.state.phase = "playing";
 
