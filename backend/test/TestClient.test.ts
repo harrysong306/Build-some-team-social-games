@@ -141,6 +141,48 @@ describe("LobbyRoom", () => {
     );
   });
 
+  it("checks player-question answers on the server", async () => {
+    const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
+    const client = await colyseus.connectTo(room, { name: "Jordan" });
+
+    client.send("submitPlayerQuestion", {
+      prompt: "What is my favourite colour?",
+      options: ["Red", "Blue", "Green", "Yellow"],
+      correctOption: 1,
+    });
+    await room.waitForNextPatch();
+
+    await new Promise<void>((resolve) => {
+      client.onMessage("player_question_result", (message) => {
+        assert.strictEqual(message.questionId, `${client.sessionId}:0`);
+        assert.strictEqual(message.correct, true);
+        resolve();
+      });
+
+      client.send("submitPlayerQuestionAnswer", {
+        ownerSessionId: client.sessionId,
+        questionIndex: 0,
+        answerIndex: 1,
+      });
+    });
+
+    const wrongAnswer = new Promise<void>((resolve) => {
+      client.onMessage("player_question_result", (message) => {
+        assert.strictEqual(message.questionId, `${client.sessionId}:0`);
+        assert.strictEqual(message.correct, false);
+        resolve();
+      });
+
+      client.send("submitPlayerQuestionAnswer", {
+        ownerSessionId: client.sessionId,
+        questionIndex: 0,
+        answerIndex: 0,
+      });
+    });
+
+    await wrongAnswer;
+  });
+
   it("changeName rejects an empty name and leaves state unchanged", async () => {
     const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
     const client1 = await colyseus.connectTo(room, { name: "Jordan" });

@@ -191,6 +191,42 @@ export class LobbyRoom extends Room {
       player.questions.push(publicQuestion);
     },
 
+      // Validate distraction answers on the server without revealing the
+      // correct option in the synchronized lobby state.
+      submitPlayerQuestionAnswer: (
+        client: Client,
+        message: {
+          ownerSessionId: string;
+          questionIndex: number;
+          answerIndex: number;
+        },
+      ) => {
+        if (
+          !Number.isInteger(message.questionIndex) ||
+          !Number.isInteger(message.answerIndex)
+        ) {
+          return;
+        }
+
+        const question = this.playerQuestions.get(
+          message.ownerSessionId,
+        )?.[message.questionIndex];
+
+        if (
+          !question ||
+          message.answerIndex < 0 ||
+          message.answerIndex >= QUESTION_OPTION_COUNT
+        ) {
+          return;
+        }
+
+        client.send("player_question_result", {
+          questionId: `${message.ownerSessionId}:${message.questionIndex}`,
+          correct:
+            message.answerIndex === question.correctOption,
+        });
+      },
+
     changeName: (
       client: Client,
       message: { name: string },
