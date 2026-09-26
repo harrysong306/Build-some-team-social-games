@@ -1,5 +1,9 @@
 import { Room, Client, CloseCode } from "colyseus";
-import { GameState, Player } from "./schema/GameState.js";
+import {
+  GameState,
+  Player,
+  PlayerQuestion,
+} from "./schema/GameState.js";
 import { generateGameWords } from "../utils/WordGen.js";
 
 const VALID_GAME_MODES = ["sketchRecall", "test"] as const;
@@ -11,6 +15,23 @@ const VALID_DRAWING_SPEEDS = [
   "hard",
 ] as const;
 type DrawingSpeed = typeof VALID_DRAWING_SPEEDS[number];
+
+const REQUIRED_PLAYER_QUESTIONS = 2;
+const QUESTION_OPTION_COUNT = 4;
+
+type ServerPlayerQuestion = {
+  prompt: string;
+  options: string[];
+  correctOption: number;
+};
+
+type AssignedPlayerQuestion = {
+  ownerSessionId: string;
+  questionIndex: number;
+  ownerName: string;
+  prompt: string;
+  options: string[];
+};
 
 type RecallAnswer = {
   sessionId: string;
@@ -88,6 +109,10 @@ export class LobbyRoom extends Room {
   private recallDeadline = 0;
   private recallStarted = false;
 
+  // Correct options stay private on the server; only prompts and options are
+  // synchronized to the lobby through the Player schema.
+  private playerQuestions = new Map<string, ServerPlayerQuestion[]>();
+
   messages = {
     yourMessageType: (
       client: Client,
@@ -110,6 +135,17 @@ export class LobbyRoom extends Room {
         );
 
       if (player) {
+        if (
+          message.ready &&
+          (this.playerQuestions.get(client.sessionId)?.length ?? 0) !==
+            REQUIRED_PLAYER_QUESTIONS
+        ) {
+          client.send("questions_required", {
+            reason: `Submit ${REQUIRED_PLAYER_QUESTIONS} questions before readying up.`,
+          });
+          return;
+        }
+
         console.log(
           player.name,
           "changed ready to",
@@ -119,6 +155,94 @@ export class LobbyRoom extends Room {
         player.ready = message.ready;
       }
     },
+
+    submitPlayerQuestion: (
+      client: Client,
+      message: {
+        prompt: string;
+        options: string[];
+        correctOption: number;
+      },
+    ) => {
+      const player = this.state.players.get(client.sessionId);
+      if (!player || player.ready) return;
+
+      const prompt = message.prompt?.trim().slice(0, 120);
+      const options = Array.isArray(message.options)
+        ? message.options.map((option) => option?.trim().slice(0, 60))
+        : [];
+      const correctOption = Number(
+        message.correctOption,
+      );
+
+      if (
+        !prompt ||
+        options.length !== QUESTION_OPTION_COUNT ||
+        options.some((option) => !option) ||
+        !Number.isInteger(correctOption) ||
+        correctOption < 0 ||
+        correctOption >= QUESTION_OPTION_COUNT
+      ) {
+        client.send("question_error", {
+          reason: "Each question needs a prompt, four options, and one correct option.",
+        });
+        return;
+      }
+
+      const questions = this.playerQuestions.get(client.sessionId) ?? [];
+      if (questions.length >= REQUIRED_PLAYER_QUESTIONS) return;
+
+      questions.push({ prompt, options, correctOption });
+      this.playerQuestions.set(client.sessionId, questions);
+
+      const publicQuestion = new PlayerQuestion();
+      publicQuestion.prompt = prompt;
+      publicQuestion.options.push(...options);
+      player.questions.push(publicQuestion);
+    },
+
+      // Validate distraction answers on the server without revealing the
+      // correct option in the synchronized lobby state.
+      submitPlayerQuestionAnswer: (
+        client: Client,
+        message: {
+          ownerSessionId: string;
+          questionIndex: number;
+          answerIndex: number;
+        },
+      ) => {
+        const questionIndex = Number(
+          message.questionIndex,
+        );
+        const answerIndex = Number(
+          message.answerIndex,
+        );
+
+        if (
+          !Number.isInteger(questionIndex) ||
+          !Number.isInteger(answerIndex)
+        ) {
+          return;
+        }
+
+        const question = this.playerQuestions.get(
+          message.ownerSessionId,
+        )?.[questionIndex];
+
+        if (
+          !question ||
+          answerIndex < 0 ||
+          answerIndex >= QUESTION_OPTION_COUNT
+        ) {
+          return;
+        }
+
+        client.send("player_question_result", {
+          questionId: `${message.ownerSessionId}:${message.questionIndex}`,
+          correct:
+          answerIndex === Number(question.correctOption),
+        });
+      },
 
     changeName: (
       client: Client,
@@ -261,6 +385,50 @@ export class LobbyRoom extends Room {
       this.state.gameWords.push(
         ...generateGameWords(wordCount),
       );
+
+      // Assign each personal question to one random player other than its
+      // author. The author never receives their own question.
+      const players = [...this.state.players.entries()];
+      const assignedQuestions = new Map<string, AssignedPlayerQuestion[]>();
+
+      for (const [ownerSessionId, owner] of players) {
+        const eligiblePlayers = players.filter(
+          ([sessionId]) => sessionId !== ownerSessionId,
+        );
+
+        for (const [questionIndex, question] of (
+          this.playerQuestions.get(ownerSessionId) ?? []
+        ).entries()) {
+          if (eligiblePlayers.length === 0) continue;
+
+          const [recipientSessionId] = eligiblePlayers[
+            Math.floor(Math.random() * eligiblePlayers.length)
+          ];
+
+          const recipientQuestions =
+            assignedQuestions.get(recipientSessionId) ?? [];
+
+          recipientQuestions.push({
+            ownerSessionId,
+            questionIndex,
+            ownerName: owner.name,
+            prompt: question.prompt,
+            options: question.options,
+          });
+          assignedQuestions.set(
+            recipientSessionId,
+            recipientQuestions,
+          );
+        }
+      }
+
+      for (const [recipientSessionId, questions] of assignedQuestions) {
+        this.clients
+          .find((connectedClient) =>
+            connectedClient.sessionId === recipientSessionId,
+          )
+          ?.send("assigned_player_questions", questions);
+      }
 
       this.state.phase = "playing";
 
@@ -534,6 +702,7 @@ export class LobbyRoom extends Room {
       client.sessionId,
       player,
     );
+    this.playerQuestions.set(client.sessionId, []);
 
     console.log(
       client.sessionId,
@@ -554,6 +723,7 @@ export class LobbyRoom extends Room {
     this.state.players.delete(
       client.sessionId,
     );
+    this.playerQuestions.delete(client.sessionId);
 
     this.recallReady.delete(
       client.sessionId,

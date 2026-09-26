@@ -1,11 +1,17 @@
 import { Schema, type, MapSchema, ArraySchema } from "@colyseus/schema";
 
+export class PlayerQuestion extends Schema {
+  @type("string") prompt: string = "";
+  @type(["string"]) options = new ArraySchema<string>();
+}
+
 export class Player extends Schema {
   @type("string") name: string = "";
   @type("boolean") ready: boolean = false;
   @type("boolean") isHost: boolean = false;
+  // The prompt and options are public; the correct option stays server-side.
+  @type([PlayerQuestion]) questions = new ArraySchema<PlayerQuestion>();
 }
-
 
 export class DrawingSlot extends Schema {
   @type("string") playerId: string = "";

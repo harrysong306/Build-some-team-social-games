@@ -1,6 +1,9 @@
 import { useState } from "react";
 import type { Room } from "@colyseus/sdk";
-import { useLobbyState } from "./useLobbyState";
+import {
+  type PlayerQuestionForGame,
+  useLobbyState,
+} from "./useLobbyState";
 import InstructionsScreen from "../sketch-recall/InstructionsScreen";
 import SketchRecallGame from "../sketch-recall/SketchRecallGame";
 
@@ -19,6 +22,20 @@ const DRAWING_SPEEDS = [
   { value: "hard", label: "Hard" },
 ]
 
+function shuffleQuestions<T>(items: T[]) {
+  const shuffled = [...items]
+
+  for (let index = shuffled.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1))
+    ;[shuffled[index], shuffled[swapIndex]] = [
+      shuffled[swapIndex],
+      shuffled[index],
+    ]
+  }
+
+  return shuffled
+}
+
 function LobbyScreen({ room, roomId }: LobbyScreenProps) {
   const {
     players,
@@ -26,23 +43,67 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
     drawingSpeed,
     phase,
     gameWords,
+    assignedPlayerQuestions,
     mySessionId,
     toggleReady,
     setGameMode,
     setDrawingSpeed,
     startGame,
+    submitPlayerQuestion,
   } = useLobbyState(room);
 
   const [roundStarted, setRoundStarted] = useState(false);
+  const [questionPrompt, setQuestionPrompt] = useState("");
+  const [questionOptions, setQuestionOptions] = useState([
+    "",
+    "",
+    "",
+    "",
+  ]);
+  const [correctOption, setCorrectOption] = useState(0);
 
   const playerList = Object.entries(players);
   const me = players[mySessionId];
 
   const isHost = me?.isHost ?? false;
+  const questionCount = me?.questions?.length ?? 0;
+  const questionsComplete = questionCount === 2;
+  const playerQuestions: PlayerQuestionForGame[] = shuffleQuestions(
+    playerList.flatMap(([sessionId, player]) =>
+      sessionId === mySessionId
+        ? []
+        : (player.questions ?? []).map((question, questionIndex) => ({
+            ...question,
+            ownerSessionId: sessionId,
+            questionIndex,
+            ownerName: player.name,
+          })),
+    ),
+  );
 
   const allReady =
     playerList.length > 0 &&
     playerList.every(([, player]) => player.ready);
+
+  const submitQuestion = () => {
+    const prompt = questionPrompt.trim();
+    const options = questionOptions.map((option) =>
+      option.trim(),
+    );
+
+    if (!prompt || options.some((option) => !option)) {
+      return;
+    }
+
+    submitPlayerQuestion(
+      prompt,
+      options,
+      correctOption,
+    );
+    setQuestionPrompt("");
+    setQuestionOptions(["", "", "", ""]);
+    setCorrectOption(0);
+  };
 
   if (roundStarted) {
     return (
@@ -50,6 +111,7 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
         room={room}
         onExit={() => setRoundStarted(false)}
         gameWords={gameWords}
+        playerQuestions={assignedPlayerQuestions}
         drawingSpeed={drawingSpeed}
         onPlayAgain={startGame}
         onSubmitDrawing={(bytes, index) => {
@@ -116,9 +178,78 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
           )}
         </ul>
 
+        {!questionsComplete && !me?.ready && (
+          <section className="mt-6 rounded-lg border border-amber-500/30 bg-[#160b06] p-4">
+            <p className="text-sm font-semibold text-amber-300">
+              Personal questions ({questionCount}/2)
+            </p>
+
+            <p className="mt-2 text-xs leading-5 text-white/55">
+              Write two factual questions about yourself. Each question needs four options and one correct answer. Make them recognisable and unambiguous, so players know who the question is about. Avoid questions like “What is my name?” when several players are in the room. For example: “What year was Alex born?” or “How old is Alex’s wife?”
+            </p>
+
+            <input
+              value={questionPrompt}
+              onChange={(event) =>
+                setQuestionPrompt(event.target.value)
+              }
+              placeholder="Question about you"
+              maxLength={120}
+              className="mt-4 w-full rounded-lg border border-amber-500/30 bg-[#211006] px-3 py-2 text-sm text-white placeholder:text-white/35 focus:border-amber-400 focus:outline-none"
+            />
+
+            <div className="mt-3 space-y-2">
+              {questionOptions.map((option, index) => (
+                <div
+                  key={index}
+                  className="flex items-center gap-2"
+                >
+                  <input
+                    type="radio"
+                    name="correct-option"
+                    checked={correctOption === index}
+                    onChange={() => setCorrectOption(index)}
+                    aria-label={`Option ${index + 1} is correct`}
+                    className="accent-amber-500"
+                  />
+
+                  <input
+                    value={option}
+                    onChange={(event) => {
+                      setQuestionOptions((current) =>
+                        current.map((currentOption, optionIndex) =>
+                          optionIndex === index
+                            ? event.target.value
+                            : currentOption,
+                        ),
+                      );
+                    }}
+                    placeholder={`Option ${index + 1}`}
+                    maxLength={60}
+                    className="w-full rounded-lg border border-amber-500/30 bg-[#211006] px-3 py-2 text-sm text-white placeholder:text-white/35 focus:border-amber-400 focus:outline-none"
+                  />
+                </div>
+              ))}
+            </div>
+
+            <button
+              type="button"
+              onClick={submitQuestion}
+              disabled={
+                !questionPrompt.trim() ||
+                questionOptions.some((option) => !option.trim())
+              }
+              className="mt-4 w-full rounded-lg bg-amber-400 px-4 py-2 font-bold text-black transition hover:brightness-110 disabled:opacity-40"
+            >
+              SAVE QUESTION
+            </button>
+          </section>
+        )}
+
         <button
           onClick={toggleReady}
-          className="mt-6 w-full rounded-lg border border-amber-400 px-6 py-3 font-bold text-amber-300 transition hover:bg-amber-500/10"
+          disabled={!questionsComplete}
+          className="mt-6 w-full rounded-lg border border-amber-400 px-6 py-3 font-bold text-amber-300 transition hover:bg-amber-500/10 disabled:cursor-not-allowed disabled:opacity-40"
         >
           {me?.ready
             ? "Cancel Ready"

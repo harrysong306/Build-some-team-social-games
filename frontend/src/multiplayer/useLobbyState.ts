@@ -5,6 +5,18 @@ export type PlayerView = {
   name: string;
   ready: boolean;
   isHost: boolean;
+  questions?: PlayerQuestionView[];
+};
+
+export type PlayerQuestionView = {
+  prompt: string;
+  options: string[];
+};
+
+export type PlayerQuestionForGame = PlayerQuestionView & {
+  ownerSessionId: string;
+  questionIndex: number;
+  ownerName: string;
 };
 
 export function useLobbyState(room: Room | null) {
@@ -13,6 +25,8 @@ export function useLobbyState(room: Room | null) {
   const [drawingSpeed, setDrawingSpeedState] = useState<string>("normal");
   const [phase, setPhase] = useState<string>("lobby");
   const [gameWords, setGameWords] = useState<string[]>([]);
+  const [assignedPlayerQuestions, setAssignedPlayerQuestions] =
+    useState<PlayerQuestionForGame[]>([]);
 
   useEffect(() => {
     if (!room) return;
@@ -30,8 +44,16 @@ export function useLobbyState(room: Room | null) {
 
     room.onStateChange(handleStateChange);
 
+    const removeAssignedQuestionsListener = room.onMessage(
+      "assigned_player_questions",
+      (questions: PlayerQuestionForGame[]) => {
+        setAssignedPlayerQuestions(questions);
+      },
+    );
+
     return () => {
       room.onStateChange.remove(handleStateChange);
+      removeAssignedQuestionsListener?.();
     };
   }, [room]);
 
@@ -50,6 +72,19 @@ export function useLobbyState(room: Room | null) {
     room?.send("setDrawingSpeed", { speed });
   };
 
+  // Correct answers are intentionally not sent to the client in this message.
+  const submitPlayerQuestion = (
+    prompt: string,
+    options: string[],
+    correctOption: number,
+  ) => {
+    room?.send("submitPlayerQuestion", {
+      prompt,
+      options,
+      correctOption,
+    });
+  };
+
   const startGame = () => {
     room?.send("startGame");
   };
@@ -60,10 +95,12 @@ export function useLobbyState(room: Room | null) {
     drawingSpeed,
     phase,
     gameWords,
+    assignedPlayerQuestions,
     mySessionId: room?.sessionId ?? "",
     toggleReady,
     setGameMode,
     setDrawingSpeed,
+    submitPlayerQuestion,
     startGame,
   };
 }

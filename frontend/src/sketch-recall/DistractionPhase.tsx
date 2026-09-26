@@ -8,8 +8,19 @@ import {
   distractionQuestions,
   type DistractionQuestion,
 } from './DistractionQuestions'
+import type { Room } from '@colyseus/sdk'
+import type { PlayerQuestionForGame } from '../multiplayer/useLobbyState'
+
+type GameQuestion = DistractionQuestion & {
+  ownerSessionId?: string
+  questionIndex?: number
+  ownerName?: string
+  optionIndexes?: number[]
+}
 
 type DistractionPhaseProps = {
+  room?: Room | null
+  playerQuestions?: readonly PlayerQuestionForGame[]
   onComplete: () => void
 }
 
@@ -37,18 +48,72 @@ function shuffleArray<T>(items: T[]): T[] {
   return shuffled
 }
 
+function randomizeOptions(
+  options: string[],
+  correctIndex: number,
+) {
+  const shuffled = shuffleArray(
+    options.map((option, optionIndex) => ({
+      option,
+      optionIndex,
+    })),
+  )
+
+  const displayedCorrectIndex =
+    shuffled.findIndex(
+      ({ optionIndex }) => optionIndex === correctIndex,
+    )
+
+  // Prevent a stable first-option answer when the random source repeats 0.
+  if (displayedCorrectIndex === 0 && shuffled.length > 1) {
+    const swapIndex =
+      Math.floor(Math.random() * (shuffled.length - 1)) + 1
+
+    ;[shuffled[0], shuffled[swapIndex]] = [
+      shuffled[swapIndex],
+      shuffled[0],
+    ]
+  }
+
+  return shuffled
+}
+
 function DistractionPhase({
+  room = null,
+  playerQuestions = [],
   onComplete,
 }: DistractionPhaseProps) {
-  const [questions, setQuestions] =
-    useState<DistractionQuestion[]>(() =>
-      shuffleArray(distractionQuestions).map(
-        (question) => ({
-          ...question,
-          options: shuffleArray(question.options),
-        }),
-      ),
-    )
+  const [questions, setQuestions] = useState<GameQuestion[]>(() => [
+    ...playerQuestions.map((question) => {
+      const options = shuffleArray(
+        question.options.map((option, optionIndex) => ({
+          option,
+          optionIndex,
+        })),
+      )
+
+      return {
+        question: `${question.ownerName}: ${question.prompt}`,
+        options: options.map(({ option }) => option),
+        optionIndexes: options.map(({ optionIndex }) => optionIndex),
+        answer: '',
+        ownerSessionId: question.ownerSessionId,
+        questionIndex: question.questionIndex,
+        ownerName: question.ownerName,
+      }
+    }),
+    ...shuffleArray(distractionQuestions).map((question) => {
+      const options = randomizeOptions(
+        question.options,
+        question.options.indexOf(question.answer),
+      )
+
+      return {
+        ...question,
+        options: options.map(({ option }) => option),
+      }
+    }),
+  ])
 
   const [questionIndex, setQuestionIndex] =
     useState(0)
@@ -63,6 +128,7 @@ function DistractionPhase({
   const [score, setScore] = useState(0)
   const [timeLeft, setTimeLeft] = useState(10)
   const [finished, setFinished] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
 
   const currentQuestion =
     questions[questionIndex]
@@ -70,12 +136,17 @@ function DistractionPhase({
   const moveToNextQuestion = useCallback(() => {
     if (questionIndex >= questions.length - 1) {
       setQuestions(
-        shuffleArray(distractionQuestions).map(
-          (question) => ({
+        shuffleArray(distractionQuestions).map((question) => {
+          const options = randomizeOptions(
+            question.options,
+            question.options.indexOf(question.answer),
+          )
+
+          return {
             ...question,
-            options: shuffleArray(question.options),
-          }),
-        ),
+            options: options.map(({ option }) => option),
+          }
+        }),
       )
 
       setQuestionIndex(0)
@@ -92,10 +163,30 @@ function DistractionPhase({
     questions.length,
   ])
 
-  const nextQuestion = () => {
-    const isCorrect =
-      selectedAnswer === currentQuestion.answer
+  const checkPlayerAnswer = (question: GameQuestion, answerIndex: number) =>
+    new Promise<boolean>((resolve) => {
+      if (!room || !question.ownerSessionId || question.questionIndex === undefined) {
+        resolve(false)
+        return
+      }
 
+      const removeListener = room.onMessage(
+        'player_question_result',
+        (message: { questionId: string; correct: boolean }) => {
+          if (message.questionId !== `${question.ownerSessionId}:${question.questionIndex}`) return
+          removeListener?.()
+          resolve(message.correct)
+        },
+      )
+
+      room.send('submitPlayerQuestionAnswer', {
+        ownerSessionId: question.ownerSessionId,
+        questionIndex: question.questionIndex,
+        answerIndex,
+      })
+    })
+
+  const finishQuestion = (isCorrect: boolean) => {
     const nextScore =
       score + (isCorrect ? 1 : 0)
 
@@ -114,6 +205,21 @@ function DistractionPhase({
     }
 
     moveToNextQuestion()
+    setSubmitting(false)
+  }
+
+  const nextQuestion = async () => {
+    if (submitting || !selectedAnswer) return
+    setSubmitting(true)
+
+    const displayedIndex = currentQuestion.options.indexOf(selectedAnswer)
+    const selectedIndex =
+      currentQuestion.optionIndexes?.[displayedIndex] ?? displayedIndex
+    const isCorrect = currentQuestion.ownerSessionId
+      ? await checkPlayerAnswer(currentQuestion, selectedIndex)
+      : selectedAnswer === currentQuestion.answer
+
+    finishQuestion(isCorrect)
   }
 
   useEffect(() => {
@@ -121,20 +227,7 @@ function DistractionPhase({
 
     if (timeLeft === 0) {
       // Treat timeout as an incorrect answer
-      const nextAnsweredCount =
-        answeredCount + 1
-
-      setAnsweredCount(nextAnsweredCount)
-
-      if (
-        nextAnsweredCount >= INITIAL_QUESTIONS &&
-        score >= REQUIRED_CORRECT
-      ) {
-        setFinished(true)
-        return
-      }
-
-      moveToNextQuestion()
+      if (!submitting) finishQuestion(false)
 
       return
     }
@@ -151,6 +244,7 @@ function DistractionPhase({
     answeredCount,
     score,
     moveToNextQuestion,
+    nextQuestion,
   ])
 
   if (finished) {
@@ -283,7 +377,7 @@ function DistractionPhase({
 
           <button
             type="button"
-            disabled={!selectedAnswer}
+            disabled={!selectedAnswer || submitting}
             onClick={nextQuestion}
             className="mt-8 w-full rounded-xl bg-gradient-to-r from-amber-500 to-yellow-400 py-4 text-lg font-bold text-black disabled:cursor-not-allowed disabled:opacity-30"
           >
