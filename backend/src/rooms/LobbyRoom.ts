@@ -255,7 +255,18 @@ export class LobbyRoom extends Room {
 
       if (!allReady) return;
 
-      const wordCount = this.state.drawingSpeed === "easy" ? 20 : 25
+      // Start every new game with a clean scoreboard.
+      for (
+        const currentPlayer of
+        this.state.players.values()
+      ) {
+        currentPlayer.score = 0;
+      }
+
+      const wordCount =
+        this.state.drawingSpeed === "easy"
+          ? 20
+          : 25;
 
       this.state.gameWords.clear();
       this.state.gameWords.push(
@@ -309,18 +320,33 @@ export class LobbyRoom extends Room {
       this.recallDeadline =
         Date.now() + 10_000;
 
+      const roundIndex =
+        this.recallRound;
+
       this.broadcast(
         "recallRoundStarted",
         {
-          roundIndex:
-            this.recallRound,
+          roundIndex,
           deadline:
             this.recallDeadline,
         },
       );
 
+      /*
+       * Keep the timeout tied to the round
+       * that created it. If everybody answers
+       * early and the next round starts before
+       * this timer fires, the old timer must
+       * not finish the new round.
+       */
       this.clock.setTimeout(() => {
-        this.finishRecallRound();
+        if (
+          this.recallStarted &&
+          this.recallRound ===
+            roundIndex
+        ) {
+          this.finishRecallRound();
+        }
       }, 10_000);
     },
 
@@ -420,6 +446,9 @@ export class LobbyRoom extends Room {
             right.submittedAt,
       );
 
+    const playerCount =
+      this.state.players.size;
+
     const results = [
       ...this.state.players.entries(),
     ].map(
@@ -436,15 +465,35 @@ export class LobbyRoom extends Room {
             ? ranked[resultIndex]
             : undefined;
 
+        const rank = entry
+          ? resultIndex + 1
+          : null;
+
+        /*
+         * Rank-based scoring:
+         * points = number of players - rank + 1.
+         *
+         * Example with 4 players:
+         * 1st = 4, 2nd = 3, 3rd = 2, 4th = 1.
+         *
+         * Players who do not answer receive 0.
+         */
+        const pointsEarned =
+          rank !== null
+            ? playerCount - rank + 1
+            : 0;
+
+        player.score += pointsEarned;
+
         return {
           sessionId,
           playerName: player.name,
           answer:
             entry?.answer ?? "",
-          rank: entry
-            ? resultIndex + 1
-            : null,
+          rank,
           timedOut: !entry,
+          pointsEarned,
+          totalScore: player.score,
         };
       },
     );

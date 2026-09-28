@@ -31,6 +31,7 @@ describe("LobbyRoom", () => {
     assert.strictEqual(player?.name, "Jordan");
     assert.strictEqual(player?.isHost, true);
     assert.strictEqual(player?.ready, false);
+    assert.strictEqual(player?.score, 0);
   });
 
   it("second player to join is not host", async () => {
@@ -182,6 +183,216 @@ describe("LobbyRoom", () => {
       [...client1.state.gameWords],
       [...room.state.gameWords],
     );
+  });
+
+  it("startGame resets all player scores to zero", async () => {
+    const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
+    const client1 = await colyseus.connectTo(room, { name: "Jordan" });
+    const client2 = await colyseus.connectTo(room, { name: "Sam" });
+
+    const player1 = room.state.players.get(client1.sessionId);
+    const player2 = room.state.players.get(client2.sessionId);
+
+    assert.ok(player1);
+    assert.ok(player2);
+
+    player1.score = 10;
+    player2.score = 5;
+
+    client1.send("markReady", { ready: true });
+    client2.send("markReady", { ready: true });
+    await room.waitForNextPatch();
+
+    assert.strictEqual(
+      client1.state.players.get(client1.sessionId)?.score,
+      10,
+    );
+    assert.strictEqual(
+      client1.state.players.get(client2.sessionId)?.score,
+      5,
+    );
+
+    client1.send("startGame", {});
+    await room.waitForNextPatch();
+
+    assert.strictEqual(
+      room.state.players.get(client1.sessionId)?.score,
+      0,
+    );
+    assert.strictEqual(
+      room.state.players.get(client2.sessionId)?.score,
+      0,
+    );
+    assert.strictEqual(
+      client1.state.players.get(client1.sessionId)?.score,
+      0,
+    );
+    assert.strictEqual(
+      client1.state.players.get(client2.sessionId)?.score,
+      0,
+    );
+  });
+
+  describe("Recall multiplayer scoring", () => {
+    it("awards rank-based points and gives timed-out players zero", async () => {
+      const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
+      const client1 = await colyseus.connectTo(room, { name: "Jordan" });
+      const client2 = await colyseus.connectTo(room, { name: "Sam" });
+      const client3 = await colyseus.connectTo(room, { name: "Alex" });
+
+      room.state.gameWords.clear();
+      room.state.gameWords.push("apple");
+
+      const resultPromise = new Promise<any>((resolve) => {
+        client1.onMessage("recallRoundResult", resolve);
+      });
+
+      const internalRoom = room as any;
+
+      internalRoom.recallRound = 0;
+      internalRoom.recallStarted = true;
+      internalRoom.recallAnswers.clear();
+
+      internalRoom.recallAnswers.set(client1.sessionId, {
+        sessionId: client1.sessionId,
+        answer: "apple",
+        submittedAt: 100,
+      });
+
+      internalRoom.recallAnswers.set(client2.sessionId, {
+        sessionId: client2.sessionId,
+        answer: "appl",
+        submittedAt: 200,
+      });
+
+      // Alex does not answer, so they time out.
+      internalRoom.finishRecallRound();
+
+      const result = await resultPromise;
+
+      assert.strictEqual(
+        room.state.players.get(client1.sessionId)?.score,
+        3,
+      );
+      assert.strictEqual(
+        room.state.players.get(client2.sessionId)?.score,
+        2,
+      );
+      assert.strictEqual(
+        room.state.players.get(client3.sessionId)?.score,
+        0,
+      );
+
+      const client1Result = result.results.find(
+        (entry: any) => entry.sessionId === client1.sessionId,
+      );
+      const client2Result = result.results.find(
+        (entry: any) => entry.sessionId === client2.sessionId,
+      );
+      const client3Result = result.results.find(
+        (entry: any) => entry.sessionId === client3.sessionId,
+      );
+
+      assert.strictEqual(client1Result.rank, 1);
+      assert.strictEqual(client1Result.pointsEarned, 3);
+      assert.strictEqual(client1Result.totalScore, 3);
+
+      assert.strictEqual(client2Result.rank, 2);
+      assert.strictEqual(client2Result.pointsEarned, 2);
+      assert.strictEqual(client2Result.totalScore, 2);
+
+      assert.strictEqual(client3Result.rank, null);
+      assert.strictEqual(client3Result.timedOut, true);
+      assert.strictEqual(client3Result.pointsEarned, 0);
+      assert.strictEqual(client3Result.totalScore, 0);
+    });
+
+    it("accumulates player scores across Recall rounds", async () => {
+      const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
+      const client1 = await colyseus.connectTo(room, { name: "Jordan" });
+      const client2 = await colyseus.connectTo(room, { name: "Sam" });
+      const client3 = await colyseus.connectTo(room, { name: "Alex" });
+
+      room.state.gameWords.clear();
+      room.state.gameWords.push("apple", "banana");
+
+      const internalRoom = room as any;
+
+      // Round 1:
+      // Jordan = 1st = 3
+      // Sam = 2nd = 2
+      // Alex = timeout = 0
+      internalRoom.recallRound = 0;
+      internalRoom.recallStarted = true;
+      internalRoom.recallAnswers.clear();
+
+      internalRoom.recallAnswers.set(client1.sessionId, {
+        sessionId: client1.sessionId,
+        answer: "apple",
+        submittedAt: 100,
+      });
+
+      internalRoom.recallAnswers.set(client2.sessionId, {
+        sessionId: client2.sessionId,
+        answer: "appl",
+        submittedAt: 200,
+      });
+
+      internalRoom.finishRecallRound();
+
+      assert.strictEqual(
+        room.state.players.get(client1.sessionId)?.score,
+        3,
+      );
+      assert.strictEqual(
+        room.state.players.get(client2.sessionId)?.score,
+        2,
+      );
+      assert.strictEqual(
+        room.state.players.get(client3.sessionId)?.score,
+        0,
+      );
+
+      // Round 2:
+      // Sam = 1st = 3
+      // Jordan = 2nd = 2
+      // Alex = 3rd = 1
+      internalRoom.recallStarted = true;
+      internalRoom.recallAnswers.clear();
+
+      internalRoom.recallAnswers.set(client1.sessionId, {
+        sessionId: client1.sessionId,
+        answer: "banan",
+        submittedAt: 200,
+      });
+
+      internalRoom.recallAnswers.set(client2.sessionId, {
+        sessionId: client2.sessionId,
+        answer: "banana",
+        submittedAt: 100,
+      });
+
+      internalRoom.recallAnswers.set(client3.sessionId, {
+        sessionId: client3.sessionId,
+        answer: "x",
+        submittedAt: 300,
+      });
+
+      internalRoom.finishRecallRound();
+
+      assert.strictEqual(
+        room.state.players.get(client1.sessionId)?.score,
+        5,
+      );
+      assert.strictEqual(
+        room.state.players.get(client2.sessionId)?.score,
+        5,
+      );
+      assert.strictEqual(
+        room.state.players.get(client3.sessionId)?.score,
+        1,
+      );
+    });
   });
 
   describe("generateGameWords", () => {

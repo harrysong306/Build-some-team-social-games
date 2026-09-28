@@ -4,6 +4,7 @@ export class Player extends Schema {
   @type("string") name: string = "";
   @type("boolean") ready: boolean = false;
   @type("boolean") isHost: boolean = false;
+  @type("number") score: number = 0;
 }
 
 
