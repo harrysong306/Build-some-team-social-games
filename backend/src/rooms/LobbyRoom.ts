@@ -607,8 +607,7 @@ export class LobbyRoom extends Room {
     for (const sessionId of this.state.players.keys()) {
       for (
         let index = 0;
-        index 
-        this.state.gameWords.length;
+        index < this.state.gameWords.length;
         index++
       ) {
         if (
