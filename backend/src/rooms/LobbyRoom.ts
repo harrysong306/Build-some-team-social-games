@@ -67,6 +67,34 @@ function similarity(
   );
 }
 
+function scoreRecallAnswer(
+  guess: string,
+  target: string,
+) {
+  const left = normalize(guess);
+  const right = normalize(target);
+
+  if (!left && !right) return 4;
+  if (!left || !right) return 0;
+  if (left === right) return 4;
+
+  let score = Math.round(
+    similarity(left, right) * 4,
+  );
+
+  if (
+    left.includes(right) ||
+    right.includes(left)
+  ) {
+    score = Math.max(score, 3);
+  }
+
+  return Math.max(
+    0,
+    Math.min(4, score),
+  );
+}
+
 export class LobbyRoom extends Room {
   maxClients = 8;
   state = new GameState();
@@ -232,7 +260,8 @@ export class LobbyRoom extends Room {
         message.speed,
       );
 
-      this.state.drawingSpeed = message.speed;
+      this.state.drawingSpeed =
+        message.speed;
     },
 
     startGame: (
@@ -255,14 +284,6 @@ export class LobbyRoom extends Room {
 
       if (!allReady) return;
 
-      // Start every new game with a clean scoreboard.
-      for (
-        const currentPlayer of
-        this.state.players.values()
-      ) {
-        currentPlayer.score = 0;
-      }
-
       const wordCount =
         this.state.drawingSpeed === "easy"
           ? 20
@@ -272,6 +293,14 @@ export class LobbyRoom extends Room {
       this.state.gameWords.push(
         ...generateGameWords(wordCount),
       );
+
+      // Start each new game with a clean scoreboard.
+      for (
+        const currentPlayer of
+        this.state.players.values()
+      ) {
+        currentPlayer.score = 0;
+      }
 
       this.state.phase = "playing";
 
@@ -320,8 +349,7 @@ export class LobbyRoom extends Room {
       this.recallDeadline =
         Date.now() + 10_000;
 
-      const roundIndex =
-        this.recallRound;
+      const roundIndex = this.recallRound;
 
       this.broadcast(
         "recallRoundStarted",
@@ -332,13 +360,6 @@ export class LobbyRoom extends Room {
         },
       );
 
-      /*
-       * Keep the timeout tied to the round
-       * that created it. If everybody answers
-       * early and the next round starts before
-       * this timer fires, the old timer must
-       * not finish the new round.
-       */
       this.clock.setTimeout(() => {
         if (
           this.recallStarted &&
@@ -417,37 +438,39 @@ export class LobbyRoom extends Room {
   private finishRecallRound() {
     if (!this.recallStarted) return;
 
+    const roundIndex = this.recallRound;
+
     const correctWord =
       this.state.gameWords[
-        this.recallRound
+        roundIndex
       ] ?? "";
 
     /*
-     * Closest answer ranks first.
+     * Each answer keeps the original
+     * Sketch Recall 0-4 grading.
      *
-     * If two answers are equally close,
-     * the earlier server submission time wins.
+     * Higher scores rank first.
+     * Equal scores are ordered by the
+     * earlier server submission time.
      */
     const ranked = [
       ...this.recallAnswers.values(),
     ]
       .map((entry) => ({
         ...entry,
-        similarity: similarity(
-          entry.answer,
-          correctWord,
-        ),
+        pointsEarned:
+          scoreRecallAnswer(
+            entry.answer,
+            correctWord,
+          ),
       }))
       .sort(
         (left, right) =>
-          right.similarity -
-            left.similarity ||
+          right.pointsEarned -
+            left.pointsEarned ||
           left.submittedAt -
             right.submittedAt,
       );
-
-    const playerCount =
-      this.state.players.size;
 
     const results = [
       ...this.state.players.entries(),
@@ -465,23 +488,8 @@ export class LobbyRoom extends Room {
             ? ranked[resultIndex]
             : undefined;
 
-        const rank = entry
-          ? resultIndex + 1
-          : null;
-
-        /*
-         * Rank-based scoring:
-         * points = number of players - rank + 1.
-         *
-         * Example with 4 players:
-         * 1st = 4, 2nd = 3, 3rd = 2, 4th = 1.
-         *
-         * Players who do not answer receive 0.
-         */
         const pointsEarned =
-          rank !== null
-            ? playerCount - rank + 1
-            : 0;
+          entry?.pointsEarned ?? 0;
 
         player.score += pointsEarned;
 
@@ -490,7 +498,9 @@ export class LobbyRoom extends Room {
           playerName: player.name,
           answer:
             entry?.answer ?? "",
-          rank,
+          rank: entry
+            ? resultIndex + 1
+            : null,
           timedOut: !entry,
           pointsEarned,
           totalScore: player.score,
@@ -501,8 +511,7 @@ export class LobbyRoom extends Room {
     this.broadcast(
       "recallRoundResult",
       {
-        roundIndex:
-          this.recallRound,
+        roundIndex,
         correctWord,
         results,
       },
