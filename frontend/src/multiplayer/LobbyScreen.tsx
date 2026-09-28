@@ -48,6 +48,7 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
     return (
       <SketchRecallGame
         room={room}
+        players={players}
         onExit={() => setRoundStarted(false)}
         gameWords={gameWords}
         drawingSpeed={drawingSpeed}

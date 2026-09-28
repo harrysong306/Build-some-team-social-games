@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { Room } from '@colyseus/sdk'
 
+import type { PlayerView } from '../multiplayer/useLobbyState'
 import DistractionPhase from './DistractionPhase'
 import DrawingPhase from './DrawingPhase'
 import InstructionsScreen from './InstructionsScreen'
@@ -9,6 +10,7 @@ import ResultsScreen from './ResultsScreen'
 
 type SketchRecallGameProps = {
   room: Room | null
+  players: Record<string, PlayerView>
   onExit: () => void
   gameWords: readonly string[]
   drawingSpeed: string
