@@ -1,8 +1,12 @@
 import {
+  act,
   fireEvent,
   render,
   screen,
+  within,
 } from '@testing-library/react'
+
+import type { Room } from '@colyseus/sdk'
 
 import {
   describe,
@@ -12,6 +16,61 @@ import {
 } from 'vitest'
 
 import RecallPhase from './RecallPhase'
+
+function createMockRoom(
+  sessionId = 'player-one',
+) {
+  const handlers =
+    new Map<
+      string,
+      (message: any) => void
+    >()
+
+  const room = {
+    sessionId,
+    send: vi.fn(),
+    onMessage: vi.fn(
+      (
+        type: string,
+        callback: (
+          message: any,
+        ) => void,
+      ) => {
+        handlers.set(
+          type,
+          callback,
+        )
+
+        return () => {
+          handlers.delete(type)
+        }
+      },
+    ),
+  } as unknown as Room
+
+  const sendMessage = (
+    type: string,
+    message: any,
+  ) => {
+    const handler =
+      handlers.get(type)
+
+    if (!handler) {
+      throw new Error(
+        `No handler registered for ${type}`,
+      )
+    }
+
+    act(() => {
+      handler(message)
+    })
+  }
+
+  return {
+    room,
+    sendMessage,
+  }
+}
 
 describe('RecallPhase component tests', () => {
   it('allows the user to type and submit an answer', () => {
@@ -340,7 +399,9 @@ describe('RecallPhase component tests', () => {
       />,
     )
 
-    const submitAnswer = (value: string) => {
+    const submitAnswer = (
+      value: string,
+    ) => {
       const answerInput =
         screen.getByPlaceholderText(
           /enter your answer/i,
@@ -358,6 +419,7 @@ describe('RecallPhase component tests', () => {
     }
 
     submitAnswer('Kake')
+
     expect(
       screen.getByText('Score: 3 / 12'),
     ).toBeInTheDocument()
@@ -369,6 +431,7 @@ describe('RecallPhase component tests', () => {
     )
 
     submitAnswer('Kacke')
+
     expect(
       screen.getByText('Score: 5 / 12'),
     ).toBeInTheDocument()
@@ -380,6 +443,7 @@ describe('RecallPhase component tests', () => {
     )
 
     submitAnswer('Cake')
+
     expect(
       screen.getByText('Score: 9 / 12'),
     ).toBeInTheDocument()
@@ -446,5 +510,234 @@ describe('RecallPhase component tests', () => {
     ).not.toBeInTheDocument()
 
     expect(onComplete).not.toHaveBeenCalled()
+  })
+
+  it('shows multiplayer points and current standings after a round', () => {
+    const {
+      room,
+      sendMessage,
+    } = createMockRoom(
+      'player-one',
+    )
+
+    render(
+      <RecallPhase
+        room={room}
+        drawings={[
+          'data:image/png;base64,drawing-one',
+        ]}
+        words={['Apple']}
+        onComplete={vi.fn()}
+      />,
+    )
+
+    sendMessage(
+      'recallRoundResult',
+      {
+        roundIndex: 0,
+        correctWord: 'Apple',
+        results: [
+          {
+            sessionId:
+              'player-one',
+            playerName:
+              'Jordan',
+            answer: 'Aple',
+            rank: 2,
+            timedOut: false,
+            pointsEarned: 2,
+            totalScore: 5,
+          },
+          {
+            sessionId:
+              'player-two',
+            playerName:
+              'Sam',
+            answer: 'Apple',
+            rank: 1,
+            timedOut: false,
+            pointsEarned: 3,
+            totalScore: 6,
+          },
+          {
+            sessionId:
+              'player-three',
+            playerName:
+              'Alex',
+            answer: '',
+            rank: null,
+            timedOut: true,
+            pointsEarned: 0,
+            totalScore: 2,
+          },
+        ],
+      },
+    )
+
+    expect(
+      screen.getByText(
+        'You ranked #2',
+      ),
+    ).toBeInTheDocument()
+
+    expect(
+      screen.getByText(
+        /Correct word:/i,
+      ),
+    ).toHaveTextContent('Apple')
+
+    expect(
+      screen.getAllByText(
+        /\+2\s+points/i,
+      ).length,
+    ).toBeGreaterThan(0)
+
+    expect(
+      screen.getByText(
+        /Total:\s*5/i,
+      ),
+    ).toBeInTheDocument()
+
+    expect(
+      screen.getByRole(
+        'heading',
+        {
+          name: /round rankings/i,
+        },
+      ),
+    ).toBeInTheDocument()
+
+    const standingsHeading =
+      screen.getByRole(
+        'heading',
+        {
+          name: /current standings/i,
+        },
+      )
+
+    const standingsSection =
+      standingsHeading.closest(
+        'section',
+      )
+
+    expect(
+      standingsSection,
+    ).not.toBeNull()
+
+    const standings =
+      within(
+        standingsSection as HTMLElement,
+      )
+
+    expect(
+      standings.getByText(
+        '6 pts',
+      ),
+    ).toBeInTheDocument()
+
+    expect(
+      standings.getByText(
+        '5 pts',
+      ),
+    ).toBeInTheDocument()
+
+    expect(
+      standings.getByText(
+        '2 pts',
+      ),
+    ).toBeInTheDocument()
+
+    const standingsText =
+      standingsSection
+        ?.textContent ?? ''
+
+    expect(
+      standingsText.indexOf('Sam'),
+    ).toBeLessThan(
+      standingsText.indexOf(
+        'Jordan',
+      ),
+    )
+
+    expect(
+      standingsText.indexOf(
+        'Jordan',
+      ),
+    ).toBeLessThan(
+      standingsText.indexOf(
+        'Alex',
+      ),
+    )
+  })
+
+  it('shows zero points when the player times out', () => {
+    const {
+      room,
+      sendMessage,
+    } = createMockRoom(
+      'player-one',
+    )
+
+    render(
+      <RecallPhase
+        room={room}
+        drawings={[
+          'data:image/png;base64,drawing-one',
+        ]}
+        words={['Apple']}
+        onComplete={vi.fn()}
+      />,
+    )
+
+    sendMessage(
+      'recallRoundResult',
+      {
+        roundIndex: 0,
+        correctWord: 'Apple',
+        results: [
+          {
+            sessionId:
+              'player-one',
+            playerName:
+              'Jordan',
+            answer: '',
+            rank: null,
+            timedOut: true,
+            pointsEarned: 0,
+            totalScore: 3,
+          },
+        ],
+      },
+    )
+
+    expect(
+      screen.getByText(
+        'Time is up',
+      ),
+    ).toBeInTheDocument()
+
+    expect(
+      screen.getAllByText(
+        /\+0\s+points/i,
+      ).length,
+    ).toBeGreaterThan(0)
+
+    expect(
+      screen.getByText(
+        /Total:\s*3/i,
+      ),
+    ).toBeInTheDocument()
+
+    expect(
+      screen.getByText(
+        'Timed out',
+      ),
+    ).toBeInTheDocument()
+
+    expect(
+      screen.getByText(
+        '3 pts',
+      ),
+    ).toBeInTheDocument()
   })
 })

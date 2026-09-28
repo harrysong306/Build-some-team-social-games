@@ -14,6 +14,8 @@ type RecallPlayerResult = {
   answer: string
   rank: number | null
   timedOut: boolean
+  pointsEarned: number
+  totalScore: number
 }
 
 type RecallRoundResult = {
@@ -314,6 +316,40 @@ function RecallPhase({
           room.sessionId,
       )
 
+    const roundRankings =
+      [...roundResult.results].sort(
+        (left, right) => {
+          if (
+            left.rank === null
+          ) {
+            return 1
+          }
+
+          if (
+            right.rank === null
+          ) {
+            return -1
+          }
+
+          return (
+            left.rank -
+            right.rank
+          )
+        },
+      )
+
+    const standings =
+      [...roundResult.results].sort(
+        (left, right) =>
+          right.totalScore -
+            left.totalScore ||
+          (left.rank ?? Infinity) -
+            (right.rank ?? Infinity) ||
+          left.playerName.localeCompare(
+            right.playerName,
+          ),
+      )
+
     return (
       <main className="min-h-[calc(100vh-80px)] bg-[#0d0704] px-6 py-10 text-white">
         <div className="mx-auto max-w-3xl">
@@ -336,34 +372,30 @@ function RecallPhase({
                 {roundResult.correctWord}
               </strong>
             </p>
+
+            {myResult && (
+              <div className="mt-5 flex justify-center gap-3">
+                <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-4 py-2 font-semibold text-amber-300">
+                  +{myResult.pointsEarned}{' '}
+                  points
+                </span>
+
+                <span className="rounded-full border border-white/10 bg-white/5 px-4 py-2 font-semibold text-white/80">
+                  Total:{' '}
+                  {myResult.totalScore}
+                </span>
+              </div>
+            )}
           </section>
 
           <section className="mt-8 rounded-2xl border border-amber-500/30 bg-[#160b06] p-6">
             <h2 className="text-lg font-bold">
-              Rankings
+              Round Rankings
             </h2>
 
             <div className="mt-5 space-y-3">
-              {[...roundResult.results]
-                .sort((left, right) => {
-                  if (
-                    left.rank === null
-                  ) {
-                    return 1
-                  }
-
-                  if (
-                    right.rank === null
-                  ) {
-                    return -1
-                  }
-
-                  return (
-                    left.rank -
-                    right.rank
-                  )
-                })
-                .map((result) => (
+              {roundRankings.map(
+                (result) => (
                   <div
                     key={
                       result.sessionId
@@ -385,13 +417,63 @@ function RecallPhase({
                       </p>
                     </div>
 
-                    <span className="font-bold text-amber-400">
-                      {result.rank
-                        ? `#${result.rank}`
-                        : 'Timed out'}
+                    <div className="text-right">
+                      <p className="font-bold text-amber-400">
+                        {result.rank
+                          ? `#${result.rank}`
+                          : 'Timed out'}
+                      </p>
+
+                      <p className="mt-1 text-sm text-white/50">
+                        +
+                        {
+                          result.pointsEarned
+                        }{' '}
+                        points
+                      </p>
+                    </div>
+                  </div>
+                ),
+              )}
+            </div>
+          </section>
+
+          <section className="mt-6 rounded-2xl border border-amber-500/30 bg-[#160b06] p-6">
+            <h2 className="text-lg font-bold">
+              Current Standings
+            </h2>
+
+            <div className="mt-5 space-y-3">
+              {standings.map(
+                (result, index) => (
+                  <div
+                    key={
+                      result.sessionId
+                    }
+                    className="flex items-center justify-between rounded-xl border border-white/10 bg-[#211006] px-5 py-4"
+                  >
+                    <div className="flex items-center gap-4">
+                      <span className="w-7 text-center font-bold text-amber-400">
+                        #{index + 1}
+                      </span>
+
+                      <p className="font-semibold">
+                        {result.playerName}
+                        {result.sessionId ===
+                          room.sessionId &&
+                          ' (You)'}
+                      </p>
+                    </div>
+
+                    <span className="font-bold text-white">
+                      {
+                        result.totalScore
+                      }{' '}
+                      pts
                     </span>
                   </div>
-                ))}
+                ),
+              )}
             </div>
 
             <button
