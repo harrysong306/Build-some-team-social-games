@@ -92,37 +92,58 @@ describe('RecallPhase component tests', () => {
         /enter your answer/i,
       )
 
-    fireEvent.change(answerInput, {
-      target: {
-        value: 'Apple',
+    fireEvent.change(
+      answerInput,
+      {
+        target: {
+          value: 'Apple',
+        },
       },
-    })
-
-    expect(answerInput).toHaveValue('Apple')
-
-    fireEvent.click(
-      screen.getByRole('button', {
-        name: /check answer/i,
-      }),
     )
 
-    expect(answerInput).toBeDisabled()
+    expect(
+      answerInput,
+    ).toHaveValue(
+      'Apple',
+    )
+
+    fireEvent.click(
+      screen.getByRole(
+        'button',
+        {
+          name: /check answer/i,
+        },
+      ),
+    )
 
     expect(
-      screen.getByText('Correct! +4/4'),
+      answerInput,
+    ).toBeDisabled()
+
+    expect(
+      screen.getByText(
+        'Correct! +4/4',
+      ),
     ).toBeInTheDocument()
 
     expect(
-      screen.getByText('Score: 4 / 8'),
+      screen.getByText(
+        'Score: 4 / 8',
+      ),
     ).toBeInTheDocument()
 
     expect(
-      screen.getByRole('button', {
-        name: /next drawing/i,
-      }),
+      screen.getByRole(
+        'button',
+        {
+          name: /next drawing/i,
+        },
+      ),
     ).toBeInTheDocument()
 
-    expect(onComplete).not.toHaveBeenCalled()
+    expect(
+      onComplete,
+    ).not.toHaveBeenCalled()
   })
 
   it('awards full marks ignoring case and spaces', () => {
@@ -141,24 +162,35 @@ describe('RecallPhase component tests', () => {
         /enter your answer/i,
       )
 
-    fireEvent.change(answerInput, {
-      target: {
-        value: '  APPLE  ',
+    fireEvent.change(
+      answerInput,
+      {
+        target: {
+          value:
+            '  APPLE  ',
+        },
       },
-    })
+    )
 
     fireEvent.click(
-      screen.getByRole('button', {
-        name: /check answer/i,
-      }),
+      screen.getByRole(
+        'button',
+        {
+          name: /check answer/i,
+        },
+      ),
     )
 
     expect(
-      screen.getByText('Correct! +4/4'),
+      screen.getByText(
+        'Correct! +4/4',
+      ),
     ).toBeInTheDocument()
 
     expect(
-      screen.getByText('Score: 4 / 4'),
+      screen.getByText(
+        'Score: 4 / 4',
+      ),
     ).toBeInTheDocument()
   })
 
@@ -178,28 +210,40 @@ describe('RecallPhase component tests', () => {
         /enter your answer/i,
       )
 
-    fireEvent.change(answerInput, {
-      target: {
-        value: 'Kake',
+    fireEvent.change(
+      answerInput,
+      {
+        target: {
+          value: 'Kake',
+        },
       },
-    })
+    )
 
     fireEvent.click(
-      screen.getByRole('button', {
-        name: /check answer/i,
-      }),
+      screen.getByRole(
+        'button',
+        {
+          name: /check answer/i,
+        },
+      ),
     )
 
     expect(
-      screen.getByText('Close! +3/4'),
+      screen.getByText(
+        'Close! +3/4',
+      ),
     ).toBeInTheDocument()
 
     expect(
-      screen.getByText('Score: 3 / 4'),
+      screen.getByText(
+        'Score: 3 / 4',
+      ),
     ).toBeInTheDocument()
 
     expect(
-      screen.getByText('Cake'),
+      screen.getByText(
+        'Cake',
+      ),
     ).toBeInTheDocument()
   })
 
@@ -219,24 +263,34 @@ describe('RecallPhase component tests', () => {
         /enter your answer/i,
       )
 
-    fireEvent.change(answerInput, {
-      target: {
-        value: 'Kacke',
+    fireEvent.change(
+      answerInput,
+      {
+        target: {
+          value: 'Kacke',
+        },
       },
-    })
+    )
 
     fireEvent.click(
-      screen.getByRole('button', {
-        name: /check answer/i,
-      }),
+      screen.getByRole(
+        'button',
+        {
+          name: /check answer/i,
+        },
+      ),
     )
 
     expect(
-      screen.getByText('Close! +2/4'),
+      screen.getByText(
+        'Close! +2/4',
+      ),
     ).toBeInTheDocument()
 
     expect(
-      screen.getByText('Score: 2 / 4'),
+      screen.getByText(
+        'Score: 2 / 4',
+      ),
     ).toBeInTheDocument()
   })
 
@@ -256,23 +310,33 @@ describe('RecallPhase component tests', () => {
         /enter your answer/i,
       )
 
-    fireEvent.change(answerInput, {
-      target: {
-        value: 'Kake',
+    fireEvent.change(
+      answerInput,
+      {
+        target: {
+          value: 'Kake',
+        },
       },
-    })
+    )
 
-    fireEvent.keyDown(answerInput, {
-      key: 'Enter',
-      code: 'Enter',
-    })
+    fireEvent.keyDown(
+      answerInput,
+      {
+        key: 'Enter',
+        code: 'Enter',
+      },
+    )
 
     expect(
-      screen.getByText('Close! +3/4'),
+      screen.getByText(
+        'Close! +3/4',
+      ),
     ).toBeInTheDocument()
 
     expect(
-      screen.getByText('Score: 3 / 4'),
+      screen.getByText(
+        'Score: 3 / 4',
+      ),
     ).toBeInTheDocument()
   })
 
@@ -292,29 +356,40 @@ describe('RecallPhase component tests', () => {
         /enter your answer/i,
       )
 
-    fireEvent.change(answerInput, {
-      target: {
-        value: 'Dog',
+    fireEvent.change(
+      answerInput,
+      {
+        target: {
+          value: 'Dog',
+        },
       },
-    })
+    )
 
     fireEvent.click(
-      screen.getByRole('button', {
-        name: /check answer/i,
-      }),
+      screen.getByRole(
+        'button',
+        {
+          name: /check answer/i,
+        },
+      ),
     )
 
     expect(
-      screen.getByText('Not quite'),
+      screen.getByText(
+        'Not quite',
+      ),
     ).toBeInTheDocument()
 
     expect(
-      screen.getByText('Score: 0 / 4'),
+      screen.getByText(
+        'Score: 0 / 4',
+      ),
     ).toBeInTheDocument()
   })
 
   it('keeps the accumulated score across drawings', () => {
-    const onComplete = vi.fn()
+    const onComplete =
+      vi.fn()
 
     render(
       <RecallPhase
@@ -322,7 +397,10 @@ describe('RecallPhase component tests', () => {
           'data:image/png;base64,drawing-one',
           'data:image/png;base64,drawing-two',
         ]}
-        words={['Cake', 'Tree']}
+        words={[
+          'Cake',
+          'Tree',
+        ]}
         onComplete={onComplete}
       />,
     )
@@ -332,26 +410,37 @@ describe('RecallPhase component tests', () => {
         /enter your answer/i,
       )
 
-    fireEvent.change(answerInput, {
-      target: {
-        value: 'Cake',
+    fireEvent.change(
+      answerInput,
+      {
+        target: {
+          value: 'Cake',
+        },
       },
-    })
+    )
 
     fireEvent.click(
-      screen.getByRole('button', {
-        name: /check answer/i,
-      }),
+      screen.getByRole(
+        'button',
+        {
+          name: /check answer/i,
+        },
+      ),
     )
 
     expect(
-      screen.getByText('Score: 4 / 8'),
+      screen.getByText(
+        'Score: 4 / 8',
+      ),
     ).toBeInTheDocument()
 
     fireEvent.click(
-      screen.getByRole('button', {
-        name: /next drawing/i,
-      }),
+      screen.getByRole(
+        'button',
+        {
+          name: /next drawing/i,
+        },
+      ),
     )
 
     answerInput =
@@ -359,33 +448,49 @@ describe('RecallPhase component tests', () => {
         /enter your answer/i,
       )
 
-    fireEvent.change(answerInput, {
-      target: {
-        value: 'Dog',
+    fireEvent.change(
+      answerInput,
+      {
+        target: {
+          value: 'Dog',
+        },
       },
-    })
+    )
 
     fireEvent.click(
-      screen.getByRole('button', {
-        name: /check answer/i,
-      }),
+      screen.getByRole(
+        'button',
+        {
+          name: /check answer/i,
+        },
+      ),
     )
 
     expect(
-      screen.getByText('Score: 4 / 8'),
+      screen.getByText(
+        'Score: 4 / 8',
+      ),
     ).toBeInTheDocument()
 
     fireEvent.click(
-      screen.getByRole('button', {
-        name: /view results/i,
-      }),
+      screen.getByRole(
+        'button',
+        {
+          name: /view results/i,
+        },
+      ),
     )
 
-    expect(onComplete).toHaveBeenCalledWith(4)
+    expect(
+      onComplete,
+    ).toHaveBeenCalledWith(
+      4,
+    )
   })
 
   it('combines partial marks from several drawings', () => {
-    const onComplete = vi.fn()
+    const onComplete =
+      vi.fn()
 
     render(
       <RecallPhase
@@ -394,7 +499,11 @@ describe('RecallPhase component tests', () => {
           'data:image/png;base64,drawing-two',
           'data:image/png;base64,drawing-three',
         ]}
-        words={['Cake', 'Cake', 'Cake']}
+        words={[
+          'Cake',
+          'Cake',
+          'Cake',
+        ]}
         onComplete={onComplete}
       />,
     )
@@ -407,58 +516,87 @@ describe('RecallPhase component tests', () => {
           /enter your answer/i,
         )
 
-      fireEvent.change(answerInput, {
-        target: { value },
-      })
+      fireEvent.change(
+        answerInput,
+        {
+          target: {
+            value,
+          },
+        },
+      )
 
       fireEvent.click(
-        screen.getByRole('button', {
-          name: /check answer/i,
-        }),
+        screen.getByRole(
+          'button',
+          {
+            name:
+              /check answer/i,
+          },
+        ),
       )
     }
 
     submitAnswer('Kake')
 
     expect(
-      screen.getByText('Score: 3 / 12'),
+      screen.getByText(
+        'Score: 3 / 12',
+      ),
     ).toBeInTheDocument()
 
     fireEvent.click(
-      screen.getByRole('button', {
-        name: /next drawing/i,
-      }),
+      screen.getByRole(
+        'button',
+        {
+          name: /next drawing/i,
+        },
+      ),
     )
 
     submitAnswer('Kacke')
 
     expect(
-      screen.getByText('Score: 5 / 12'),
+      screen.getByText(
+        'Score: 5 / 12',
+      ),
     ).toBeInTheDocument()
 
     fireEvent.click(
-      screen.getByRole('button', {
-        name: /next drawing/i,
-      }),
+      screen.getByRole(
+        'button',
+        {
+          name: /next drawing/i,
+        },
+      ),
     )
 
     submitAnswer('Cake')
 
     expect(
-      screen.getByText('Score: 9 / 12'),
+      screen.getByText(
+        'Score: 9 / 12',
+      ),
     ).toBeInTheDocument()
 
     fireEvent.click(
-      screen.getByRole('button', {
-        name: /view results/i,
-      }),
+      screen.getByRole(
+        'button',
+        {
+          name: /view results/i,
+        },
+      ),
     )
 
-    expect(onComplete).toHaveBeenCalledWith(9)
+    expect(
+      onComplete,
+    ).toHaveBeenCalledWith(
+      9,
+    )
   })
 
   it('does not submit a blank recall answer', () => {
-    const onComplete = vi.fn()
+    const onComplete =
+      vi.fn()
 
     render(
       <RecallPhase
@@ -476,43 +614,66 @@ describe('RecallPhase component tests', () => {
       )
 
     const checkButton =
-      screen.getByRole('button', {
-        name: /check answer/i,
-      })
+      screen.getByRole(
+        'button',
+        {
+          name: /check answer/i,
+        },
+      )
 
-    expect(checkButton).toBeDisabled()
+    expect(
+      checkButton,
+    ).toBeDisabled()
 
-    fireEvent.change(answerInput, {
-      target: {
-        value: '   ',
+    fireEvent.change(
+      answerInput,
+      {
+        target: {
+          value: '   ',
+        },
       },
-    })
-
-    expect(checkButton).toBeDisabled()
-
-    fireEvent.keyDown(answerInput, {
-      key: 'Enter',
-      code: 'Enter',
-    })
-
-    expect(answerInput).toBeEnabled()
+    )
 
     expect(
-      screen.queryByText(/correct!/i),
+      checkButton,
+    ).toBeDisabled()
+
+    fireEvent.keyDown(
+      answerInput,
+      {
+        key: 'Enter',
+        code: 'Enter',
+      },
+    )
+
+    expect(
+      answerInput,
+    ).toBeEnabled()
+
+    expect(
+      screen.queryByText(
+        /correct!/i,
+      ),
     ).not.toBeInTheDocument()
 
     expect(
-      screen.queryByText(/close!/i),
+      screen.queryByText(
+        /close!/i,
+      ),
     ).not.toBeInTheDocument()
 
     expect(
-      screen.queryByText('Not quite'),
+      screen.queryByText(
+        'Not quite',
+      ),
     ).not.toBeInTheDocument()
 
-    expect(onComplete).not.toHaveBeenCalled()
+    expect(
+      onComplete,
+    ).not.toHaveBeenCalled()
   })
 
-  it('shows multiplayer points and current standings after a round', () => {
+  it('shows four-mark multiplayer scores and ranks current standings by total score', () => {
     const {
       room,
       sendMessage,
@@ -535,7 +696,8 @@ describe('RecallPhase component tests', () => {
       'recallRoundResult',
       {
         roundIndex: 0,
-        correctWord: 'Apple',
+        correctWord:
+          'Apple',
         results: [
           {
             sessionId:
@@ -545,8 +707,8 @@ describe('RecallPhase component tests', () => {
             answer: 'Aple',
             rank: 2,
             timedOut: false,
-            pointsEarned: 2,
-            totalScore: 5,
+            pointsEarned: 3,
+            totalScore: 7,
           },
           {
             sessionId:
@@ -556,7 +718,7 @@ describe('RecallPhase component tests', () => {
             answer: 'Apple',
             rank: 1,
             timedOut: false,
-            pointsEarned: 3,
+            pointsEarned: 4,
             totalScore: 6,
           },
           {
@@ -584,17 +746,19 @@ describe('RecallPhase component tests', () => {
       screen.getByText(
         /Correct word:/i,
       ),
-    ).toHaveTextContent('Apple')
+    ).toHaveTextContent(
+      'Apple',
+    )
 
     expect(
       screen.getAllByText(
-        /\+2\s+points/i,
+        /\+3\/4/i,
       ).length,
     ).toBeGreaterThan(0)
 
     expect(
       screen.getByText(
-        /Total:\s*5/i,
+        /Total:\s*7/i,
       ),
     ).toBeInTheDocument()
 
@@ -602,7 +766,8 @@ describe('RecallPhase component tests', () => {
       screen.getByRole(
         'heading',
         {
-          name: /round rankings/i,
+          name:
+            /round rankings/i,
         },
       ),
     ).toBeInTheDocument()
@@ -611,7 +776,8 @@ describe('RecallPhase component tests', () => {
       screen.getByRole(
         'heading',
         {
-          name: /current standings/i,
+          name:
+            /current standings/i,
         },
       )
 
@@ -631,13 +797,13 @@ describe('RecallPhase component tests', () => {
 
     expect(
       standings.getByText(
-        '6 pts',
+        '7 pts',
       ),
     ).toBeInTheDocument()
 
     expect(
       standings.getByText(
-        '5 pts',
+        '6 pts',
       ),
     ).toBeInTheDocument()
 
@@ -649,19 +815,29 @@ describe('RecallPhase component tests', () => {
 
     const standingsText =
       standingsSection
-        ?.textContent ?? ''
+        ?.textContent ??
+      ''
 
+    /*
+     * Jordan had round rank #2,
+     * but has the highest total.
+     *
+     * Current standings therefore
+     * rank Jordan above Sam.
+     */
     expect(
-      standingsText.indexOf('Sam'),
-    ).toBeLessThan(
       standingsText.indexOf(
         'Jordan',
+      ),
+    ).toBeLessThan(
+      standingsText.indexOf(
+        'Sam',
       ),
     )
 
     expect(
       standingsText.indexOf(
-        'Jordan',
+        'Sam',
       ),
     ).toBeLessThan(
       standingsText.indexOf(
@@ -670,7 +846,7 @@ describe('RecallPhase component tests', () => {
     )
   })
 
-  it('shows zero points when the player times out', () => {
+  it('shows zero out of four when the player times out', () => {
     const {
       room,
       sendMessage,
@@ -693,7 +869,8 @@ describe('RecallPhase component tests', () => {
       'recallRoundResult',
       {
         roundIndex: 0,
-        correctWord: 'Apple',
+        correctWord:
+          'Apple',
         results: [
           {
             sessionId:
@@ -718,7 +895,7 @@ describe('RecallPhase component tests', () => {
 
     expect(
       screen.getAllByText(
-        /\+0\s+points/i,
+        /\+0\/4/i,
       ).length,
     ).toBeGreaterThan(0)
 
