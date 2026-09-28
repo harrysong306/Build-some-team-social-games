@@ -221,6 +221,173 @@ describe("LobbyRoom", () => {
     );
   });
 
+  describe("multiplayer replay", () => {
+    it("allows the host to return everyone to the lobby after Recall finishes", async () => {
+      const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
+      const host = await colyseus.connectTo(room, { name: "Jordan" });
+      const guest = await colyseus.connectTo(room, { name: "Sam" });
+
+      await room.waitForNextPatch();
+
+      const hostPlayer = room.state.players.get(host.sessionId);
+      const guestPlayer = room.state.players.get(guest.sessionId);
+
+      assert.ok(hostPlayer);
+      assert.ok(guestPlayer);
+
+      hostPlayer.ready = true;
+      guestPlayer.ready = true;
+      hostPlayer.score = 8;
+      guestPlayer.score = 6;
+
+      room.state.phase = "playing";
+      room.state.gameWords.clear();
+      room.state.gameWords.push("Apple", "Tree");
+
+      const internal = room as any;
+
+      internal.recallRound = 2;
+      internal.recallReady = new Set([host.sessionId, guest.sessionId]);
+      internal.recallAnswers = new Map([
+        [
+          host.sessionId,
+          {
+            sessionId: host.sessionId,
+            answer: "Apple",
+            submittedAt: 100,
+          },
+        ],
+      ]);
+      internal.recallDeadline = Date.now() + 5000;
+      internal.recallStarted = false;
+      internal.drawings.set(
+        `${host.sessionId}:0`,
+        new Uint8Array([1, 2, 3]),
+      );
+      internal.pendingDrawingIndexes.set(host.sessionId, 1);
+
+      // Flush the setup state before testing the replay transition.
+      await room.waitForNextPatch();
+
+      host.send("returnToLobby", {});
+      await room.waitForNextPatch();
+
+      assert.strictEqual(room.state.phase, "lobby");
+      assert.strictEqual(host.state.phase, "lobby");
+      assert.strictEqual(guest.state.phase, "lobby");
+      assert.strictEqual(hostPlayer.ready, false);
+      assert.strictEqual(guestPlayer.ready, false);
+      assert.strictEqual(room.state.gameWords.length, 0);
+
+      // Keep the final totals visible until the next game starts.
+      assert.strictEqual(hostPlayer.score, 8);
+      assert.strictEqual(guestPlayer.score, 6);
+
+      assert.strictEqual(internal.recallRound, 0);
+      assert.strictEqual(internal.recallReady.size, 0);
+      assert.strictEqual(internal.recallAnswers.size, 0);
+      assert.strictEqual(internal.recallDeadline, 0);
+      assert.strictEqual(internal.recallStarted, false);
+      assert.strictEqual(internal.drawings.size, 0);
+      assert.strictEqual(internal.pendingDrawingIndexes.size, 0);
+    });
+
+    it("does not allow a non-host to return the room to the lobby", async () => {
+      const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
+      const host = await colyseus.connectTo(room, { name: "Jordan" });
+      const guest = await colyseus.connectTo(room, { name: "Sam" });
+
+      const hostPlayer = room.state.players.get(host.sessionId);
+      const guestPlayer = room.state.players.get(guest.sessionId);
+
+      assert.ok(hostPlayer);
+      assert.ok(guestPlayer);
+
+      hostPlayer.ready = true;
+      guestPlayer.ready = true;
+
+      room.state.phase = "playing";
+      room.state.gameWords.clear();
+      room.state.gameWords.push("Apple");
+
+      const internal = room as any;
+      internal.recallRound = 1;
+      internal.recallStarted = false;
+
+      await room.waitForNextPatch();
+
+      guest.send("returnToLobby", {});
+
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      assert.strictEqual(room.state.phase, "playing");
+      assert.strictEqual(hostPlayer.ready, true);
+      assert.strictEqual(guestPlayer.ready, true);
+      assert.strictEqual(room.state.gameWords.length, 1);
+    });
+
+    it("does not allow replay before all Recall rounds are complete", async () => {
+      const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
+      const host = await colyseus.connectTo(room, { name: "Jordan" });
+
+      const hostPlayer = room.state.players.get(host.sessionId);
+      assert.ok(hostPlayer);
+
+      hostPlayer.ready = true;
+
+      room.state.phase = "playing";
+      room.state.gameWords.clear();
+      room.state.gameWords.push("Apple", "Tree");
+
+      const internal = room as any;
+      internal.recallRound = 1;
+      internal.recallStarted = false;
+
+      await room.waitForNextPatch();
+
+      host.send("returnToLobby", {});
+
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      assert.strictEqual(room.state.phase, "playing");
+      assert.strictEqual(hostPlayer.ready, true);
+      assert.strictEqual(room.state.gameWords.length, 2);
+      assert.strictEqual(internal.recallRound, 1);
+    });
+
+    it("does not restart a game directly while the room is already playing", async () => {
+      const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
+      const host = await colyseus.connectTo(room, { name: "Jordan" });
+      const guest = await colyseus.connectTo(room, { name: "Sam" });
+
+      const hostPlayer = room.state.players.get(host.sessionId);
+      const guestPlayer = room.state.players.get(guest.sessionId);
+
+      assert.ok(hostPlayer);
+      assert.ok(guestPlayer);
+
+      hostPlayer.ready = true;
+      guestPlayer.ready = true;
+      hostPlayer.score = 8;
+      guestPlayer.score = 6;
+
+      room.state.phase = "playing";
+      room.state.gameWords.clear();
+      room.state.gameWords.push("Apple");
+
+      await room.waitForNextPatch();
+
+      host.send("startGame", {});
+
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      assert.strictEqual(room.state.phase, "playing");
+      assert.deepStrictEqual([...room.state.gameWords], ["Apple"]);
+      assert.strictEqual(hostPlayer.score, 8);
+      assert.strictEqual(guestPlayer.score, 6);
+    });
+  });
+
   describe("Recall multiplayer scoring", () => {
     it("awards four-mark answer scores and gives timed-out players zero", async () => {
       const room = await colyseus.createRoom<GameState>("LobbyRoom", {});

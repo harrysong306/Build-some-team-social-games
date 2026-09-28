@@ -275,6 +275,9 @@ export class LobbyRoom extends Room {
 
       if (!player?.isHost) return;
 
+      // Games can only be started from the shared lobby.
+      if (this.state.phase !== "lobby") return;
+
       const allReady = [
         ...this.state.players.values(),
       ].every(
@@ -310,6 +313,64 @@ export class LobbyRoom extends Room {
       this.recallAnswers.clear();
       this.recallDeadline = 0;
       this.recallStarted = false;
+
+      // Never reuse drawing data from a previous game.
+      this.drawings.clear();
+      this.pendingDrawingIndexes.clear();
+    },
+
+    /*
+     * Return every player to the shared lobby after
+     * the final Recall round.
+     *
+     * Only the host can trigger a replay, and only
+     * once all Recall rounds have actually finished.
+     *
+     * Final scores remain intact while players are
+     * returned to the lobby. startGame resets them
+     * when the next game begins.
+     */
+    returnToLobby: (
+      client: Client,
+      _message: any,
+    ) => {
+      const player =
+        this.state.players.get(
+          client.sessionId,
+        );
+
+      if (!player?.isHost) return;
+
+      const recallComplete =
+        !this.recallStarted &&
+        this.recallRound >=
+          this.state.gameWords.length;
+
+      if (
+        this.state.phase !== "playing" ||
+        !recallComplete
+      ) {
+        return;
+      }
+
+      for (
+        const currentPlayer of
+        this.state.players.values()
+      ) {
+        currentPlayer.ready = false;
+      }
+
+      this.state.phase = "lobby";
+      this.state.gameWords.clear();
+
+      this.recallRound = 0;
+      this.recallReady.clear();
+      this.recallAnswers.clear();
+      this.recallDeadline = 0;
+      this.recallStarted = false;
+
+      this.drawings.clear();
+      this.pendingDrawingIndexes.clear();
     },
 
     /*

@@ -57,10 +57,41 @@ function SketchRecallGame({
     setSavedDrawings([])
   }
 
+  /*
+   * Single-player replay stays local.
+   *
+   * Multiplayer replay is handled separately below
+   * because the shared server state must move every
+   * connected player back to the lobby together.
+   */
   const playAgain = () => {
     clearSavedDrawings()
     setRecallScore(0)
     setPhase('instructions')
+    onPlayAgain()
+  }
+
+  /*
+   * Only the host should request a multiplayer replay.
+   *
+   * Do not change this client's local GamePhase here.
+   * The server handles returnToLobby and LobbyScreen
+   * follows the synchronized server phase.
+   *
+   * The backend also verifies host ownership, so this
+   * client-side check is an additional UI safeguard.
+   */
+  const requestMultiplayerReplay = () => {
+    if (!room) return
+
+    const currentPlayer =
+      players[room.sessionId]
+
+    if (!currentPlayer?.isHost) {
+      return
+    }
+
+    clearSavedDrawings()
     onPlayAgain()
   }
 
@@ -113,7 +144,9 @@ function SketchRecallGame({
         <MultiplayerResultsScreen
           players={players}
           sessionId={room.sessionId}
-          onPlayAgain={playAgain}
+          onPlayAgain={
+            requestMultiplayerReplay
+          }
           onExit={() => {
             clearSavedDrawings()
             onExit()
