@@ -5,6 +5,7 @@ export type PlayerView = {
   name: string;
   ready: boolean;
   isHost: boolean;
+  score: number;
 };
 
 export function useLobbyState(room: Room | null) {
