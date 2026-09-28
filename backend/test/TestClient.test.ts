@@ -569,6 +569,12 @@ describe("LobbyRoom", () => {
 
       internal.finishRecallRound();
 
+      // The result message is intentionally sent after the next
+      // state patch. Wait for round one before configuring round two.
+      while (messages.length < 1) {
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+
       internal.recallStarted = true;
 
       internal.recallAnswers = new Map([
@@ -641,6 +647,120 @@ describe("LobbyRoom", () => {
       assert.strictEqual(
         room.state.players.get(alex.sessionId)?.score,
         0,
+      );
+    });
+
+    it("delivers the final-round result after updated scores reach the client state", async () => {
+      const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
+      const jordan = await colyseus.connectTo(room, { name: "Jordan" });
+      const sam = await colyseus.connectTo(room, { name: "Sam" });
+
+      await room.waitForNextPatch();
+
+      const jordanPlayer = room.state.players.get(jordan.sessionId);
+      const samPlayer = room.state.players.get(sam.sessionId);
+
+      assert.ok(jordanPlayer);
+      assert.ok(samPlayer);
+
+      // Deliberate final-round case:
+      // Jordan: 20 + 3 = 23
+      // Sam:    19 + 4 = 23
+      jordanPlayer.score = 20;
+      samPlayer.score = 19;
+
+      room.state.phase = "playing";
+      room.state.gameWords.clear();
+      room.state.gameWords.push("Apple");
+
+      const internal = room as any;
+
+      internal.recallRound = 0;
+      internal.recallStarted = true;
+
+      internal.recallAnswers = new Map([
+        [
+          jordan.sessionId,
+          {
+            sessionId: jordan.sessionId,
+            answer: "Aple",
+            submittedAt: 100,
+          },
+        ],
+        [
+          sam.sessionId,
+          {
+            sessionId: sam.sessionId,
+            answer: "Apple",
+            submittedAt: 200,
+          },
+        ],
+      ]);
+
+      // Ensure the clients first see the pre-final totals.
+      await room.waitForNextPatch();
+
+      assert.strictEqual(
+        jordan.state.players.get(jordan.sessionId)?.score,
+        20,
+      );
+      assert.strictEqual(
+        jordan.state.players.get(sam.sessionId)?.score,
+        19,
+      );
+
+      const resultPromise = new Promise<any>((resolve, reject) => {
+        jordan.onMessage(
+          "recallRoundResult",
+          (message: any) => {
+            try {
+              // Check client state at the exact moment the
+              // final-round result message arrives.
+              assert.strictEqual(
+                jordan.state.players.get(jordan.sessionId)?.score,
+                23,
+              );
+              assert.strictEqual(
+                jordan.state.players.get(sam.sessionId)?.score,
+                23,
+              );
+
+              resolve(message);
+            } catch (error) {
+              reject(error);
+            }
+          },
+        );
+      });
+
+      internal.finishRecallRound();
+
+      const result = await resultPromise;
+
+      const jordanResult = result.results.find(
+        (entry: any) =>
+          entry.sessionId === jordan.sessionId,
+      );
+      const samResult = result.results.find(
+        (entry: any) =>
+          entry.sessionId === sam.sessionId,
+      );
+
+      assert.ok(jordanResult);
+      assert.ok(samResult);
+
+      assert.strictEqual(jordanResult.pointsEarned, 3);
+      assert.strictEqual(jordanResult.totalScore, 23);
+      assert.strictEqual(samResult.pointsEarned, 4);
+      assert.strictEqual(samResult.totalScore, 23);
+
+      assert.strictEqual(
+        room.state.players.get(jordan.sessionId)?.score,
+        23,
+      );
+      assert.strictEqual(
+        room.state.players.get(sam.sessionId)?.score,
+        23,
       );
     });
   });

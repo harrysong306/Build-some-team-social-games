@@ -569,12 +569,23 @@ export class LobbyRoom extends Room {
       },
     );
 
+    /*
+     * Deliver the round result only after the score
+     * mutations above have reached every client.
+     *
+     * This matters on the final round because the
+     * result message can transition the UI to the
+     * final leaderboard.
+     */
     this.broadcast(
       "recallRoundResult",
       {
         roundIndex,
         correctWord,
         results,
+      },
+      {
+        afterNextPatch: true,
       },
     );
 
