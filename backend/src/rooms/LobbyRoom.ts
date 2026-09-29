@@ -12,6 +12,18 @@ const VALID_DRAWING_SPEEDS = [
 ] as const;
 type DrawingSpeed = typeof VALID_DRAWING_SPEEDS[number];
 
+// How many drawings/words a game can be
+// configured to have. Independent of
+// drawingSpeed, which only affects the
+// per-drawing timer.
+//
+// Minimum is 10, not lower: generateGameWords
+// always includes 3 complete similar-word
+// groups (9 words), and asking it for fewer
+// than that breaks its general-word fill-in.
+const MIN_DRAWING_COUNT = 10;
+const MAX_DRAWING_COUNT = 30;
+
 type RecallAnswer = {
   sessionId: string;
   answer: string;
@@ -235,6 +247,43 @@ export class LobbyRoom extends Room {
       this.state.drawingSpeed = message.speed;
     },
 
+    setDrawingCount: (
+      client: Client,
+      message: { count: number },
+    ) => {
+      const player =
+        this.state.players.get(
+          client.sessionId,
+        );
+
+      // Only the host can change the drawing count.
+      if (!player?.isHost) return;
+
+      const count = Math.round(
+        message.count,
+      );
+
+      if (
+        !Number.isFinite(count) ||
+        count < MIN_DRAWING_COUNT ||
+        count > MAX_DRAWING_COUNT
+      ) {
+        client.send("drawing_count_error", {
+          reason: `Number of drawings must be between ${MIN_DRAWING_COUNT} and ${MAX_DRAWING_COUNT}.`,
+        });
+
+        return;
+      }
+
+      console.log(
+        this.state.drawingCount,
+        "Changed to:",
+        count,
+      );
+
+      this.state.drawingCount = count;
+    },
+
     startGame: (
       client: Client,
       _message: any,
@@ -255,7 +304,7 @@ export class LobbyRoom extends Room {
 
       if (!allReady) return;
 
-      const wordCount = this.state.drawingSpeed === "easy" ? 20 : 25
+      const wordCount = this.state.drawingCount;
 
       this.state.gameWords.clear();
       this.state.gameWords.push(
@@ -270,6 +319,11 @@ export class LobbyRoom extends Room {
       this.recallAnswers.clear();
       this.recallDeadline = 0;
       this.recallStarted = false;
+
+      // Drop any drawings from a previous
+      // game so the final gallery never
+      // shows stale images.
+      this.drawings.clear();
     },
 
     /*
@@ -386,6 +440,62 @@ export class LobbyRoom extends Room {
         message.index,
       );
     },
+
+    /*
+     * The manifest is also broadcast once
+     * automatically (see finishRecallRound),
+     * but a client that reaches the results
+     * screen after that already happened
+     * (the normal case: everyone still has to
+     * read the last round result and press
+     * Finish first) would otherwise never see
+     * it. So it's also available on request.
+     */
+    requestFinalGallery: (
+      client: Client,
+      _message: any,
+    ) => {
+      if (!this.isGameOver()) return;
+
+      client.send("finalGallery", {
+        entries:
+          this.buildGalleryManifest(),
+      });
+    },
+
+    /*
+     * Final gallery images are pulled one at
+     * a time instead of broadcast all at once,
+     * since dozens of PNGs in a single message
+     * can blow past the websocket maxPayload
+     * (see host-drawing-mode's size-limit bug).
+     *
+     * Only answered once the game has actually
+     * finished, so drawings can't leak early.
+     */
+    requestGalleryImage: (
+      client: Client,
+      message: {
+        sessionId: string;
+        index: number;
+      },
+    ) => {
+      if (!this.isGameOver()) return;
+
+      const drawing = this.drawings.get(
+        `${message.sessionId}:${message.index}`,
+      );
+
+      if (!drawing) return;
+
+      client.send("galleryImage", {
+        sessionId: message.sessionId,
+        index: message.index,
+        image: Buffer.from(
+          drawing,
+        ).toString("base64"),
+      });
+    },
   };
 
   private finishRecallRound() {
@@ -465,6 +575,55 @@ export class LobbyRoom extends Room {
     this.recallAnswers.clear();
     this.recallDeadline = 0;
     this.recallStarted = false;
+
+    if (this.isGameOver()) {
+      // Manifest only: no image bytes here.
+      // Clients fetch each drawing they want
+      // to show via requestGalleryImage.
+      this.broadcast(
+        "finalGallery",
+        {
+          entries:
+            this.buildGalleryManifest(),
+        },
+      );
+    }
+  }
+
+  private isGameOver() {
+    return (
+      this.state.gameWords.length > 0 &&
+      this.recallRound >=
+        this.state.gameWords.length
+    );
+  }
+
+  private buildGalleryManifest() {
+    const entries: {
+      sessionId: string;
+      index: number;
+    }[] = [];
+
+    for (const sessionId of this.state.players.keys()) {
+      for (
+        let index = 0;
+        index < this.state.gameWords.length;
+        index++
+      ) {
+        if (
+          this.drawings.has(
+            `${sessionId}:${index}`,
+          )
+        ) {
+          entries.push({
+            sessionId,
+            index,
+          });
+        }
+      }
+    }
+
+    return entries;
   }
 
   onCreate(_options: any) {
