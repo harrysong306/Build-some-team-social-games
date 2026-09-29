@@ -19,11 +19,16 @@ const DRAWING_SPEEDS = [
   { value: "hard", label: "Hard" },
 ]
 
+// Must stay within MIN_DRAWING_COUNT and
+// MAX_DRAWING_COUNT in backend LobbyRoom.ts.
+const DRAWING_COUNTS = [10, 15, 20, 25, 30];
+
 function LobbyScreen({ room, roomId }: LobbyScreenProps) {
   const {
     players,
     gameMode,
     drawingSpeed,
+    drawingCount,
     phase,
     gameWords,
     assignedPlayerQuestions,
@@ -31,6 +36,7 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
     toggleReady,
     setGameMode,
     setDrawingSpeed,
+    setDrawingCount,
     startGame,
     submitPlayerQuestion,
   } = useLobbyState(room);
@@ -284,6 +290,39 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
         ) : (
           <p className="mt-4 text-sm text-white/60">
             Drawing speed: {drawingSpeed}
+          </p>
+        )}
+
+        {isHost ? (
+          <div className="mt-4">
+            <label
+              htmlFor="drawing-count"
+              className="mb-2 block text-sm text-white/60"
+            >
+              Number of drawings
+            </label>
+
+            <select
+              id="drawing-count"
+              value={drawingCount}
+              onChange={(event) =>
+                setDrawingCount(Number(event.target.value))
+              }
+              className="w-full rounded-lg border border-amber-500/30 bg-[#211006] px-4 py-3 text-white focus:border-amber-400 focus:outline-none"
+            >
+              {DRAWING_COUNTS.map((count) => (
+                <option
+                  key={count}
+                  value={count}
+                >
+                  {count}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : (
+          <p className="mt-4 text-sm text-white/60">
+            Number of drawings: {drawingCount}
           </p>
         )}
 

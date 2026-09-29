@@ -50,10 +50,10 @@ describe("LobbyRoom", () => {
     const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
     const client1 = await colyseus.connectTo(room, { name: "Jordan" });
     await room.waitForNextPatch();
-  
+
     const client2 = await colyseus.connectTo(room, { name: "Sam" });
     await room.waitForNextPatch();
-  
+
     const p1 = client1.state.players.get(client1.sessionId);
     const p2 = client1.state.players.get(client2.sessionId);
     assert.strictEqual(p1?.isHost, true);
@@ -293,6 +293,57 @@ describe("LobbyRoom", () => {
     );
   });
 
+  describe("setDrawingCount (FE-99)", () => {
+    it("only the host can set the drawing count", async () => {
+      const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
+      const client1 = await colyseus.connectTo(room, { name: "Jordan" }); // host
+      const client2 = await colyseus.connectTo(room, { name: "Sam" });
+
+      client2.send("setDrawingCount", { count: 15 });
+      await room.waitForNextPatch();
+      assert.strictEqual(client1.state.drawingCount, 25); // still default, rejected
+
+      client1.send("setDrawingCount", { count: 15 });
+      await room.waitForNextPatch();
+      assert.strictEqual(client1.state.drawingCount, 15); // host's change succeeded
+    });
+
+    it("rejects a count below the minimum", async () => {
+      const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
+      const client1 = await colyseus.connectTo(room, { name: "Jordan" });
+
+      client1.send("setDrawingCount", { count: 3 });
+      await new Promise(resolve => setTimeout(resolve, 20));
+
+      assert.strictEqual(client1.state.drawingCount, 25);
+    });
+
+    it("rejects a count above the maximum", async () => {
+      const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
+      const client1 = await colyseus.connectTo(room, { name: "Jordan" });
+
+      client1.send("setDrawingCount", { count: 100 });
+      await new Promise(resolve => setTimeout(resolve, 20));
+
+      assert.strictEqual(client1.state.drawingCount, 25);
+    });
+
+    it("startGame uses the host-configured drawing count as the word count", async () => {
+      const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
+      const client1 = await colyseus.connectTo(room, { name: "Jordan" });
+
+      client1.send("setDrawingCount", { count: 12 });
+      await submitQuestions(client1, room);
+      client1.send("markReady", { ready: true });
+      await room.waitForNextPatch();
+
+      client1.send("startGame", {});
+      await room.waitForNextPatch();
+
+      assert.strictEqual(client1.state.gameWords.length, 12);
+    });
+  });
+
   describe("generateGameWords", () => {
     it("returns 25 words from the configured word pools", () => {
       const words = generateGameWords();
@@ -382,6 +433,174 @@ describe("LobbyRoom", () => {
 
       assert.deepStrictEqual([...drawings.get(`${client1.sessionId}:0`)!], [1]);
       assert.deepStrictEqual([...drawings.get(`${client2.sessionId}:0`)!], [2]);
+    });
+  });
+
+  describe("final gallery (BE-33)", () => {
+    it("ignores requestFinalGallery before the game is over", async () => {
+      const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
+      const client1 = await colyseus.connectTo(room, { name: "Jordan" });
+
+      let manifest: any = null;
+      client1.onMessage("finalGallery", (message: any) => { manifest = message; });
+
+      client1.send("requestFinalGallery", {});
+      await new Promise(resolve => setTimeout(resolve, 20));
+
+      assert.strictEqual(manifest, null);
+    });
+
+    it("requestFinalGallery replies to just the requester once the game is over", async () => {
+      const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
+      const client1 = await colyseus.connectTo(room, { name: "Jordan" });
+
+      room.state.gameWords.push("cat");
+      (room as any).recallRound = 1;
+
+      client1.send("submit-drawing-meta", { index: 0 });
+      client1.sendBytes("submit-drawing", new Uint8Array([4, 5]));
+      await new Promise(resolve => setTimeout(resolve, 20));
+
+      let manifest: any = null;
+      client1.onMessage("finalGallery", (message: any) => { manifest = message; });
+
+      client1.send("requestFinalGallery", {});
+      await new Promise(resolve => setTimeout(resolve, 20));
+
+      assert.ok(manifest);
+      assert.deepStrictEqual(manifest.entries, [
+        { sessionId: client1.sessionId, index: 0 },
+      ]);
+    });
+
+    it("ignores requestGalleryImage before the game is over", async () => {
+      const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
+      const client1 = await colyseus.connectTo(room, { name: "Jordan" });
+
+      client1.send("submit-drawing-meta", { index: 0 });
+      client1.sendBytes("submit-drawing", new Uint8Array([1, 2, 3]));
+      await new Promise(resolve => setTimeout(resolve, 20));
+
+      let received: any = null;
+      client1.onMessage("galleryImage", (message: any) => { received = message; });
+
+      client1.send("requestGalleryImage", { sessionId: client1.sessionId, index: 0 });
+      await new Promise(resolve => setTimeout(resolve, 20));
+
+      assert.strictEqual(received, null);
+    });
+
+    it("returns the requested drawing as base64 once the game is over", async () => {
+      const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
+      const client1 = await colyseus.connectTo(room, { name: "Jordan" });
+
+      // One-word game, already on its final round.
+      room.state.gameWords.push("cat");
+      (room as any).recallRound = 1;
+
+      client1.send("submit-drawing-meta", { index: 0 });
+      client1.sendBytes("submit-drawing", new Uint8Array([9, 9, 9]));
+      await new Promise(resolve => setTimeout(resolve, 20));
+
+      let received: any = null;
+      client1.onMessage("galleryImage", (message: any) => { received = message; });
+
+      client1.send("requestGalleryImage", { sessionId: client1.sessionId, index: 0 });
+      await new Promise(resolve => setTimeout(resolve, 20));
+
+      assert.ok(received);
+      assert.strictEqual(received.sessionId, client1.sessionId);
+      assert.strictEqual(received.index, 0);
+      assert.deepStrictEqual(
+        [...Buffer.from(received.image, "base64")],
+        [9, 9, 9],
+      );
+    });
+
+    it("ignores a request for a drawing that was never submitted", async () => {
+      const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
+      const client1 = await colyseus.connectTo(room, { name: "Jordan" });
+
+      room.state.gameWords.push("cat");
+      (room as any).recallRound = 1;
+
+      let received: any = null;
+      client1.onMessage("galleryImage", (message: any) => { received = message; });
+
+      client1.send("requestGalleryImage", { sessionId: client1.sessionId, index: 0 });
+      await new Promise(resolve => setTimeout(resolve, 20));
+
+      assert.strictEqual(received, null);
+    });
+
+    it("broadcasts a manifest of only the drawings that exist when the final recall round ends", async () => {
+      const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
+      const client1 = await colyseus.connectTo(room, { name: "Jordan" });
+      const client2 = await colyseus.connectTo(room, { name: "Sam" });
+
+      room.state.gameWords.push("cat", "dog");
+
+      // Only two of the four possible slots
+      // ever received a drawing.
+      client1.send("submit-drawing-meta", { index: 0 });
+      client1.sendBytes("submit-drawing", new Uint8Array([1]));
+      client2.send("submit-drawing-meta", { index: 1 });
+      client2.sendBytes("submit-drawing", new Uint8Array([2]));
+      await new Promise(resolve => setTimeout(resolve, 20));
+
+      // Skip straight to the last round instead
+      // of waiting on the real 10s recall timer.
+      (room as any).recallRound = 1;
+      (room as any).recallStarted = true;
+
+      let manifest: any = null;
+      client1.onMessage("finalGallery", (message: any) => { manifest = message; });
+
+      (room as any).finishRecallRound();
+      await new Promise(resolve => setTimeout(resolve, 20));
+
+      assert.ok(manifest);
+      assert.deepStrictEqual(
+        new Set(manifest.entries.map((entry: any) => `${entry.sessionId}:${entry.index}`)),
+        new Set([`${client1.sessionId}:0`, `${client2.sessionId}:1`]),
+      );
+    });
+
+    it("does not broadcast a manifest when a mid-game round finishes", async () => {
+      const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
+      const client1 = await colyseus.connectTo(room, { name: "Jordan" });
+
+      room.state.gameWords.push("cat", "dog", "bird");
+      (room as any).recallRound = 0;
+      (room as any).recallStarted = true;
+
+      let manifestReceived = false;
+      client1.onMessage("finalGallery", () => { manifestReceived = true; });
+
+      (room as any).finishRecallRound();
+      await new Promise(resolve => setTimeout(resolve, 20));
+
+      assert.strictEqual(manifestReceived, false);
+      assert.strictEqual((room as any).recallRound, 1); // advanced, but game isn't over yet
+    });
+
+    it("startGame clears drawings left over from a previous game", async () => {
+      const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
+      const client1 = await colyseus.connectTo(room, { name: "Jordan" });
+
+      client1.send("submit-drawing-meta", { index: 0 });
+      client1.sendBytes("submit-drawing", new Uint8Array([1]));
+      await new Promise(resolve => setTimeout(resolve, 20));
+
+      await submitQuestions(client1, room);
+      client1.send("markReady", { ready: true });
+      await room.waitForNextPatch();
+
+      client1.send("startGame", {});
+      await room.waitForNextPatch();
+
+      const drawings = (room as any).drawings as Map<string, Uint8Array>;
+      assert.strictEqual(drawings.size, 0);
     });
   });
 
