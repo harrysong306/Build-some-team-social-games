@@ -1,10 +1,9 @@
 import {
+  act,
   fireEvent,
   render,
   screen,
 } from '@testing-library/react'
-
-import type { Room } from '@colyseus/sdk'
 
 import {
   beforeEach,
@@ -14,21 +13,9 @@ import {
   vi,
 } from 'vitest'
 
+import type { Room } from '@colyseus/sdk'
+
 import LobbyScreen from './LobbyScreen'
-
-const {
-  mockUseLobbyState,
-} = vi.hoisted(() => ({
-  mockUseLobbyState: vi.fn(),
-}))
-
-vi.mock(
-  './useLobbyState',
-  () => ({
-    useLobbyState:
-      mockUseLobbyState,
-  }),
-)
 
 vi.mock(
   '../sketch-recall/InstructionsScreen',
@@ -56,12 +43,8 @@ vi.mock(
     }: {
       onPlayAgain: () => void
     }) => (
-      <section
-        data-testid="mock-sketch-game"
-      >
-        <p>
-          MOCK SKETCH GAME
-        </p>
+      <section data-testid="mock-sketch-game">
+        <p>MOCK SKETCH GAME</p>
 
         <button
           type="button"
@@ -74,92 +57,223 @@ vi.mock(
   }),
 )
 
-type LobbyState = {
-  players: Record<
-    string,
-    {
-      name: string
-      ready: boolean
-      isHost: boolean
-      score: number
-    }
-  >
-  gameMode: string
-  drawingSpeed: string
-  phase: string
-  gameWords: string[]
-  mySessionId: string
-  toggleReady: ReturnType<
-    typeof vi.fn
-  >
-  setGameMode: ReturnType<
-    typeof vi.fn
-  >
-  setDrawingSpeed: ReturnType<
-    typeof vi.fn
-  >
-  startGame: ReturnType<
-    typeof vi.fn
-  >
-  returnToLobby: ReturnType<
-    typeof vi.fn
-  >
+type FakePlayer = {
+  name: string
+  ready: boolean
+  isHost: boolean
+  score: number
 }
 
-function makeLobbyState(
-  overrides:
-    Partial<LobbyState> = {},
-): LobbyState {
+type FakeState = {
+  players: Record<string, FakePlayer>
+  drawingCount?: number
+  drawingSpeed?: string
+  phase?: string
+  gameWords?: string[]
+}
+
+// Minimal stand-in for a Colyseus room.
+// It records outgoing messages and lets
+// tests push synchronized server state.
+function createFakeRoom(
+  sessionId: string,
+) {
+  let stateHandler:
+    ((state: any) => void) |
+    null = null
+
+  const onStateChange =
+    Object.assign(
+      (
+        handler:
+          (state: any) => void,
+      ) => {
+        stateHandler = handler
+      },
+      {
+        remove: vi.fn(),
+      },
+    )
+
+  const room = {
+    sessionId,
+    send: vi.fn(),
+    sendBytes: vi.fn(),
+    onStateChange,
+  }
+
+  const pushState = (
+    state: FakeState,
+  ) => {
+    act(() => {
+      stateHandler?.({
+        players:
+          new Map(
+            Object.entries(
+              state.players,
+            ),
+          ),
+        gameMode:
+          'sketchRecall',
+        drawingSpeed:
+          state.drawingSpeed ??
+          'normal',
+        drawingCount:
+          state.drawingCount ??
+          25,
+        phase:
+          state.phase ??
+          'lobby',
+        gameWords:
+          state.gameWords ??
+          [],
+      })
+    })
+  }
+
   return {
-    players: {
-      host: {
-        name: 'Jordan',
-        ready: true,
-        isHost: true,
-        score: 23,
-      },
-      guest: {
-        name: 'Sam',
-        ready: true,
-        isHost: false,
-        score: 23,
-      },
-    },
-    gameMode:
-      'sketchRecall',
-    drawingSpeed:
-      'normal',
-    phase:
-      'playing',
-    gameWords: [
-      'Apple',
-    ],
-    mySessionId:
-      'host',
-    toggleReady:
-      vi.fn(),
-    setGameMode:
-      vi.fn(),
-    setDrawingSpeed:
-      vi.fn(),
-    startGame:
-      vi.fn(),
-    returnToLobby:
-      vi.fn(),
-    ...overrides,
+    room:
+      room as unknown as Room,
+    send:
+      room.send,
+    pushState,
   }
 }
 
-function makeRoom() {
-  return {
-    sessionId:
-      'host',
-    send:
-      vi.fn(),
-    sendBytes:
-      vi.fn(),
-  } as unknown as Room
-}
+describe(
+  'LobbyScreen number of drawings setting',
+  () => {
+    beforeEach(() => {
+      vi.clearAllMocks()
+    })
+
+    it(
+      'lets the host pick the number of drawings',
+      () => {
+        const {
+          room,
+          send,
+          pushState,
+        } =
+          createFakeRoom(
+            'host',
+          )
+
+        render(
+          <LobbyScreen
+            room={room}
+            roomId="ABCD"
+          />,
+        )
+
+        pushState({
+          players: {
+            host: {
+              name:
+                'Jordan',
+              ready:
+                false,
+              isHost:
+                true,
+              score:
+                0,
+            },
+          },
+          drawingCount:
+            25,
+        })
+
+        const select =
+          screen.getByLabelText(
+            'Number of drawings',
+          ) as HTMLSelectElement
+
+        expect(
+          select.value,
+        ).toBe('25')
+
+        fireEvent.change(
+          select,
+          {
+            target: {
+              value:
+                '15',
+            },
+          },
+        )
+
+        expect(
+          send,
+        ).toHaveBeenCalledWith(
+          'setDrawingCount',
+          {
+            count:
+              15,
+          },
+        )
+      },
+    )
+
+    it(
+      'shows the synced count to non-host players without a control',
+      () => {
+        const {
+          room,
+          pushState,
+        } =
+          createFakeRoom(
+            'guest',
+          )
+
+        render(
+          <LobbyScreen
+            room={room}
+            roomId="ABCD"
+          />,
+        )
+
+        pushState({
+          players: {
+            host: {
+              name:
+                'Jordan',
+              ready:
+                false,
+              isHost:
+                true,
+              score:
+                0,
+            },
+            guest: {
+              name:
+                'Sam',
+              ready:
+                false,
+              isHost:
+                false,
+              score:
+                0,
+            },
+          },
+          drawingCount:
+            10,
+        })
+
+        expect(
+          screen.queryByLabelText(
+            'Number of drawings',
+          ),
+        ).toBeNull()
+
+        expect(
+          screen.getByText(
+            'Number of drawings: 10',
+          ),
+        ).toBeTruthy()
+      },
+    )
+  },
+)
 
 describe(
   'LobbyScreen multiplayer replay integration',
@@ -171,29 +285,53 @@ describe(
     it(
       'passes returnToLobby to the running game instead of startGame',
       () => {
-        const startGame =
-          vi.fn()
-
-        const returnToLobby =
-          vi.fn()
-
-        const lobbyState =
-          makeLobbyState({
-            startGame,
-            returnToLobby,
-          })
-
-        mockUseLobbyState
-          .mockReturnValue(
-            lobbyState,
+        const {
+          room,
+          send,
+          pushState,
+        } =
+          createFakeRoom(
+            'host',
           )
 
         render(
           <LobbyScreen
-            room={makeRoom()}
+            room={room}
             roomId="ABC123"
           />,
         )
+
+        pushState({
+          players: {
+            host: {
+              name:
+                'Jordan',
+              ready:
+                true,
+              isHost:
+                true,
+              score:
+                23,
+            },
+            guest: {
+              name:
+                'Sam',
+              ready:
+                true,
+              isHost:
+                false,
+              score:
+                23,
+            },
+          },
+          phase:
+            'playing',
+          drawingCount:
+            10,
+          gameWords: [
+            'Apple',
+          ],
+        })
 
         fireEvent.click(
           screen.getByRole(
@@ -222,40 +360,70 @@ describe(
         )
 
         expect(
-          returnToLobby,
-        ).toHaveBeenCalledTimes(
-          1,
+          send,
+        ).toHaveBeenCalledWith(
+          'returnToLobby',
         )
 
         expect(
-          startGame,
-        ).not.toHaveBeenCalled()
+          send,
+        ).not.toHaveBeenCalledWith(
+          'startGame',
+        )
       },
     )
 
     it(
       'leaves the running game when the authoritative server phase returns to lobby',
       () => {
-        let currentState =
-          makeLobbyState({
-            phase:
-              'playing',
-          })
-
-        mockUseLobbyState
-          .mockImplementation(
-            () =>
-              currentState,
+        const {
+          room,
+          pushState,
+        } =
+          createFakeRoom(
+            'host',
           )
 
-        const {
-          rerender,
-        } = render(
+        render(
           <LobbyScreen
-            room={makeRoom()}
+            room={room}
             roomId="ABC123"
           />,
         )
+
+        const players = {
+          host: {
+            name:
+              'Jordan',
+            ready:
+              true,
+            isHost:
+              true,
+            score:
+              23,
+          },
+          guest: {
+            name:
+              'Sam',
+            ready:
+              true,
+            isHost:
+              false,
+            score:
+              23,
+          },
+        }
+
+        pushState({
+          players,
+          phase:
+            'playing',
+          drawingCount:
+            10,
+          gameWords: [
+            'Apple',
+          ],
+        })
 
         fireEvent.click(
           screen.getByRole(
@@ -273,24 +441,38 @@ describe(
           ),
         ).toBeInTheDocument()
 
-        currentState = {
-          ...currentState,
+        /*
+         * The backend is authoritative:
+         * when it sends lobby, every
+         * browser must leave the running
+         * SketchRecallGame.
+         */
+        pushState({
+          players: {
+            host: {
+              ...players.host,
+              ready:
+                false,
+            },
+            guest: {
+              ...players.guest,
+              ready:
+                false,
+            },
+          },
           phase:
             'lobby',
-        }
-
-        rerender(
-          <LobbyScreen
-            room={makeRoom()}
-            roomId="ABC123"
-          />,
-        )
+          drawingCount:
+            10,
+          gameWords: [],
+        })
 
         expect(
           screen.getByRole(
             'heading',
             {
-              name: /lobby/i,
+              name:
+                /lobby/i,
             },
           ),
         ).toBeInTheDocument()
@@ -302,28 +484,32 @@ describe(
         ).not.toBeInTheDocument()
 
         /*
-         * Move the authoritative server
-         * phase back to playing.
-         *
-         * roundStarted must have been
-         * reset while phase was lobby,
-         * so the client should return to
-         * the pre-game instructions
-         * rather than reopening the
-         * previous SketchRecallGame.
+         * If another game later starts,
+         * the old local roundStarted flag
+         * must not reopen the previous
+         * SketchRecallGame.
          */
-        currentState = {
-          ...currentState,
+        pushState({
+          players: {
+            host: {
+              ...players.host,
+              ready:
+                true,
+            },
+            guest: {
+              ...players.guest,
+              ready:
+                true,
+            },
+          },
           phase:
             'playing',
-        }
-
-        rerender(
-          <LobbyScreen
-            room={makeRoom()}
-            roomId="ABC123"
-          />,
-        )
+          drawingCount:
+            10,
+          gameWords: [
+            'Tree',
+          ],
+        })
 
         expect(
           screen.getByRole(
