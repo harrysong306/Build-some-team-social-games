@@ -100,6 +100,12 @@ function MultiplayerResultsScreen({
         sessionId,
     )
 
+  const currentPlayer =
+    players[sessionId]
+
+  const canPlayAgain =
+    currentPlayer?.isHost ?? false
+
   const winnerTitle =
     winners.length === 1
       ? `${winners[0].playerName} wins!`
@@ -124,7 +130,6 @@ function MultiplayerResultsScreen({
   return (
     <main className="min-h-[calc(100vh-80px)] bg-[#0d0704] px-6 py-10 text-white">
       <div className="mx-auto max-w-2xl">
-
         <section className="text-center">
           <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full border border-amber-400/30 bg-amber-400/10">
             <svg
@@ -280,13 +285,22 @@ function MultiplayerResultsScreen({
           )}
 
           <div className="mt-8 grid gap-3 sm:grid-cols-2">
-            <button
-              type="button"
-              onClick={onPlayAgain}
-              className="rounded-xl bg-gradient-to-r from-amber-500 to-yellow-400 px-6 py-4 font-bold text-black transition hover:brightness-110"
-            >
-              PLAY AGAIN
-            </button>
+            {canPlayAgain ? (
+              <button
+                type="button"
+                onClick={onPlayAgain}
+                className="rounded-xl bg-gradient-to-r from-amber-500 to-yellow-400 px-6 py-4 font-bold text-black transition hover:brightness-110"
+              >
+                PLAY AGAIN
+              </button>
+            ) : (
+              <div
+                role="status"
+                className="flex items-center justify-center rounded-xl border border-amber-500/20 bg-amber-500/10 px-6 py-4 text-center font-semibold text-amber-200"
+              >
+                Waiting for host to play again…
+              </div>
+            )}
 
             <button
               type="button"
@@ -297,7 +311,6 @@ function MultiplayerResultsScreen({
             </button>
           </div>
         </section>
-
       </div>
     </main>
   )
