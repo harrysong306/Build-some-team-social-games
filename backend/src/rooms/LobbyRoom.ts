@@ -1,6 +1,7 @@
 import { Room, Client, CloseCode } from "colyseus";
 import { GameState, Player } from "./schema/GameState.js";
 import { generateGameWords } from "../utils/WordGen.js";
+import { wordPacks, type WordPackTheme } from "../utils/sketchRecallWords.js";
 
 const VALID_GAME_MODES = ["sketchRecall", "test"] as const;
 type GameMode = typeof VALID_GAME_MODES[number];
@@ -23,6 +24,7 @@ type DrawingSpeed = typeof VALID_DRAWING_SPEEDS[number];
 // than that breaks its general-word fill-in.
 const MIN_DRAWING_COUNT = 10;
 const MAX_DRAWING_COUNT = 30;
+const VALID_WORD_THEMES = Object.keys(wordPacks) as WordPackTheme[];
 
 type RecallAnswer = {
   sessionId: string;
@@ -284,6 +286,39 @@ export class LobbyRoom extends Room {
       this.state.drawingCount = count;
     },
 
+    setWordTheme: (
+      client: Client,
+      message: { theme: string },
+    ) => {
+      const player =
+        this.state.players.get(
+          client.sessionId,
+        );
+
+      // Only the host can change the word theme.
+      if (!player?.isHost) return;
+
+      if (
+        !VALID_WORD_THEMES.includes(
+          message.theme as WordPackTheme,
+        )
+      ) {
+        client.send("word_theme_error", {
+          reason: `Invalid word theme: ${message.theme}`,
+        });
+
+        return;
+      }
+
+      console.log(
+        this.state.wordTheme,
+        "Changed to:",
+        message.theme,
+      );
+
+      this.state.wordTheme = message.theme;
+    },
+
     startGame: (
       client: Client,
       _message: any,
@@ -308,7 +343,7 @@ export class LobbyRoom extends Room {
 
       this.state.gameWords.clear();
       this.state.gameWords.push(
-        ...generateGameWords(wordCount),
+        ...generateGameWords(wordCount, this.state.wordTheme as WordPackTheme),
       );
 
       this.state.phase = "playing";
