@@ -7,6 +7,7 @@ import {
 import type { Room } from '@colyseus/sdk'
 
 import { scoreGuess } from './scoreUtils'
+import TeamAbilities from './TeamAbilities'
 
 type RecallPlayerResult = {
   sessionId: string
@@ -16,6 +17,8 @@ type RecallPlayerResult = {
   timedOut: boolean
   pointsEarned: number
   totalScore: number
+  lostLife?: boolean
+  lives?: number
 }
 
 type RecallRoundResult = {
@@ -28,6 +31,13 @@ type RecallPhaseProps = {
   room?: Room | null
   drawings: (string | null)[]
   words: readonly string[]
+  // BE-16: guess someone else's drawing,
+  // sent by the server without the artist.
+  anonymous?: boolean
+  // Multiplayer only: this player's lives and
+  // the team abilities already used.
+  lives?: number
+  usedAbilities?: readonly string[]
   onComplete: (score: number) => void
 }
 
@@ -35,6 +45,9 @@ function RecallPhase({
   room = null,
   drawings,
   words,
+  anonymous = false,
+  lives,
+  usedAbilities = [],
   onComplete,
 }: RecallPhaseProps) {
   const [currentIndex, setCurrentIndex] =
@@ -88,8 +101,26 @@ function RecallPhase({
   const readyRoundRef =
     useRef<number | null>(null)
 
-  const currentDrawing =
-    drawings[currentIndex]
+  // Anonymous mode: the drawing for this
+  // round arrives from the server.
+  const [anonymousDrawing, setAnonymousDrawing] =
+    useState<{
+      roundIndex: number
+      image: string | null
+    } | null>(null)
+
+  const showAnonymous = anonymous && room !== null
+
+  // Out of lives: can watch but not answer.
+  // undefined means no lives (single player).
+  const isOut =
+    room !== null && lives !== undefined && lives <= 0
+
+  const currentDrawing = showAnonymous
+    ? anonymousDrawing?.roundIndex === currentIndex
+      ? anonymousDrawing.image
+      : null
+    : drawings[currentIndex]
 
   const currentWord =
     words[currentIndex]
@@ -143,9 +174,26 @@ function RecallPhase({
         },
       )
 
+    const removeDrawingListener =
+      room.onMessage(
+        'recallDrawing',
+        (message: {
+          roundIndex: number
+          image: string | null
+        }) => {
+          setAnonymousDrawing({
+            roundIndex: message.roundIndex,
+            image: message.image
+              ? `data:image/png;base64,${message.image}`
+              : null,
+          })
+        },
+      )
+
     return () => {
       removeStartListener?.()
       removeResultListener?.()
+      removeDrawingListener?.()
     }
   }, [
     room,
@@ -267,6 +315,7 @@ function RecallPhase({
     () => {
       if (
         !room ||
+        isOut ||
         !roundStarted ||
         submitted ||
         !answer.trim()
@@ -487,6 +536,15 @@ function RecallPhase({
                         }
                         /4
                       </p>
+
+                      {result.lives !== undefined && (
+                        <p className="mt-1 text-xs text-white/50">
+                          {result.lostLife ? '−1 ❤️ · ' : ''}
+                          {result.lives > 0
+                            ? '❤️'.repeat(result.lives)
+                            : 'Out'}
+                        </p>
+                      )}
                     </div>
                   </div>
                 ),
@@ -564,12 +622,15 @@ function RecallPhase({
           </p>
 
           <h1 className="mt-3 text-4xl font-bold">
-            What did you draw?
+            {showAnonymous
+              ? 'What was drawn?'
+              : 'What did you draw?'}
           </h1>
 
           <p className="mt-3 text-white/50">
-            Look at your sketch and remember
-            the original word.
+            {showAnonymous
+              ? 'Guess the word from another player\'s sketch.'
+              : 'Look at your sketch and remember the original word.'}
           </p>
         </section>
 
@@ -578,6 +639,12 @@ function RecallPhase({
             Drawing{' '}
             {currentIndex + 1} of{' '}
             {words.length}
+            {room && lives !== undefined && (
+              <>
+                {' · '}
+                {lives > 0 ? '❤️'.repeat(lives) : 'Out of lives'}
+              </>
+            )}
           </span>
 
           {room ? (
@@ -604,9 +671,20 @@ function RecallPhase({
         <section className="mt-6 grid gap-6 md:grid-cols-[1.2fr_1fr]">
 
           <div className="rounded-2xl border border-amber-500/30 bg-[#160b06] p-6">
-            <p className="mb-4 text-sm font-semibold text-amber-300">
-              YOUR DRAWING
-            </p>
+            <div className="mb-4 flex items-center justify-between">
+              <p className="text-sm font-semibold text-amber-300">
+                {showAnonymous
+                  ? 'DRAWING'
+                  : 'YOUR DRAWING'}
+              </p>
+
+              {/* BE-16/FE-18: the artist is never shown */}
+              {showAnonymous && (
+                <span className="text-xs text-white/40">
+                  Drawn anonymously
+                </span>
+              )}
+            </div>
 
             <div className="flex min-h-[380px] items-center justify-center overflow-hidden rounded-xl bg-[#fffdf7]">
               {currentDrawing ? (
@@ -617,7 +695,9 @@ function RecallPhase({
                 />
               ) : (
                 <p className="text-black/40">
-                  No drawing saved
+                  {showAnonymous && !roundStarted
+                    ? 'Waiting for the drawing…'
+                    : 'No drawing saved'}
                 </p>
               )}
             </div>
@@ -650,7 +730,8 @@ function RecallPhase({
               disabled={
                 room
                   ? !roundStarted ||
-                    submitted
+                    submitted ||
+                    isOut
                   : checked
               }
               onChange={(event) =>
@@ -714,6 +795,23 @@ function RecallPhase({
                 </div>
               )}
 
+            {isOut && (
+              <p className="mt-5 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">
+                You're out of lives. Watch the rest of the rounds!
+              </p>
+            )}
+
+            {room && (
+              <TeamAbilities
+                key={currentIndex}
+                room={room}
+                roundIndex={currentIndex}
+                roundStarted={roundStarted}
+                disabled={isOut}
+                usedAbilities={usedAbilities}
+              />
+            )}
+
             {room &&
               submitted && (
                 <div className="mt-5 rounded-xl border border-amber-500/20 bg-amber-500/10 p-4">
@@ -735,6 +833,7 @@ function RecallPhase({
                   disabled={
                     !roundStarted ||
                     submitted ||
+                    isOut ||
                     !answer.trim()
                   }
                   onClick={

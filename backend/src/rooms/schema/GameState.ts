@@ -12,6 +12,8 @@ export class Player extends Schema {
   // The prompt and options are public; the correct option stays server-side.
   @type([PlayerQuestion]) questions = new ArraySchema<PlayerQuestion>();
   @type("number") score: number = 0;
+  // Reset to STARTING_LIVES (LobbyRoom.ts) when a game starts.
+  @type("number") lives: number = 3;
 }
 
 export class DrawingSlot extends Schema {
@@ -33,5 +35,9 @@ export class GameState extends Schema {
 
   @type([DrawingSlot])
   drawingSlots = new ArraySchema<DrawingSlot>();
+
+  // Team abilities already spent this game (BE-20).
+  @type(["string"])
+  usedAbilities = new ArraySchema<string>();
 
 }

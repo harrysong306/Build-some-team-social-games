@@ -11,6 +11,7 @@ type LobbyScreenProps = {
 
 const GAME_MODES = [
   { value: "sketchRecall", label: "Sketch Recall" },
+  { value: "anonymousRecall", label: "Sketch Recall: Anonymous Swap" },
 ];
 
 const DRAWING_SPEEDS = [
@@ -287,7 +288,7 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
           </div>
         ) : (
           <p className="mt-6 text-sm text-white/60">
-            Mode: {gameMode}
+            Mode: {GAME_MODES.find((mode) => mode.value === gameMode)?.label ?? gameMode}
           </p>
         )}
 

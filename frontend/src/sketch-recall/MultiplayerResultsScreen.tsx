@@ -5,6 +5,10 @@ type MultiplayerResultsScreenProps = {
   sessionId: string
   onPlayAgain: () => void
   onExit: () => void
+  // Lives left per sessionId, when the game has them.
+  lives?: Record<string, number>
+  // Leave the room entirely.
+  onLeave?: () => void
 }
 
 type FinalStanding = {
@@ -19,6 +23,8 @@ function MultiplayerResultsScreen({
   sessionId,
   onPlayAgain,
   onExit,
+  lives,
+  onLeave,
 }: MultiplayerResultsScreenProps) {
   /*
    * Final leaderboard ranking is based
@@ -250,6 +256,14 @@ function MultiplayerResultsScreen({
                               ' (You)'}
                           </p>
 
+                          {lives?.[player.sessionId] !== undefined && (
+                            <p className="mt-1 text-xs text-white/50">
+                              {lives[player.sessionId] > 0
+                                ? '❤️'.repeat(lives[player.sessionId])
+                                : 'Out of lives'}
+                            </p>
+                          )}
+
                           {isWinner && (
                             <p className="mt-1 text-xs font-semibold uppercase tracking-wider text-amber-400">
                               {winners.length >
@@ -309,6 +323,16 @@ function MultiplayerResultsScreen({
             >
               EXIT
             </button>
+
+            {onLeave && (
+              <button
+                type="button"
+                onClick={onLeave}
+                className="rounded-xl border border-red-500/30 bg-transparent px-6 py-4 font-bold text-red-400 transition hover:border-red-400 sm:col-span-2"
+              >
+                LEAVE ROOM
+              </button>
+            )}
           </div>
         </section>
       </div>
