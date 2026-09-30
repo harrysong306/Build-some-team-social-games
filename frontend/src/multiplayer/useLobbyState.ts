@@ -5,6 +5,7 @@ export type PlayerView = {
   name: string;
   ready: boolean;
   isHost: boolean;
+  score: number;
 };
 
 export function useLobbyState(room: Room | null) {
@@ -39,8 +40,12 @@ export function useLobbyState(room: Room | null) {
 
   const toggleReady = () => {
     if (!room) return;
+
     const me = players[room.sessionId];
-    room.send("markReady", { ready: !me?.ready });
+
+    room.send("markReady", {
+      ready: !me?.ready,
+    });
   };
 
   const setGameMode = (mode: string) => {
@@ -61,6 +66,10 @@ export function useLobbyState(room: Room | null) {
     room?.send("startGame");
   };
 
+  const returnToLobby = () => {
+    room?.send("returnToLobby");
+  };
+
   return {
     players,
     gameMode,
@@ -74,5 +83,6 @@ export function useLobbyState(room: Room | null) {
     setDrawingSpeed,
     setDrawingCount,
     startGame,
+    returnToLobby,
   };
 }

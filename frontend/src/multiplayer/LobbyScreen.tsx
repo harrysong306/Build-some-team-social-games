@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Room } from "@colyseus/sdk";
 import { useLobbyState } from "./useLobbyState";
 import InstructionsScreen from "../sketch-recall/InstructionsScreen";
@@ -17,7 +17,7 @@ const DRAWING_SPEEDS = [
   { value: "easy", label: "Easy" },
   { value: "normal", label: "Normal" },
   { value: "hard", label: "Hard" },
-]
+];
 
 // Must stay within MIN_DRAWING_COUNT and
 // MAX_DRAWING_COUNT in backend LobbyRoom.ts.
@@ -37,6 +37,7 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
     setDrawingSpeed,
     setDrawingCount,
     startGame,
+    returnToLobby,
   } = useLobbyState(room);
 
   const [roundStarted, setRoundStarted] = useState(false);
@@ -50,14 +51,29 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
     playerList.length > 0 &&
     playerList.every(([, player]) => player.ready);
 
-  if (roundStarted) {
+  /*
+   * The backend phase is authoritative.
+   *
+   * When the host returns the room to the lobby,
+   * every connected client receives phase === "lobby".
+   * Reset the local game-screen flag as well so all
+   * clients leave SketchRecallGame together.
+   */
+  useEffect(() => {
+    if (phase === "lobby") {
+      setRoundStarted(false);
+    }
+  }, [phase]);
+
+  if (roundStarted && phase === "playing") {
     return (
       <SketchRecallGame
         room={room}
+        players={players}
         onExit={() => setRoundStarted(false)}
         gameWords={gameWords}
         drawingSpeed={drawingSpeed}
-        onPlayAgain={startGame}
+        onPlayAgain={returnToLobby}
         onSubmitDrawing={(bytes, index) => {
           room?.send("submit-drawing-meta", {
             index,
