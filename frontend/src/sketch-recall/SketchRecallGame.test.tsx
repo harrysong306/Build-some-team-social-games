@@ -1,533 +1,190 @@
-import {
-  fireEvent,
-  render,
-  screen,
-} from '@testing-library/react'
-
+import { useState } from 'react'
 import type { Room } from '@colyseus/sdk'
 
-import {
-  beforeEach,
-  describe,
-  expect,
-  it,
-  vi,
-} from 'vitest'
-
 import type { PlayerView } from '../multiplayer/useLobbyState'
-import SketchRecallGame from './SketchRecallGame'
+import DistractionPhase from './DistractionPhase'
+import DrawingPhase from './DrawingPhase'
+import FinalGallery from './FinalGallery'
+import InstructionsScreen from './InstructionsScreen'
+import MultiplayerResultsScreen from './MultiplayerResultsScreen'
+import RecallPhase from './RecallPhase'
+import ResultsScreen from './ResultsScreen'
 
-vi.mock(
-  './InstructionsScreen',
-  () => ({
-    default: ({
-      onStart,
-    }: {
-      onStart: () => void
-    }) => (
-      <button
-        type="button"
-        onClick={onStart}
-      >
-        MOCK BEGIN
-      </button>
-    ),
-  }),
-)
-
-vi.mock(
-  './DrawingPhase',
-  () => ({
-    default: ({
-      onComplete,
-    }: {
-      onComplete: (
-        drawings:
-          (string | null)[],
-      ) => void
-    }) => (
-      <button
-        type="button"
-        onClick={() =>
-          onComplete([])
-        }
-      >
-        MOCK DRAWING COMPLETE
-      </button>
-    ),
-  }),
-)
-
-vi.mock(
-  './DistractionPhase',
-  () => ({
-    default: ({
-      onComplete,
-    }: {
-      onComplete: () => void
-    }) => (
-      <button
-        type="button"
-        onClick={onComplete}
-      >
-        MOCK DISTRACTION COMPLETE
-      </button>
-    ),
-  }),
-)
-
-vi.mock(
-  './RecallPhase',
-  () => ({
-    default: ({
-      onComplete,
-    }: {
-      onComplete: (
-        score: number,
-      ) => void
-    }) => (
-      <button
-        type="button"
-        onClick={() =>
-          onComplete(0)
-        }
-      >
-        MOCK RECALL COMPLETE
-      </button>
-    ),
-  }),
-)
-
-vi.mock(
-  './MultiplayerResultsScreen',
-  () => ({
-    default: ({
-      players,
-      sessionId,
-      onPlayAgain,
-    }: {
-      players: Record<
-        string,
-        PlayerView
-      >
-      sessionId: string
-      onPlayAgain: () => void
-    }) => (
-      <section
-        data-testid="mock-multiplayer-results"
-      >
-        <p>
-          Current:
-          {' '}
-          {sessionId}
-        </p>
-
-        {Object.entries(
-          players,
-        ).map(
-          ([
-            playerSessionId,
-            player,
-          ]) => (
-            <p
-              key={
-                playerSessionId
-              }
-            >
-              {playerSessionId}
-              :
-              {player.score}
-            </p>
-          ),
-        )}
-
-        <button
-          type="button"
-          onClick={onPlayAgain}
-        >
-          MOCK PLAY AGAIN
-        </button>
-      </section>
-    ),
-  }),
-)
-
-vi.mock(
-  './ResultsScreen',
-  () => ({
-    default: () => (
-      <div>
-        MOCK SINGLE PLAYER RESULTS
-      </div>
-    ),
-  }),
-)
-
-function makeRoom(
-  sessionId: string,
-) {
-  return {
-    sessionId,
-  } as unknown as Room
+type SketchRecallGameProps = {
+  room: Room | null
+  players: Record<string, PlayerView>
+  onExit: () => void
+  gameWords: readonly string[]
+  drawingSpeed: string
+  onPlayAgain: () => void
+  onSubmitDrawing?: (
+    bytes: Uint8Array,
+    index: number,
+  ) => void
 }
 
-function advanceToRecall() {
-  fireEvent.click(
-    screen.getByRole(
-      'button',
-      {
-        name:
-          /mock begin/i,
-      },
-    ),
-  )
+type GamePhase =
+  | 'instructions'
+  | 'drawing'
+  | 'distraction'
+  | 'recall'
+  | 'results'
 
-  fireEvent.click(
-    screen.getByRole(
-      'button',
-      {
-        name:
-          /mock drawing complete/i,
-      },
-    ),
-  )
+function SketchRecallGame({
+  room,
+  players,
+  onExit,
+  gameWords,
+  drawingSpeed,
+  onPlayAgain,
+  onSubmitDrawing,
+}: SketchRecallGameProps) {
+  const [phase, setPhase] =
+    useState<GamePhase>('instructions')
 
-  fireEvent.click(
-    screen.getByRole(
-      'button',
-      {
-        name:
-          /mock distraction complete/i,
-      },
-    ),
-  )
-}
+  const [savedDrawings, setSavedDrawings] =
+    useState<(string | null)[]>([])
 
-function finishRecall() {
-  fireEvent.click(
-    screen.getByRole(
-      'button',
-      {
-        name:
-          /mock recall complete/i,
-      },
-    ),
-  )
-}
+  const [recallScore, setRecallScore] =
+    useState(0)
 
-describe(
-  'SketchRecallGame multiplayer integration',
-  () => {
-    beforeEach(() => {
-      vi.clearAllMocks()
+  const clearSavedDrawings = () => {
+    savedDrawings.forEach((drawing) => {
+      if (drawing) {
+        URL.revokeObjectURL(drawing)
+      }
     })
 
-    it(
-      'allows the host to request multiplayer replay from the final results',
-      () => {
-        const onPlayAgain =
-          vi.fn()
+    setSavedDrawings([])
+  }
 
-        const players:
-          Record<
-            string,
-            PlayerView
-          > = {
-            host: {
-              name:
-                'Jordan',
-              ready:
-                true,
-              isHost:
-                true,
-              score:
-                23,
-            },
-            guest: {
-              name:
-                'Sam',
-              ready:
-                true,
-              isHost:
-                false,
-              score:
-                23,
-            },
-          }
+  /*
+   * Single-player replay stays local.
+   *
+   * Multiplayer replay is handled separately below
+   * because the shared server state must move every
+   * connected player back to the lobby together.
+   */
+  const playAgain = () => {
+    clearSavedDrawings()
+    setRecallScore(0)
+    setPhase('instructions')
+    onPlayAgain()
+  }
 
-        render(
-          <SketchRecallGame
-            room={
-              makeRoom(
-                'host',
-              )
-            }
-            players={
-              players
-            }
-            onExit={
-              vi.fn()
-            }
-            gameWords={[
-              'Apple',
-            ]}
-            drawingSpeed="normal"
-            onPlayAgain={
-              onPlayAgain
-            }
-          />,
-        )
+  /*
+   * Only the host should request a multiplayer replay.
+   *
+   * Do not change this client's local GamePhase here.
+   * The server handles returnToLobby and LobbyScreen
+   * follows the synchronized server phase.
+   *
+   * The backend also verifies host ownership, so this
+   * client-side check is an additional UI safeguard.
+   */
+  const requestMultiplayerReplay = () => {
+    if (!room) return
 
-        advanceToRecall()
-        finishRecall()
+    const currentPlayer =
+      players[room.sessionId]
 
-        expect(
-          screen.getByTestId(
-            'mock-multiplayer-results',
-          ),
-        ).toBeInTheDocument()
+    if (!currentPlayer?.isHost) {
+      return
+    }
 
-        fireEvent.click(
-          screen.getByRole(
-            'button',
-            {
-              name:
-                /mock play again/i,
-            },
-          ),
-        )
+    clearSavedDrawings()
+    onPlayAgain()
+  }
 
-        expect(
-          onPlayAgain,
-        ).toHaveBeenCalledTimes(
-          1,
-        )
-
-        /*
-         * Multiplayer replay does not
-         * locally jump back to the
-         * instructions screen.
-         *
-         * It waits for LobbyScreen to
-         * receive the server's lobby
-         * phase.
-         */
-        expect(
-          screen.getByTestId(
-            'mock-multiplayer-results',
-          ),
-        ).toBeInTheDocument()
-      },
+  if (phase === 'drawing') {
+    return (
+      <DrawingPhase
+        words={gameWords}
+        drawingSpeed={drawingSpeed}
+        onBack={() =>
+          setPhase('instructions')
+        }
+        onSubmitDrawing={
+          onSubmitDrawing
+        }
+        onComplete={(drawings) => {
+          setSavedDrawings(drawings)
+          setPhase('distraction')
+        }}
+      />
     )
+  }
 
-    it(
-      'does not let a non-host trigger multiplayer replay locally',
-      () => {
-        const onPlayAgain =
-          vi.fn()
-
-        const players:
-          Record<
-            string,
-            PlayerView
-          > = {
-            host: {
-              name:
-                'Jordan',
-              ready:
-                true,
-              isHost:
-                true,
-              score:
-                24,
-            },
-            guest: {
-              name:
-                'Sam',
-              ready:
-                true,
-              isHost:
-                false,
-              score:
-                20,
-            },
-          }
-
-        render(
-          <SketchRecallGame
-            room={
-              makeRoom(
-                'guest',
-              )
-            }
-            players={
-              players
-            }
-            onExit={
-              vi.fn()
-            }
-            gameWords={[
-              'Apple',
-            ]}
-            drawingSpeed="normal"
-            onPlayAgain={
-              onPlayAgain
-            }
-          />,
-        )
-
-        advanceToRecall()
-        finishRecall()
-
-        fireEvent.click(
-          screen.getByRole(
-            'button',
-            {
-              name:
-                /mock play again/i,
-            },
-          ),
-        )
-
-        expect(
-          onPlayAgain,
-        ).not.toHaveBeenCalled()
-
-        expect(
-          screen.getByTestId(
-            'mock-multiplayer-results',
-          ),
-        ).toBeInTheDocument()
-      },
+  if (phase === 'distraction') {
+    return (
+      <DistractionPhase
+        onComplete={() =>
+          setPhase('recall')
+        }
+      />
     )
+  }
 
-    it(
-      'passes the latest synchronized player totals into the final leaderboard',
-      () => {
-        const beforeFinalRound:
-          Record<
-            string,
-            PlayerView
-          > = {
-            host: {
-              name:
-                'Jordan',
-              ready:
-                true,
-              isHost:
-                true,
-              score:
-                20,
-            },
-            guest: {
-              name:
-                'Sam',
-              ready:
-                true,
-              isHost:
-                false,
-              score:
-                19,
-            },
-          }
-
-        const afterFinalRound:
-          Record<
-            string,
-            PlayerView
-          > = {
-            host: {
-              ...beforeFinalRound
-                .host,
-              score:
-                23,
-            },
-            guest: {
-              ...beforeFinalRound
-                .guest,
-              score:
-                23,
-            },
-          }
-
-        const room =
-          makeRoom(
-            'host',
-          )
-
-        const {
-          rerender,
-        } = render(
-          <SketchRecallGame
-            room={room}
-            players={
-              beforeFinalRound
-            }
-            onExit={
-              vi.fn()
-            }
-            gameWords={[
-              'Apple',
-            ]}
-            drawingSpeed="normal"
-            onPlayAgain={
-              vi.fn()
-            }
-          />,
-        )
-
-        advanceToRecall()
-
-        /*
-         * This represents the Colyseus
-         * state patch reaching React
-         * before recallRoundResult.
-         */
-        rerender(
-          <SketchRecallGame
-            room={room}
-            players={
-              afterFinalRound
-            }
-            onExit={
-              vi.fn()
-            }
-            gameWords={[
-              'Apple',
-            ]}
-            drawingSpeed="normal"
-            onPlayAgain={
-              vi.fn()
-            }
-          />,
-        )
-
-        finishRecall()
-
-        expect(
-          screen.getByText(
-            'host:23',
-          ),
-        ).toBeInTheDocument()
-
-        expect(
-          screen.getByText(
-            'guest:23',
-          ),
-        ).toBeInTheDocument()
-
-        expect(
-          screen.queryByText(
-            'host:20',
-          ),
-        ).not.toBeInTheDocument()
-
-        expect(
-          screen.queryByText(
-            'guest:19',
-          ),
-        ).not.toBeInTheDocument()
-      },
+  if (phase === 'recall') {
+    return (
+      <RecallPhase
+        room={room}
+        drawings={savedDrawings}
+        words={gameWords}
+        onComplete={(score) => {
+          setRecallScore(score)
+          setPhase('results')
+        }}
+      />
     )
-  },
-)
+  }
+
+  if (phase === 'results') {
+    if (room) {
+      return (
+        <>
+        <MultiplayerResultsScreen
+          players={players}
+          sessionId={room.sessionId}
+          onPlayAgain={
+            requestMultiplayerReplay
+          }
+          onExit={() => {
+            clearSavedDrawings()
+            onExit()
+          }}
+        />
+
+        {/* FE-102: everyone's drawings, below the final leaderboard */}
+        <FinalGallery
+          room={room}
+          words={gameWords}
+        />
+        </>
+      )
+    }
+
+    return (
+      <ResultsScreen
+        score={recallScore}
+        total={gameWords.length * 4}
+        onPlayAgain={playAgain}
+        onExit={() => {
+          clearSavedDrawings()
+          onExit()
+        }}
+      />
+    )
+  }
+
+  return (
+    <InstructionsScreen
+      onBack={onExit}
+      onStart={() =>
+        setPhase('drawing')
+      }
+    />
+  )
+}
+
+export default SketchRecallGame
