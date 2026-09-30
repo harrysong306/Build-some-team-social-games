@@ -280,7 +280,10 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
           </div>
         ) : (
           <p className="mt-4 text-sm text-white/60">
-            Word theme: {wordTheme}
+            Word theme: {" "}
+            {WORD_THEMES.find(
+              (theme) => theme.value === wordTheme,
+            )?.label ?? wordTheme}
           </p>
         )}
 

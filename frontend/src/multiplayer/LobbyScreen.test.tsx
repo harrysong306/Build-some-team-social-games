@@ -384,7 +384,7 @@ describe(
 
         expect(
           screen.getByText(
-            'Word theme: animals',
+            'Word theme: Animals',
           ),
         ).toBeTruthy()
       },
