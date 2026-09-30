@@ -5,6 +5,7 @@ import {
   PlayerQuestion,
 } from "./schema/GameState.js";
 import { generateGameWords } from "../utils/WordGen.js";
+import { wordPacks, type WordPackTheme } from "../utils/sketchRecallWords.js";
 
 const VALID_GAME_MODES = ["sketchRecall", "test"] as const;
 type GameMode = typeof VALID_GAME_MODES[number];
@@ -44,6 +45,7 @@ type AssignedPlayerQuestion = {
 // than that breaks its general-word fill-in.
 const MIN_DRAWING_COUNT = 10;
 const MAX_DRAWING_COUNT = 30;
+const VALID_WORD_THEMES = Object.keys(wordPacks) as WordPackTheme[];
 
 type RecallAnswer = {
   sessionId: string;
@@ -97,6 +99,34 @@ function similarity(
     1 -
     distance /
       Math.max(left.length, right.length)
+  );
+}
+
+function scoreRecallAnswer(
+  guess: string,
+  target: string,
+) {
+  const left = normalize(guess);
+  const right = normalize(target);
+
+  if (!left && !right) return 4;
+  if (!left || !right) return 0;
+  if (left === right) return 4;
+
+  let score = Math.round(
+    similarity(left, right) * 4,
+  );
+
+  if (
+    left.includes(right) ||
+    right.includes(left)
+  ) {
+    score = Math.max(score, 3);
+  }
+
+  return Math.max(
+    0,
+    Math.min(4, score),
   );
 }
 
@@ -368,7 +398,8 @@ export class LobbyRoom extends Room {
         message.speed,
       );
 
-      this.state.drawingSpeed = message.speed;
+      this.state.drawingSpeed =
+        message.speed;
     },
 
     setDrawingCount: (
@@ -405,7 +436,41 @@ export class LobbyRoom extends Room {
         count,
       );
 
-      this.state.drawingCount = count;
+      this.state.drawingCount =
+        count;
+    },
+
+    setWordTheme: (
+      client: Client,
+      message: { theme: string },
+    ) => {
+      const player =
+        this.state.players.get(
+          client.sessionId,
+        );
+
+      // Only the host can change the word theme.
+      if (!player?.isHost) return;
+
+      if (
+        !VALID_WORD_THEMES.includes(
+          message.theme as WordPackTheme,
+        )
+      ) {
+        client.send("word_theme_error", {
+          reason: `Invalid word theme: ${message.theme}`,
+        });
+
+        return;
+      }
+
+      console.log(
+        this.state.wordTheme,
+        "Changed to:",
+        message.theme,
+      );
+
+      this.state.wordTheme = message.theme;
     },
 
     startGame: (
@@ -419,6 +484,9 @@ export class LobbyRoom extends Room {
 
       if (!player?.isHost) return;
 
+      // Games can only be started from the shared lobby.
+      if (this.state.phase !== "lobby") return;
+
       const allReady = [
         ...this.state.players.values(),
       ].every(
@@ -428,13 +496,15 @@ export class LobbyRoom extends Room {
 
       if (!allReady) return;
 
-      const wordCount = this.state.drawingCount;
+      const wordCount =
+        this.state.drawingCount;
 
       this.state.gameWords.clear();
       this.state.gameWords.push(
-        ...generateGameWords(wordCount),
+        ...generateGameWords(wordCount, this.state.wordTheme as WordPackTheme),
       );
 
+<<<<<<< HEAD
       // Assign each personal question to one random player other than its
       // author. The author never receives their own question.
       const players = [...this.state.players.entries()];
@@ -477,6 +547,14 @@ export class LobbyRoom extends Room {
             connectedClient.sessionId === recipientSessionId,
           )
           ?.send("assigned_player_questions", questions);
+=======
+      // Start each new game with a clean scoreboard.
+      for (
+        const currentPlayer of
+        this.state.players.values()
+      ) {
+        currentPlayer.score = 0;
+>>>>>>> main
       }
 
       this.state.phase = "playing";
@@ -488,10 +566,64 @@ export class LobbyRoom extends Room {
       this.recallDeadline = 0;
       this.recallStarted = false;
 
-      // Drop any drawings from a previous
-      // game so the final gallery never
-      // shows stale images.
+      // Never reuse drawings or pending
+      // drawing metadata from a previous game.
       this.drawings.clear();
+      this.pendingDrawingIndexes.clear();
+    },
+
+    /*
+     * Return every player to the shared lobby after
+     * the final Recall round.
+     *
+     * Only the host can trigger a replay, and only
+     * once all Recall rounds have actually finished.
+     *
+     * Final scores remain intact while players are
+     * returned to the lobby. startGame resets them
+     * when the next game begins.
+     */
+    returnToLobby: (
+      client: Client,
+      _message: any,
+    ) => {
+      const player =
+        this.state.players.get(
+          client.sessionId,
+        );
+
+      if (!player?.isHost) return;
+
+      const recallComplete =
+        !this.recallStarted &&
+        this.recallRound >=
+          this.state.gameWords.length;
+
+      if (
+        this.state.phase !== "playing" ||
+        !recallComplete
+      ) {
+        return;
+      }
+
+      for (
+        const currentPlayer of
+        this.state.players.values()
+      ) {
+        currentPlayer.ready = false;
+      }
+
+      this.state.phase = "lobby";
+      this.state.gameWords.clear();
+
+      this.recallRound = 0;
+      this.recallReady.clear();
+      this.recallAnswers.clear();
+      this.recallDeadline = 0;
+      this.recallStarted = false;
+
+      this.drawings.clear();
+      this.pendingDrawingIndexes.clear();
     },
 
     /*
@@ -531,18 +663,26 @@ export class LobbyRoom extends Room {
       this.recallDeadline =
         Date.now() + 10_000;
 
+      const roundIndex =
+        this.recallRound;
+
       this.broadcast(
         "recallRoundStarted",
         {
-          roundIndex:
-            this.recallRound,
+          roundIndex,
           deadline:
             this.recallDeadline,
         },
       );
 
       this.clock.setTimeout(() => {
-        this.finishRecallRound();
+        if (
+          this.recallStarted &&
+          this.recallRound ===
+            roundIndex
+        ) {
+          this.finishRecallRound();
+        }
       }, 10_000);
     },
 
@@ -650,18 +790,22 @@ export class LobbyRoom extends Room {
     ) => {
       if (!this.isGameOver()) return;
 
-      const drawing = this.drawings.get(
-        `${message.sessionId}:${message.index}`,
-      );
+      const drawing =
+        this.drawings.get(
+          `${message.sessionId}:${message.index}`,
+        );
 
       if (!drawing) return;
 
       client.send("galleryImage", {
-        sessionId: message.sessionId,
-        index: message.index,
-        image: Buffer.from(
-          drawing,
-        ).toString("base64"),
+        sessionId:
+          message.sessionId,
+        index:
+          message.index,
+        image:
+          Buffer.from(
+            drawing,
+          ).toString("base64"),
       });
     },
   };
@@ -669,31 +813,37 @@ export class LobbyRoom extends Room {
   private finishRecallRound() {
     if (!this.recallStarted) return;
 
+    const roundIndex =
+      this.recallRound;
+
     const correctWord =
       this.state.gameWords[
-        this.recallRound
+        roundIndex
       ] ?? "";
 
     /*
-     * Closest answer ranks first.
+     * Each answer keeps the original
+     * Sketch Recall 0-4 grading.
      *
-     * If two answers are equally close,
-     * the earlier server submission time wins.
+     * Higher scores rank first.
+     * Equal scores are ordered by the
+     * earlier server submission time.
      */
     const ranked = [
       ...this.recallAnswers.values(),
     ]
       .map((entry) => ({
         ...entry,
-        similarity: similarity(
-          entry.answer,
-          correctWord,
-        ),
+        pointsEarned:
+          scoreRecallAnswer(
+            entry.answer,
+            correctWord,
+          ),
       }))
       .sort(
         (left, right) =>
-          right.similarity -
-            left.similarity ||
+          right.pointsEarned -
+            left.pointsEarned ||
           left.submittedAt -
             right.submittedAt,
       );
@@ -714,26 +864,48 @@ export class LobbyRoom extends Room {
             ? ranked[resultIndex]
             : undefined;
 
+        const pointsEarned =
+          entry?.pointsEarned ?? 0;
+
+        player.score +=
+          pointsEarned;
+
         return {
           sessionId,
-          playerName: player.name,
+          playerName:
+            player.name,
           answer:
             entry?.answer ?? "",
-          rank: entry
-            ? resultIndex + 1
-            : null,
-          timedOut: !entry,
+          rank:
+            entry
+              ? resultIndex + 1
+              : null,
+          timedOut:
+            !entry,
+          pointsEarned,
+          totalScore:
+            player.score,
         };
       },
     );
 
+    /*
+     * Deliver the round result only after the score
+     * mutations above have reached every client.
+     *
+     * This matters on the final round because the
+     * result message can transition the UI to the
+     * final leaderboard.
+     */
     this.broadcast(
       "recallRoundResult",
       {
-        roundIndex:
-          this.recallRound,
+        roundIndex,
         correctWord,
         results,
+      },
+      {
+        afterNextPatch: true,
       },
     );
 
@@ -760,7 +932,8 @@ export class LobbyRoom extends Room {
 
   private isGameOver() {
     return (
-      this.state.gameWords.length > 0 &&
+      this.state.gameWords.length >
+        0 &&
       this.recallRound >=
         this.state.gameWords.length
     );
@@ -772,10 +945,14 @@ export class LobbyRoom extends Room {
       index: number;
     }[] = [];
 
-    for (const sessionId of this.state.players.keys()) {
+    for (
+      const sessionId of
+      this.state.players.keys()
+    ) {
       for (
         let index = 0;
-        index < this.state.gameWords.length;
+        index <
+        this.state.gameWords.length;
         index++
       ) {
         if (
@@ -851,7 +1028,8 @@ export class LobbyRoom extends Room {
         )}`;
     }
 
-    const player = new Player();
+    const player =
+      new Player();
 
     player.name = name;
     player.isHost =

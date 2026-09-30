@@ -17,6 +17,7 @@ export type PlayerQuestionForGame = PlayerQuestionView & {
   ownerSessionId: string;
   questionIndex: number;
   ownerName: string;
+  score: number;
 };
 
 export function useLobbyState(room: Room | null) {
@@ -24,6 +25,7 @@ export function useLobbyState(room: Room | null) {
   const [gameMode, setGameModeState] = useState<string>("sketchRecall");
   const [drawingSpeed, setDrawingSpeedState] = useState<string>("normal");
   const [drawingCount, setDrawingCountState] = useState<number>(25);
+  const [wordTheme, setWordThemeState] = useState<string>("general");
   const [phase, setPhase] = useState<string>("lobby");
   const [gameWords, setGameWords] = useState<string[]>([]);
   const [assignedPlayerQuestions, setAssignedPlayerQuestions] =
@@ -39,6 +41,7 @@ export function useLobbyState(room: Room | null) {
       // Synced from the backend GameState schema
       setDrawingSpeedState(state.drawingSpeed ?? "normal");
       setDrawingCountState(state.drawingCount ?? 25);
+      setWordThemeState(state.wordTheme ?? "general");
 
       setPhase(state.phase);
       setGameWords(Array.from(state.gameWords ?? []));
@@ -61,8 +64,12 @@ export function useLobbyState(room: Room | null) {
 
   const toggleReady = () => {
     if (!room) return;
+
     const me = players[room.sessionId];
-    room.send("markReady", { ready: !me?.ready });
+
+    room.send("markReady", {
+      ready: !me?.ready,
+    });
   };
 
   const setGameMode = (mode: string) => {
@@ -92,8 +99,16 @@ export function useLobbyState(room: Room | null) {
     room?.send("setDrawingCount", { count });
   };
 
+  const setWordTheme = (theme: string) => {
+    room?.send("setWordTheme", { theme });
+  };
+
   const startGame = () => {
     room?.send("startGame");
+  };
+
+  const returnToLobby = () => {
+    room?.send("returnToLobby");
   };
 
   return {
@@ -101,6 +116,7 @@ export function useLobbyState(room: Room | null) {
     gameMode,
     drawingSpeed,
     drawingCount,
+    wordTheme,
     phase,
     gameWords,
     assignedPlayerQuestions,
@@ -110,6 +126,8 @@ export function useLobbyState(room: Room | null) {
     setDrawingSpeed,
     submitPlayerQuestion,
     setDrawingCount,
+    setWordTheme,
     startGame,
+    returnToLobby,
   };
 }

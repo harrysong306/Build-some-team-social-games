@@ -1,10 +1,10 @@
 import {
-  generalWords,
-  similarWordGroups,
+  wordPacks,
+  type WordPackTheme,
 } from './sketchRecallWords.js'
 
 
-const shuffle = <T,>(items: T[]) => {
+const shuffle = <T,>(items: readonly T[]) => {
   const result = [...items]
 
   for (let i = result.length - 1; i > 0; i--) {
@@ -20,14 +20,19 @@ const shuffle = <T,>(items: T[]) => {
 }
 
 
-const generateGameWords = (wordCount: number = 25) => {
+const generateGameWords = (
+  wordCount: number = 25,
+  theme: WordPackTheme = 'general',
+) => {
+  const pack = wordPacks[theme]
+
   const selectedGroups =
-    shuffle(similarWordGroups).slice(0, 3)
+    shuffle<readonly string[]>(pack.similarWordGroups).slice(0, 3)
 
   const similarWords = selectedGroups.flat()
 
   const selectedGeneralWords =
-    shuffle(generalWords).slice(
+    shuffle<string>(pack.generalWords).slice(
       0,
       wordCount - similarWords.length,
     )
@@ -39,7 +44,4 @@ const generateGameWords = (wordCount: number = 25) => {
 }
 
 
-
-
-
-export {generateGameWords};
+export { generateGameWords }

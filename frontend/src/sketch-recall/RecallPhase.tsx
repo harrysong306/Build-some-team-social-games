@@ -14,6 +14,8 @@ type RecallPlayerResult = {
   answer: string
   rank: number | null
   timedOut: boolean
+  pointsEarned: number
+  totalScore: number
 }
 
 type RecallRoundResult = {
@@ -43,8 +45,6 @@ function RecallPhase({
 
   /*
    * Existing single-player state.
-   * This keeps the old behaviour working
-   * when RecallPhase is used without a room.
    */
   const [score, setScore] =
     useState(0)
@@ -55,14 +55,18 @@ function RecallPhase({
   const [correct, setCorrect] =
     useState(false)
 
-  const [pointsAwarded, setPointsAwarded] =
-    useState(0)
+  const [
+    pointsAwarded,
+    setPointsAwarded,
+  ] = useState(0)
 
   /*
    * Multiplayer Recall state.
    */
-  const [roundStarted, setRoundStarted] =
-    useState(false)
+  const [
+    roundStarted,
+    setRoundStarted,
+  ] = useState(false)
 
   const [deadline, setDeadline] =
     useState(0)
@@ -73,14 +77,16 @@ function RecallPhase({
   const [submitted, setSubmitted] =
     useState(false)
 
-  const [roundResult, setRoundResult] =
+  const [
+    roundResult,
+    setRoundResult,
+  ] =
     useState<RecallRoundResult | null>(
       null,
     )
 
-  const readyRoundRef = useRef<number | null>(
-    null,
-  )
+  const readyRoundRef =
+    useRef<number | null>(null)
 
   const currentDrawing =
     drawings[currentIndex]
@@ -89,9 +95,8 @@ function RecallPhase({
     words[currentIndex]
 
   /*
-   * Listen for the server starting the
-   * shared 10 second Recall round and for
-   * the synchronized result.
+   * Listen for the shared round start
+   * and synchronized round result.
    */
   useEffect(() => {
     if (!room) return
@@ -110,7 +115,10 @@ function RecallPhase({
             return
           }
 
-          setDeadline(message.deadline)
+          setDeadline(
+            message.deadline,
+          )
+
           setTimeLeft(10)
           setRoundStarted(true)
         },
@@ -119,7 +127,10 @@ function RecallPhase({
     const removeResultListener =
       room.onMessage(
         'recallRoundResult',
-        (message: RecallRoundResult) => {
+        (
+          message:
+            RecallRoundResult,
+        ) => {
           if (
             message.roundIndex !==
             currentIndex
@@ -142,11 +153,8 @@ function RecallPhase({
   ])
 
   /*
-   * Tell the backend when this player has
-   * reached the current Recall question.
-   *
-   * The server starts the timer only after
-   * every player reaches the same round.
+   * Tell the backend when this player
+   * reaches the current Recall round.
    */
   useEffect(() => {
     if (!room) return
@@ -164,7 +172,8 @@ function RecallPhase({
     room.send(
       'readyRecallRound',
       {
-        roundIndex: currentIndex,
+        roundIndex:
+          currentIndex,
       },
     )
   }, [
@@ -173,9 +182,9 @@ function RecallPhase({
   ])
 
   /*
-   * Display countdown only.
-   * The backend remains responsible for
-   * deciding when the round actually ends.
+   * Frontend countdown only.
+   * The backend decides when the
+   * round actually ends.
    */
   useEffect(() => {
     if (
@@ -191,8 +200,10 @@ function RecallPhase({
         Math.max(
           0,
           Math.ceil(
-            (deadline - Date.now()) /
-              1000,
+            (
+              deadline -
+              Date.now()
+            ) / 1000,
           ),
         )
 
@@ -208,7 +219,9 @@ function RecallPhase({
       )
 
     return () =>
-      window.clearInterval(timer)
+      window.clearInterval(
+        timer,
+      )
   }, [
     room,
     roundStarted,
@@ -216,8 +229,8 @@ function RecallPhase({
   ])
 
   /*
-   * Existing local/single-player answer
-   * checking.
+   * Existing local/single-player
+   * answer scoring.
    */
   const checkLocalAnswer = () => {
     if (!answer.trim()) return
@@ -240,35 +253,38 @@ function RecallPhase({
 
     setScore(
       (current) =>
-        current + awardedPoints,
+        current +
+        awardedPoints,
     )
   }
 
   /*
-   * Multiplayer answer.
-   * Only one submission is allowed locally,
-   * and the server also rejects duplicates.
+   * Multiplayer answer submission.
+   * The server also prevents duplicate
+   * submissions.
    */
-  const submitMultiplayerAnswer = () => {
-    if (
-      !room ||
-      !roundStarted ||
-      submitted ||
-      !answer.trim()
-    ) {
-      return
+  const submitMultiplayerAnswer =
+    () => {
+      if (
+        !room ||
+        !roundStarted ||
+        submitted ||
+        !answer.trim()
+      ) {
+        return
+      }
+
+      room.send(
+        'submitRecallAnswer',
+        {
+          roundIndex:
+            currentIndex,
+          answer,
+        },
+      )
+
+      setSubmitted(true)
     }
-
-    room.send(
-      'submitRecallAnswer',
-      {
-        roundIndex: currentIndex,
-        answer,
-      },
-    )
-
-    setSubmitted(true)
-  }
 
   const nextDrawing = () => {
     if (
@@ -297,11 +313,7 @@ function RecallPhase({
   }
 
   /*
-   * MULTIPLAYER RESULT
-   *
-   * There is deliberately no 5 second
-   * waiting period. The result appears as
-   * soon as the server sends it.
+   * MULTIPLAYER ROUND RESULT
    */
   if (
     room &&
@@ -312,6 +324,76 @@ function RecallPhase({
         (result) =>
           result.sessionId ===
           room.sessionId,
+      )
+
+    const roundRankings = [
+      ...roundResult.results,
+    ].sort(
+      (left, right) => {
+        const leftRank =
+          left.rank ??
+          Number.MAX_SAFE_INTEGER
+
+        const rightRank =
+          right.rank ??
+          Number.MAX_SAFE_INTEGER
+
+        return (
+          leftRank -
+            rightRank ||
+          left.playerName.localeCompare(
+            right.playerName,
+          )
+        )
+      },
+    )
+
+    /*
+     * Current standings are based on
+     * accumulated 0-4 scores.
+     *
+     * Equal totals share the same
+     * standing rank.
+     */
+    const sortedStandings = [
+      ...roundResult.results,
+    ].sort(
+      (left, right) =>
+        right.totalScore -
+          left.totalScore ||
+        left.playerName.localeCompare(
+          right.playerName,
+        ),
+    )
+
+    let previousScore:
+      | number
+      | null = null
+
+    let previousRank = 0
+
+    const currentStandings =
+      sortedStandings.map(
+        (result, index) => {
+          const standingRank =
+            previousScore !==
+              null &&
+            result.totalScore ===
+              previousScore
+              ? previousRank
+              : index + 1
+
+          previousScore =
+            result.totalScore
+
+          previousRank =
+            standingRank
+
+          return {
+            ...result,
+            standingRank,
+          }
+        },
       )
 
     return (
@@ -333,37 +415,40 @@ function RecallPhase({
             <p className="mt-4 text-white/60">
               Correct word:{' '}
               <strong className="text-white">
-                {roundResult.correctWord}
+                {
+                  roundResult.correctWord
+                }
               </strong>
             </p>
+
+            {myResult && (
+              <div className="mt-5 flex justify-center gap-3">
+                <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-4 py-2 font-semibold text-amber-300">
+                  +
+                  {
+                    myResult.pointsEarned
+                  }
+                  /4
+                </span>
+
+                <span className="rounded-full border border-white/10 bg-white/5 px-4 py-2 font-semibold text-white/80">
+                  Total:{' '}
+                  {
+                    myResult.totalScore
+                  }
+                </span>
+              </div>
+            )}
           </section>
 
           <section className="mt-8 rounded-2xl border border-amber-500/30 bg-[#160b06] p-6">
             <h2 className="text-lg font-bold">
-              Rankings
+              Round Rankings
             </h2>
 
             <div className="mt-5 space-y-3">
-              {[...roundResult.results]
-                .sort((left, right) => {
-                  if (
-                    left.rank === null
-                  ) {
-                    return 1
-                  }
-
-                  if (
-                    right.rank === null
-                  ) {
-                    return -1
-                  }
-
-                  return (
-                    left.rank -
-                    right.rank
-                  )
-                })
-                .map((result) => (
+              {roundRankings.map(
+                (result) => (
                   <div
                     key={
                       result.sessionId
@@ -372,7 +457,10 @@ function RecallPhase({
                   >
                     <div>
                       <p className="font-semibold">
-                        {result.playerName}
+                        {
+                          result.playerName
+                        }
+
                         {result.sessionId ===
                           room.sessionId &&
                           ' (You)'}
@@ -385,13 +473,69 @@ function RecallPhase({
                       </p>
                     </div>
 
-                    <span className="font-bold text-amber-400">
-                      {result.rank
-                        ? `#${result.rank}`
-                        : 'Timed out'}
+                    <div className="text-right">
+                      <p className="font-bold text-amber-400">
+                        {result.rank
+                          ? `#${result.rank}`
+                          : 'Timed out'}
+                      </p>
+
+                      <p className="mt-1 text-sm text-white/50">
+                        +
+                        {
+                          result.pointsEarned
+                        }
+                        /4
+                      </p>
+                    </div>
+                  </div>
+                ),
+              )}
+            </div>
+          </section>
+
+          <section className="mt-6 rounded-2xl border border-amber-500/30 bg-[#160b06] p-6">
+            <h2 className="text-lg font-bold">
+              Current Standings
+            </h2>
+
+            <div className="mt-5 space-y-3">
+              {currentStandings.map(
+                (result) => (
+                  <div
+                    key={
+                      result.sessionId
+                    }
+                    className="flex items-center justify-between rounded-xl border border-white/10 bg-[#211006] px-5 py-4"
+                  >
+                    <div className="flex items-center gap-4">
+                      <span className="w-7 text-center font-bold text-amber-400">
+                        #
+                        {
+                          result.standingRank
+                        }
+                      </span>
+
+                      <p className="font-semibold">
+                        {
+                          result.playerName
+                        }
+
+                        {result.sessionId ===
+                          room.sessionId &&
+                          ' (You)'}
+                      </p>
+                    </div>
+
+                    <span className="font-bold text-white">
+                      {
+                        result.totalScore
+                      }{' '}
+                      pts
                     </span>
                   </div>
-                ))}
+                ),
+              )}
             </div>
 
             <button
@@ -431,7 +575,8 @@ function RecallPhase({
 
         <div className="mt-8 flex justify-between">
           <span className="text-white/50">
-            Drawing {currentIndex + 1} of{' '}
+            Drawing{' '}
+            {currentIndex + 1} of{' '}
             {words.length}
           </span>
 
@@ -485,15 +630,17 @@ function RecallPhase({
             </p>
 
             <h2 className="mt-3 text-2xl font-bold">
-              What was the original word?
+              What was the original
+              word?
             </h2>
 
             {room &&
               !roundStarted &&
               !submitted && (
                 <p className="mt-5 rounded-xl border border-amber-500/20 bg-amber-500/10 p-4 text-sm text-amber-100/70">
-                  Waiting for everyone to
-                  reach this question…
+                  Waiting for everyone
+                  to reach this
+                  question…
                 </p>
               )}
 
@@ -521,7 +668,9 @@ function RecallPhase({
 
                 if (room) {
                   submitMultiplayerAnswer()
-                } else if (!checked) {
+                } else if (
+                  !checked
+                ) {
                   checkLocalAnswer()
                 }
               }}
@@ -554,8 +703,11 @@ function RecallPhase({
                       <p className="mt-2 text-white/60">
                         The word was{' '}
                         <strong>
-                          {currentWord}
-                        </strong>.
+                          {
+                            currentWord
+                          }
+                        </strong>
+                        .
                       </p>
                     </>
                   )}
@@ -570,8 +722,8 @@ function RecallPhase({
                   </p>
 
                   <p className="mt-1 text-sm text-white/50">
-                    Waiting for the other
-                    players…
+                    Waiting for the
+                    other players…
                   </p>
                 </div>
               )}
