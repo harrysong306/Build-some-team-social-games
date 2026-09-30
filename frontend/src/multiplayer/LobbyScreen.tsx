@@ -23,12 +23,22 @@ const DRAWING_SPEEDS = [
 // MAX_DRAWING_COUNT in backend LobbyRoom.ts.
 const DRAWING_COUNTS = [10, 15, 20, 25, 30];
 
+const WORD_THEMES = [
+  { value: "general", label: "General" },
+  { value: "animals", label: "Animals" },
+  { value: "food", label: "Food" },
+  { value: "sports", label: "Sports" },
+  { value: "transport", label: "Transport" },
+  { value: "nature", label: "Nature" },
+];
+
 function LobbyScreen({ room, roomId }: LobbyScreenProps) {
   const {
     players,
     gameMode,
     drawingSpeed,
     drawingCount,
+    wordTheme,
     phase,
     gameWords,
     mySessionId,
@@ -36,6 +46,7 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
     setGameMode,
     setDrawingSpeed,
     setDrawingCount,
+    setWordTheme,
     startGame,
     returnToLobby,
   } = useLobbyState(room);
@@ -237,6 +248,39 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
         ) : (
           <p className="mt-4 text-sm text-white/60">
             Number of drawings: {drawingCount}
+          </p>
+        )}
+
+        {isHost ? (
+          <div className="mt-4">
+            <label
+              htmlFor="word-theme"
+              className="mb-2 block text-sm text-white/60"
+            >
+              Word theme
+            </label>
+
+            <select
+              id="word-theme"
+              value={wordTheme}
+              onChange={(event) =>
+                setWordTheme(event.target.value)
+              }
+              className="w-full rounded-lg border border-amber-500/30 bg-[#211006] px-4 py-3 text-white focus:border-amber-400 focus:outline-none"
+            >
+              {WORD_THEMES.map((theme) => (
+                <option
+                  key={theme.value}
+                  value={theme.value}
+                >
+                  {theme.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : (
+          <p className="mt-4 text-sm text-white/60">
+            Word theme: {wordTheme}
           </p>
         )}
 

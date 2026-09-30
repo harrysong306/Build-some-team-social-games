@@ -13,6 +13,7 @@ export function useLobbyState(room: Room | null) {
   const [gameMode, setGameModeState] = useState<string>("sketchRecall");
   const [drawingSpeed, setDrawingSpeedState] = useState<string>("normal");
   const [drawingCount, setDrawingCountState] = useState<number>(25);
+  const [wordTheme, setWordThemeState] = useState<string>("general");
   const [phase, setPhase] = useState<string>("lobby");
   const [gameWords, setGameWords] = useState<string[]>([]);
 
@@ -26,6 +27,7 @@ export function useLobbyState(room: Room | null) {
       // Synced from the backend GameState schema
       setDrawingSpeedState(state.drawingSpeed ?? "normal");
       setDrawingCountState(state.drawingCount ?? 25);
+      setWordThemeState(state.wordTheme ?? "general");
 
       setPhase(state.phase);
       setGameWords(Array.from(state.gameWords ?? []));
@@ -62,6 +64,10 @@ export function useLobbyState(room: Room | null) {
     room?.send("setDrawingCount", { count });
   };
 
+  const setWordTheme = (theme: string) => {
+    room?.send("setWordTheme", { theme });
+  };
+
   const startGame = () => {
     room?.send("startGame");
   };
@@ -75,6 +81,7 @@ export function useLobbyState(room: Room | null) {
     gameMode,
     drawingSpeed,
     drawingCount,
+    wordTheme,
     phase,
     gameWords,
     mySessionId: room?.sessionId ?? "",
@@ -82,6 +89,7 @@ export function useLobbyState(room: Room | null) {
     setGameMode,
     setDrawingSpeed,
     setDrawingCount,
+    setWordTheme,
     startGame,
     returnToLobby,
   };
