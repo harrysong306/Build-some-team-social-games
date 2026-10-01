@@ -275,6 +275,7 @@ describe(
             onPlayAgain={
               onPlayAgain
             }
+            playerQuestions={[]}
           />,
         )
 
@@ -373,6 +374,7 @@ describe(
             onPlayAgain={
               onPlayAgain
             }
+            playerQuestions={[]}
           />,
         )
 
@@ -473,6 +475,7 @@ describe(
             onPlayAgain={
               vi.fn()
             }
+            playerQuestions={[]}
           />,
         )
 
@@ -499,6 +502,7 @@ describe(
             onPlayAgain={
               vi.fn()
             }
+            playerQuestions={[]}
           />,
         )
 
