@@ -504,7 +504,6 @@ export class LobbyRoom extends Room {
         ...generateGameWords(wordCount, this.state.wordTheme as WordPackTheme),
       );
 
-<<<<<<< HEAD
       // Assign each personal question to one random player other than its
       // author. The author never receives their own question.
       const players = [...this.state.players.entries()];
@@ -547,14 +546,14 @@ export class LobbyRoom extends Room {
             connectedClient.sessionId === recipientSessionId,
           )
           ?.send("assigned_player_questions", questions);
-=======
+          }
       // Start each new game with a clean scoreboard.
       for (
         const currentPlayer of
         this.state.players.values()
       ) {
         currentPlayer.score = 0;
->>>>>>> main
+
       }
 
       this.state.phase = "playing";
@@ -1060,7 +1059,6 @@ export class LobbyRoom extends Room {
     this.state.players.delete(
       client.sessionId,
     );
-    this.playerQuestions.delete(client.sessionId);
 
     this.recallReady.delete(
       client.sessionId,
