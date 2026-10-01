@@ -5,6 +5,18 @@ export type PlayerView = {
   name: string;
   ready: boolean;
   isHost: boolean;
+  questions?: PlayerQuestionView[];
+};
+
+export type PlayerQuestionView = {
+  prompt: string;
+  options: string[];
+};
+
+export type PlayerQuestionForGame = PlayerQuestionView & {
+  ownerSessionId: string;
+  questionIndex: number;
+  ownerName: string;
   score: number;
 };
 
@@ -16,6 +28,8 @@ export function useLobbyState(room: Room | null) {
   const [wordTheme, setWordThemeState] = useState<string>("general");
   const [phase, setPhase] = useState<string>("lobby");
   const [gameWords, setGameWords] = useState<string[]>([]);
+  const [assignedPlayerQuestions, setAssignedPlayerQuestions] =
+    useState<PlayerQuestionForGame[]>([]);
 
   useEffect(() => {
     if (!room) return;
@@ -35,8 +49,16 @@ export function useLobbyState(room: Room | null) {
 
     room.onStateChange(handleStateChange);
 
+    const removeAssignedQuestionsListener = room.onMessage?.(
+      "assigned_player_questions",
+      (questions: PlayerQuestionForGame[]) => {
+        setAssignedPlayerQuestions(questions);
+      },
+    );
+
     return () => {
       room.onStateChange.remove(handleStateChange);
+      removeAssignedQuestionsListener?.();
     };
   }, [room]);
 
@@ -57,6 +79,19 @@ export function useLobbyState(room: Room | null) {
   // Sends { speed } to LobbyRoom.ts using "setDrawingSpeed"
   const setDrawingSpeed = (speed: string) => {
     room?.send("setDrawingSpeed", { speed });
+  };
+
+  // Correct answers are intentionally not sent to the client in this message.
+  const submitPlayerQuestion = (
+    prompt: string,
+    options: string[],
+    correctOption: number,
+  ) => {
+    room?.send("submitPlayerQuestion", {
+      prompt,
+      options,
+      correctOption,
+    });
   };
 
   // Sends { count } to LobbyRoom.ts using "setDrawingCount"
@@ -84,10 +119,12 @@ export function useLobbyState(room: Room | null) {
     wordTheme,
     phase,
     gameWords,
+    assignedPlayerQuestions,
     mySessionId: room?.sessionId ?? "",
     toggleReady,
     setGameMode,
     setDrawingSpeed,
+    submitPlayerQuestion,
     setDrawingCount,
     setWordTheme,
     startGame,
