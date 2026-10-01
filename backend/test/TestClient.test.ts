@@ -324,10 +324,34 @@ describe("LobbyRoom", () => {
     assert.ok(player2);
 
     player1.score = 9;
-    player2.score = 5;
+player2.score = 5;
 
-    client1.send("markReady", { ready: true });
-    client2.send("markReady", { ready: true });
+client1.send("submitPlayerQuestion", {
+  prompt: "Question 1",
+  options: ["A", "B", "C", "D"],
+  correctOption: 0,
+});
+
+client1.send("submitPlayerQuestion", {
+  prompt: "Question 2",
+  options: ["A", "B", "C", "D"],
+  correctOption: 1,
+});
+
+client2.send("submitPlayerQuestion", {
+  prompt: "Question 1",
+  options: ["A", "B", "C", "D"],
+  correctOption: 0,
+});
+
+client2.send("submitPlayerQuestion", {
+  prompt: "Question 2",
+  options: ["A", "B", "C", "D"],
+  correctOption: 1,
+});
+
+client1.send("markReady", { ready: true });
+client2.send("markReady", { ready: true });
 
     await room.waitForNextPatch();
 
