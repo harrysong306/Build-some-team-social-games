@@ -6,6 +6,7 @@ export type PlayerView = {
   ready: boolean;
   isHost: boolean;
   questions?: PlayerQuestionView[];
+  score: number;
 };
 
 export type PlayerQuestionView = {
