@@ -202,6 +202,75 @@ describe('DrawingPhase component tests', () => {
     ).toBe('#3b82f6')
   })
 
+  it('lets the user draw with the line tool', () => {
+    const { container } = render(
+      <DrawingPhase
+        words={['Apple']}
+        drawingSpeed="normal"
+        onBack={vi.fn()}
+        onComplete={vi.fn()}
+      />,
+    )
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: /^line$/i,
+      }),
+    )
+
+    const canvas =
+      container.querySelector('canvas')
+
+    expect(canvas).not.toBeNull()
+
+    if (!canvas) return
+
+    vi.spyOn(
+      canvas,
+      'getBoundingClientRect',
+    ).mockReturnValue({
+      x: 0,
+      y: 0,
+      left: 0,
+      top: 0,
+      right: 900,
+      bottom: 500,
+      width: 900,
+      height: 500,
+      toJSON: () => {},
+    })
+
+    fireEvent.pointerDown(canvas, {
+      clientX: 100,
+      clientY: 100,
+      pointerId: 1,
+    })
+
+    fireEvent.pointerUp(canvas, {
+      clientX: 200,
+      clientY: 150,
+      pointerId: 1,
+    })
+
+    expect(
+      context.moveTo,
+    ).toHaveBeenCalledWith(
+      100,
+      100,
+    )
+
+    expect(
+      context.lineTo,
+    ).toHaveBeenCalledWith(
+      200,
+      150,
+    )
+
+    expect(
+      context.stroke,
+    ).toHaveBeenCalled()
+  })
+
   it('counts the drawing timer down every second', () => {
     vi.useFakeTimers()
 

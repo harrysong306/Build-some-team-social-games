@@ -60,6 +60,27 @@ describe('DrawingCanvas component tests', () => {
     )
   })
 
+  const mockCanvasRect = (
+    canvas: HTMLCanvasElement,
+    width = 900,
+    height = 500,
+  ) => {
+    vi.spyOn(
+      canvas,
+      'getBoundingClientRect',
+    ).mockReturnValue({
+      x: 0,
+      y: 0,
+      left: 0,
+      top: 0,
+      right: width,
+      bottom: height,
+      width,
+      height,
+      toJSON: () => {},
+    })
+  }
+
   it('renders and prepares the drawing canvas', () => {
     const { container } = render(
       <DrawingCanvas
@@ -110,20 +131,7 @@ describe('DrawingCanvas component tests', () => {
 
     if (!canvas) return
 
-    vi.spyOn(
-      canvas,
-      'getBoundingClientRect',
-    ).mockReturnValue({
-      x: 0,
-      y: 0,
-      left: 0,
-      top: 0,
-      right: 900,
-      bottom: 500,
-      width: 900,
-      height: 500,
-      toJSON: () => {},
-    })
+    mockCanvasRect(canvas)
 
     fireEvent.pointerDown(canvas, {
       clientX: 90,
@@ -158,6 +166,8 @@ describe('DrawingCanvas component tests', () => {
     ).toBe('#25150b')
 
     fireEvent.pointerUp(canvas, {
+      clientX: 180,
+      clientY: 100,
       pointerId: 1,
     })
 
@@ -188,20 +198,7 @@ describe('DrawingCanvas component tests', () => {
 
     if (!canvas) return
 
-    vi.spyOn(
-      canvas,
-      'getBoundingClientRect',
-    ).mockReturnValue({
-      x: 0,
-      y: 0,
-      left: 0,
-      top: 0,
-      right: 900,
-      bottom: 500,
-      width: 900,
-      height: 500,
-      toJSON: () => {},
-    })
+    mockCanvasRect(canvas)
 
     fireEvent.pointerDown(canvas, {
       clientX: 100,
@@ -222,6 +219,73 @@ describe('DrawingCanvas component tests', () => {
     expect(
       context.strokeStyle,
     ).toBe('#3b82f6')
+  })
+
+  it('draws a straight line from pointer down to pointer up', () => {
+    const { container } = render(
+      <DrawingCanvas
+        tool="line"
+        brushSize={12}
+        color="#ef4444"
+      />,
+    )
+
+    const canvas =
+      container.querySelector('canvas')
+
+    expect(canvas).not.toBeNull()
+
+    if (!canvas) return
+
+    mockCanvasRect(canvas)
+
+    fireEvent.pointerDown(canvas, {
+      clientX: 100,
+      clientY: 100,
+      pointerId: 1,
+    })
+
+    fireEvent.pointerMove(canvas, {
+      clientX: 150,
+      clientY: 125,
+      pointerId: 1,
+    })
+
+    expect(
+      context.stroke,
+    ).not.toHaveBeenCalled()
+
+    fireEvent.pointerUp(canvas, {
+      clientX: 200,
+      clientY: 150,
+      pointerId: 1,
+    })
+
+    expect(
+      context.moveTo,
+    ).toHaveBeenCalledWith(
+      100,
+      100,
+    )
+
+    expect(
+      context.lineTo,
+    ).toHaveBeenCalledWith(
+      200,
+      150,
+    )
+
+    expect(
+      context.strokeStyle,
+    ).toBe('#ef4444')
+
+    expect(
+      context.lineWidth,
+    ).toBe(12)
+
+    expect(
+      context.stroke,
+    ).toHaveBeenCalledTimes(1)
   })
 
   it('returns the drawing as saved drawing data', async () => {
@@ -281,20 +345,7 @@ describe('DrawingCanvas component tests', () => {
 
     if (!canvas) return
 
-    vi.spyOn(
-      canvas,
-      'getBoundingClientRect',
-    ).mockReturnValue({
-      x: 0,
-      y: 0,
-      left: 0,
-      top: 0,
-      right: 900,
-      bottom: 500,
-      width: 900,
-      height: 500,
-      toJSON: () => {},
-    })
+    mockCanvasRect(canvas)
 
     fireEvent.pointerDown(canvas, {
       clientX: 100,
@@ -372,20 +423,7 @@ describe('DrawingCanvas component tests', () => {
 
     if (!canvas) return
 
-    vi.spyOn(
-      canvas,
-      'getBoundingClientRect',
-    ).mockReturnValue({
-      x: 0,
-      y: 0,
-      left: 0,
-      top: 0,
-      right: 900,
-      bottom: 500,
-      width: 900,
-      height: 500,
-      toJSON: () => {},
-    })
+    mockCanvasRect(canvas)
 
     fireEvent.pointerDown(canvas, {
       clientX: 100,
@@ -430,20 +468,11 @@ describe('DrawingCanvas component tests', () => {
 
     if (!canvas) return
 
-    vi.spyOn(
+    mockCanvasRect(
       canvas,
-      'getBoundingClientRect',
-    ).mockReturnValue({
-      x: 0,
-      y: 0,
-      left: 0,
-      top: 0,
-      right: 450,
-      bottom: 250,
-      width: 450,
-      height: 250,
-      toJSON: () => {},
-    })
+      450,
+      250,
+    )
 
     fireEvent.pointerDown(canvas, {
       clientX: 45,

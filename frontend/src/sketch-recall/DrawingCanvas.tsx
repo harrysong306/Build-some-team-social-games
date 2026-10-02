@@ -17,8 +17,13 @@ export type DrawingCanvasHandle = {
   getDrawing: () => Promise<SavedDrawing | null>
 }
 
+export type DrawingTool =
+  | 'brush'
+  | 'eraser'
+  | 'line'
+
 type DrawingCanvasProps = {
-  tool: 'brush' | 'eraser'
+  tool: DrawingTool
   brushSize: number
   color: string
 }
@@ -94,6 +99,12 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(
       drawingRef.current = true
       lastPointRef.current = point
 
+      event.currentTarget.setPointerCapture(event.pointerId)
+
+      if (tool === 'line') {
+        return
+      }
+
       context.beginPath()
       context.arc(
         point.x,
@@ -109,14 +120,14 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(
           : color
 
       context.fill()
-
-      event.currentTarget.setPointerCapture(event.pointerId)
     }
 
     const draw = (
       event: React.PointerEvent<HTMLCanvasElement>,
     ) => {
       if (!drawingRef.current) return
+
+      if (tool === 'line') return
 
       const canvas = canvasRef.current
       if (!canvas) return
@@ -147,7 +158,44 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(
       lastPointRef.current = currentPoint
     }
 
-    const stopDrawing = () => {
+    const stopDrawing = (
+      event: React.PointerEvent<HTMLCanvasElement>,
+    ) => {
+      if (!drawingRef.current) return
+
+      if (tool === 'line') {
+        const canvas = canvasRef.current
+
+        if (canvas) {
+          const context = canvas.getContext('2d')
+
+          if (context) {
+            const currentPoint =
+              getPointerPosition(event)
+
+            context.lineCap = 'round'
+            context.lineJoin = 'round'
+            context.lineWidth = brushSize
+            context.strokeStyle = color
+
+            context.beginPath()
+            context.moveTo(
+              lastPointRef.current.x,
+              lastPointRef.current.y,
+            )
+            context.lineTo(
+              currentPoint.x,
+              currentPoint.y,
+            )
+            context.stroke()
+          }
+        }
+      }
+
+      drawingRef.current = false
+    }
+
+    const cancelDrawing = () => {
       drawingRef.current = false
     }
 
@@ -159,7 +207,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(
         onPointerDown={startDrawing}
         onPointerMove={draw}
         onPointerUp={stopDrawing}
-        onPointerCancel={stopDrawing}
+        onPointerCancel={cancelDrawing}
         className="h-auto w-full touch-none cursor-crosshair rounded-xl bg-[#fffdf7]"
       />
     )

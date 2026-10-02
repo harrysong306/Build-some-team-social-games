@@ -7,6 +7,7 @@ import {
 
 import DrawingCanvas, {
   type DrawingCanvasHandle,
+  type DrawingTool,
 } from './DrawingCanvas'
 
 type DrawingPhaseProps = {
@@ -78,7 +79,7 @@ function DrawingPhase({
   const [currentIndex, setCurrentIndex] = useState(0)
 
   const [tool, setTool] =
-    useState<'brush' | 'eraser'>('brush')
+    useState<DrawingTool>('brush')
 
   const [brushSize, setBrushSize] = useState(8)
 
@@ -250,6 +251,18 @@ function DrawingPhase({
                 }`}
               >
                 Pencil
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setTool('line')}
+                className={`rounded-lg px-5 py-2 text-sm font-semibold ${
+                  tool === 'line'
+                    ? 'bg-amber-400 text-black'
+                    : 'border border-amber-500/30 bg-[#211006] text-white'
+                }`}
+              >
+                Line
               </button>
 
               <button
