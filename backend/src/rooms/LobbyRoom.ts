@@ -464,12 +464,6 @@ export class LobbyRoom extends Room {
         return;
       }
 
-      console.log(
-        this.state.wordTheme,
-        "Changed to:",
-        message.theme,
-      );
-
       this.state.wordTheme = message.theme;
     },
 

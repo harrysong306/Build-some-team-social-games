@@ -10,6 +10,7 @@ import { generateGameWords } from "../src/utils/WordGen.js";
 import {
   generalWords,
   similarWordGroups,
+  wordPacks,
 } from "../src/utils/sketchRecallWords.js";
 
 async function submitQuestions(
@@ -424,6 +425,154 @@ client2.send("markReady", { ready: true });
       await room.waitForNextPatch();
 
       assert.strictEqual(client1.state.gameWords.length, 12);
+    });
+  });
+
+  describe("setWordTheme", () => {
+    it("only the host can set the word theme", async () => {
+      const room =
+        await colyseus.createRoom<GameState>(
+          "LobbyRoom",
+          {},
+        );
+
+      const host =
+        await colyseus.connectTo(
+          room,
+          { name: "Jordan" },
+        );
+
+      const guest =
+        await colyseus.connectTo(
+          room,
+          { name: "Sam" },
+        );
+
+      assert.strictEqual(
+        room.state.wordTheme,
+        "general",
+      );
+
+      guest.send("setWordTheme", {
+        theme: "animals",
+      });
+
+      await new Promise(resolve =>
+        setTimeout(resolve, 20),
+      );
+
+      assert.strictEqual(
+        room.state.wordTheme,
+        "general",
+      );
+
+      host.send("setWordTheme", {
+        theme: "animals",
+      });
+
+      await room.waitForNextPatch();
+
+      assert.strictEqual(
+        room.state.wordTheme,
+        "animals",
+      );
+
+      assert.strictEqual(
+        guest.state.wordTheme,
+        "animals",
+      );
+    });
+
+    it("rejects an invalid word theme", async () => {
+      const room =
+        await colyseus.createRoom<GameState>(
+          "LobbyRoom",
+          {},
+        );
+
+      const host =
+        await colyseus.connectTo(
+          room,
+          { name: "Jordan" },
+        );
+
+      const errorPromise =
+        new Promise<any>((resolve) => {
+          host.onMessage(
+            "word_theme_error",
+            resolve,
+          );
+        });
+
+      host.send("setWordTheme", {
+        theme: "unknown-theme",
+      });
+
+      const error =
+        await errorPromise;
+
+      assert.strictEqual(
+        room.state.wordTheme,
+        "general",
+      );
+
+      assert.ok(
+        error.reason.includes(
+          "Invalid word theme",
+        ),
+      );
+    });
+
+    it("startGame generates words from the selected theme", async () => {
+      const room =
+        await colyseus.createRoom<GameState>(
+          "LobbyRoom",
+          {},
+        );
+
+      const host =
+        await colyseus.connectTo(
+          room,
+          { name: "Jordan" },
+        );
+
+      host.send("setWordTheme", {
+        theme: "animals",
+      });
+
+      host.send("setDrawingCount", {
+        count: 10,
+      });
+
+      host.send("markReady", {
+        ready: true,
+      });
+
+      await room.waitForNextPatch();
+
+      host.send("startGame", {});
+
+      await room.waitForNextPatch();
+
+      const animalWords =
+        new Set<string>([
+          ...wordPacks.animals.generalWords,
+          ...wordPacks.animals
+            .similarWordGroups
+            .flat(),
+        ]);
+
+      assert.strictEqual(
+        room.state.gameWords.length,
+        10,
+      );
+
+      assert.ok(
+        [...room.state.gameWords].every(
+          word =>
+            animalWords.has(word),
+        ),
+      );
     });
   });
 
@@ -1090,6 +1239,34 @@ client2.send("markReady", { ready: true });
         );
 
       assert.strictEqual(includedGroups.length, 3);
+    });
+
+    it("generates words from the selected theme", () => {
+      const words =
+        generateGameWords(
+          25,
+          "animals",
+        );
+
+      const allowedWords =
+        new Set<string>([
+          ...wordPacks.animals.generalWords,
+          ...wordPacks.animals
+            .similarWordGroups
+            .flat(),
+        ]);
+
+      assert.strictEqual(
+        words.length,
+        25,
+      );
+
+      assert.ok(
+        words.every(
+          word =>
+            allowedWords.has(word),
+        ),
+      );
     });
   });
 

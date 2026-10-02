@@ -68,6 +68,7 @@ type FakeState = {
   players: Record<string, FakePlayer>
   drawingCount?: number
   drawingSpeed?: string
+  wordTheme?: string
   phase?: string
   gameWords?: string[]
 }
@@ -121,6 +122,9 @@ function createFakeRoom(
         drawingCount:
           state.drawingCount ??
           25,
+        wordTheme:
+          state.wordTheme ??
+          'general',
         phase:
           state.phase ??
           'lobby',
@@ -268,6 +272,119 @@ describe(
         expect(
           screen.getByText(
             'Number of drawings: 10',
+          ),
+        ).toBeTruthy()
+      },
+    )
+  },
+)
+
+describe(
+  'LobbyScreen word theme setting',
+  () => {
+    beforeEach(() => {
+      vi.clearAllMocks()
+    })
+
+    it(
+      'lets the host select a word theme',
+      () => {
+        const {
+          room,
+          send,
+          pushState,
+        } = createFakeRoom('host')
+
+        render(
+          <LobbyScreen
+            room={room}
+            roomId="ABCD"
+          />,
+        )
+
+        pushState({
+          players: {
+            host: {
+              name: 'Jordan',
+              ready: false,
+              isHost: true,
+              score: 0,
+            },
+          },
+          wordTheme: 'general',
+        })
+
+        const select =
+          screen.getByLabelText(
+            'Word theme',
+          ) as HTMLSelectElement
+
+        expect(
+          select.value,
+        ).toBe('general')
+
+        fireEvent.change(
+          select,
+          {
+            target: {
+              value: 'animals',
+            },
+          },
+        )
+
+        expect(
+          send,
+        ).toHaveBeenCalledWith(
+          'setWordTheme',
+          {
+            theme: 'animals',
+          },
+        )
+      },
+    )
+
+    it(
+      'shows the synced word theme to non-host players without a control',
+      () => {
+        const {
+          room,
+          pushState,
+        } = createFakeRoom('guest')
+
+        render(
+          <LobbyScreen
+            room={room}
+            roomId="ABCD"
+          />,
+        )
+
+        pushState({
+          players: {
+            host: {
+              name: 'Jordan',
+              ready: false,
+              isHost: true,
+              score: 0,
+            },
+            guest: {
+              name: 'Sam',
+              ready: false,
+              isHost: false,
+              score: 0,
+            },
+          },
+          wordTheme: 'animals',
+        })
+
+        expect(
+          screen.queryByLabelText(
+            'Word theme',
+          ),
+        ).toBeNull()
+
+        expect(
+          screen.getByText(
+            'Word theme: Animals',
           ),
         ).toBeTruthy()
       },
