@@ -87,6 +87,13 @@ describe('DrawingCanvas component tests', () => {
     })
   }
 
+  const makeSnapshot = () =>
+    ({
+      width: 900,
+      height: 500,
+      data: new Uint8ClampedArray(0),
+    }) as ImageData
+
   it('renders and prepares the drawing canvas', () => {
     const { container } = render(
       <DrawingCanvas
@@ -227,7 +234,13 @@ describe('DrawingCanvas component tests', () => {
     ).toBe('#3b82f6')
   })
 
-  it('draws a straight line from pointer down to pointer up', () => {
+  it('previews and finishes a straight line while dragging', () => {
+    const snapshot = makeSnapshot()
+
+    context.getImageData.mockReturnValue(
+      snapshot,
+    )
+
     const { container } = render(
       <DrawingCanvas
         tool="line"
@@ -258,14 +271,12 @@ describe('DrawingCanvas component tests', () => {
     })
 
     expect(
-      context.stroke,
-    ).not.toHaveBeenCalled()
-
-    fireEvent.pointerUp(canvas, {
-      clientX: 200,
-      clientY: 150,
-      pointerId: 1,
-    })
+      context.putImageData,
+    ).toHaveBeenCalledWith(
+      snapshot,
+      0,
+      0,
+    )
 
     expect(
       context.moveTo,
@@ -273,6 +284,23 @@ describe('DrawingCanvas component tests', () => {
       100,
       100,
     )
+
+    expect(
+      context.lineTo,
+    ).toHaveBeenCalledWith(
+      150,
+      125,
+    )
+
+    expect(
+      context.stroke,
+    ).toHaveBeenCalledTimes(1)
+
+    fireEvent.pointerUp(canvas, {
+      clientX: 200,
+      clientY: 150,
+      pointerId: 1,
+    })
 
     expect(
       context.lineTo,
@@ -291,10 +319,16 @@ describe('DrawingCanvas component tests', () => {
 
     expect(
       context.stroke,
-    ).toHaveBeenCalledTimes(1)
+    ).toHaveBeenCalledTimes(2)
   })
 
-  it('draws a rectangle from pointer down to pointer up', () => {
+  it('previews and finishes a rectangle while dragging', () => {
+    const snapshot = makeSnapshot()
+
+    context.getImageData.mockReturnValue(
+      snapshot,
+    )
+
     const { container } = render(
       <DrawingCanvas
         tool="rectangle"
@@ -317,6 +351,33 @@ describe('DrawingCanvas component tests', () => {
       clientY: 80,
       pointerId: 1,
     })
+
+    fireEvent.pointerMove(canvas, {
+      clientX: 200,
+      clientY: 140,
+      pointerId: 1,
+    })
+
+    expect(
+      context.putImageData,
+    ).toHaveBeenCalledWith(
+      snapshot,
+      0,
+      0,
+    )
+
+    expect(
+      context.rect,
+    ).toHaveBeenCalledWith(
+      100,
+      80,
+      100,
+      60,
+    )
+
+    expect(
+      context.stroke,
+    ).toHaveBeenCalledTimes(1)
 
     fireEvent.pointerUp(canvas, {
       clientX: 300,
@@ -343,10 +404,16 @@ describe('DrawingCanvas component tests', () => {
 
     expect(
       context.stroke,
-    ).toHaveBeenCalledTimes(1)
+    ).toHaveBeenCalledTimes(2)
   })
 
-  it('draws a circle using the drag distance as its diameter', () => {
+  it('previews and finishes a circle while dragging', () => {
+    const snapshot = makeSnapshot()
+
+    context.getImageData.mockReturnValue(
+      snapshot,
+    )
+
     const { container } = render(
       <DrawingCanvas
         tool="circle"
@@ -369,6 +436,34 @@ describe('DrawingCanvas component tests', () => {
       clientY: 100,
       pointerId: 1,
     })
+
+    fireEvent.pointerMove(canvas, {
+      clientX: 160,
+      clientY: 100,
+      pointerId: 1,
+    })
+
+    expect(
+      context.putImageData,
+    ).toHaveBeenCalledWith(
+      snapshot,
+      0,
+      0,
+    )
+
+    expect(
+      context.arc,
+    ).toHaveBeenCalledWith(
+      130,
+      100,
+      30,
+      0,
+      Math.PI * 2,
+    )
+
+    expect(
+      context.stroke,
+    ).toHaveBeenCalledTimes(1)
 
     fireEvent.pointerUp(canvas, {
       clientX: 200,
@@ -393,6 +488,69 @@ describe('DrawingCanvas component tests', () => {
     expect(
       context.lineWidth,
     ).toBe(6)
+
+    expect(
+      context.stroke,
+    ).toHaveBeenCalledTimes(2)
+  })
+
+  it('restores the canvas when a shape preview is cancelled', () => {
+    const snapshot = makeSnapshot()
+
+    context.getImageData.mockReturnValue(
+      snapshot,
+    )
+
+    const { container } = render(
+      <DrawingCanvas
+        tool="rectangle"
+        brushSize={8}
+        color="#25150b"
+      />,
+    )
+
+    const canvas =
+      container.querySelector('canvas')
+
+    expect(canvas).not.toBeNull()
+
+    if (!canvas) return
+
+    mockCanvasRect(canvas)
+
+    fireEvent.pointerDown(canvas, {
+      clientX: 100,
+      clientY: 100,
+      pointerId: 1,
+    })
+
+    fireEvent.pointerMove(canvas, {
+      clientX: 200,
+      clientY: 180,
+      pointerId: 1,
+    })
+
+    expect(
+      context.stroke,
+    ).toHaveBeenCalledTimes(1)
+
+    fireEvent.pointerCancel(canvas, {
+      pointerId: 1,
+    })
+
+    expect(
+      context.putImageData,
+    ).toHaveBeenLastCalledWith(
+      snapshot,
+      0,
+      0,
+    )
+
+    fireEvent.pointerMove(canvas, {
+      clientX: 250,
+      clientY: 220,
+      pointerId: 1,
+    })
 
     expect(
       context.stroke,

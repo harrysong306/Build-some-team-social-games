@@ -41,6 +41,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(
     const drawingRef = useRef(false)
     const lastPointRef = useRef({ x: 0, y: 0 })
     const historyRef = useRef<ImageData[]>([])
+    const shapePreviewRef = useRef<ImageData | null>(null)
 
     const notifyUndoState = () => {
       onUndoStateChange?.(historyRef.current.length > 0)
@@ -80,6 +81,9 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(
       const context = canvas.getContext('2d')
       if (!context) return
 
+      drawingRef.current = false
+      shapePreviewRef.current = null
+
       if (saveForUndo) {
         saveHistory(context)
       }
@@ -105,6 +109,8 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(
       if (!previous) return
 
       drawingRef.current = false
+      shapePreviewRef.current = null
+
       context.putImageData(previous, 0, 0)
       notifyUndoState()
     }
@@ -342,6 +348,14 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(
       event.currentTarget.setPointerCapture(event.pointerId)
 
       if (isShapeTool) {
+        shapePreviewRef.current =
+          context.getImageData(
+            0,
+            0,
+            canvas.width,
+            canvas.height,
+          )
+
         return
       }
 
@@ -369,8 +383,6 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(
     ) => {
       if (!drawingRef.current) return
 
-      if (isShapeTool) return
-
       const canvas = canvasRef.current
       if (!canvas) return
 
@@ -378,6 +390,27 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(
       if (!context) return
 
       const currentPoint = getPointerPosition(event)
+
+      if (isShapeTool) {
+        const preview =
+          shapePreviewRef.current
+
+        if (!preview) return
+
+        context.putImageData(
+          preview,
+          0,
+          0,
+        )
+
+        drawShape(
+          context,
+          lastPointRef.current,
+          currentPoint,
+        )
+
+        return
+      }
 
       context.lineCap = 'round'
       context.lineJoin = 'round'
@@ -470,6 +503,17 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(
             const currentPoint =
               getPointerPosition(event)
 
+            const preview =
+              shapePreviewRef.current
+
+            if (preview) {
+              context.putImageData(
+                preview,
+                0,
+                0,
+              )
+            }
+
             saveHistory(context)
 
             drawShape(
@@ -479,12 +523,32 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(
             )
           }
         }
+
+        shapePreviewRef.current = null
       }
 
       drawingRef.current = false
     }
 
     const cancelDrawing = () => {
+      const canvas = canvasRef.current
+
+      if (
+        isShapeTool &&
+        canvas &&
+        shapePreviewRef.current
+      ) {
+        const context =
+          canvas.getContext('2d')
+
+        context?.putImageData(
+          shapePreviewRef.current,
+          0,
+          0,
+        )
+      }
+
+      shapePreviewRef.current = null
       drawingRef.current = false
     }
 
