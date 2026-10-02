@@ -314,6 +314,47 @@ describe('DrawingPhase component tests', () => {
     )
   })
 
+  it('lets the user select the fill tool', () => {
+    render(
+      <DrawingPhase
+        words={['Apple']}
+        drawingSpeed="normal"
+        onBack={vi.fn()}
+        onComplete={vi.fn()}
+      />,
+    )
+
+    const pencilButton =
+      screen.getByRole('button', {
+        name: /^pencil$/i,
+      })
+
+    const fillButton =
+      screen.getByRole('button', {
+        name: /^fill$/i,
+      })
+
+    expect(
+      pencilButton,
+    ).toHaveClass(
+      'bg-amber-400',
+    )
+
+    fireEvent.click(fillButton)
+
+    expect(
+      fillButton,
+    ).toHaveClass(
+      'bg-amber-400',
+    )
+
+    expect(
+      pencilButton,
+    ).not.toHaveClass(
+      'bg-amber-400',
+    )
+  })
+
   it('counts the drawing timer down every second', () => {
     vi.useFakeTimers()
 

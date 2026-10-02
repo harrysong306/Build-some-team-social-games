@@ -284,6 +284,14 @@ function DrawingPhase({
 
               <button
                 type="button"
+                onClick={() => setTool('fill')}
+                className={toolButtonClass('fill')}
+              >
+                Fill
+              </button>
+
+              <button
+                type="button"
                 onClick={() => setTool('eraser')}
                 className={toolButtonClass('eraser')}
               >

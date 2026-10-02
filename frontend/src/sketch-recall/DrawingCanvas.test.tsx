@@ -29,6 +29,8 @@ describe('DrawingCanvas component tests', () => {
     moveTo: vi.fn(),
     lineTo: vi.fn(),
     stroke: vi.fn(),
+    getImageData: vi.fn(),
+    putImageData: vi.fn(),
 
     fillStyle: '',
     strokeStyle: '',
@@ -39,6 +41,9 @@ describe('DrawingCanvas component tests', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+
+    context.getImageData.mockReset()
+    context.putImageData.mockReset()
 
     context.fillStyle = ''
     context.strokeStyle = ''
@@ -392,6 +397,70 @@ describe('DrawingCanvas component tests', () => {
     expect(
       context.stroke,
     ).toHaveBeenCalledTimes(1)
+  })
+
+  it('fills only the connected area with the selected colour', () => {
+    const imageData = {
+      width: 3,
+      height: 1,
+      data: new Uint8ClampedArray([
+        255, 253, 247, 255,
+        37, 21, 11, 255,
+        255, 253, 247, 255,
+      ]),
+    } as ImageData
+
+    context.getImageData.mockReturnValue(
+      imageData,
+    )
+
+    const { container } = render(
+      <DrawingCanvas
+        tool="fill"
+        brushSize={8}
+        color="#3b82f6"
+      />,
+    )
+
+    const canvas =
+      container.querySelector('canvas')
+
+    expect(canvas).not.toBeNull()
+
+    if (!canvas) return
+
+    mockCanvasRect(canvas)
+
+    fireEvent.pointerDown(canvas, {
+      clientX: 0,
+      clientY: 0,
+      pointerId: 1,
+    })
+
+    expect(
+      context.getImageData,
+    ).toHaveBeenCalledWith(
+      0,
+      0,
+      900,
+      500,
+    )
+
+    expect(
+      [...imageData.data],
+    ).toEqual([
+      59, 130, 246, 255,
+      37, 21, 11, 255,
+      255, 253, 247, 255,
+    ])
+
+    expect(
+      context.putImageData,
+    ).toHaveBeenCalledWith(
+      imageData,
+      0,
+      0,
+    )
   })
 
   it('returns the drawing as saved drawing data', async () => {

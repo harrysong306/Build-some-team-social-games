@@ -23,6 +23,7 @@ export type DrawingTool =
   | 'line'
   | 'rectangle'
   | 'circle'
+  | 'fill'
 
 type DrawingCanvasProps = {
   tool: DrawingTool
@@ -87,6 +88,168 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(
       }
     }
 
+    const hexToRgba = (hex: string) => {
+      const normalized = hex.replace('#', '')
+
+      if (normalized.length !== 6) {
+        return null
+      }
+
+      const value = Number.parseInt(normalized, 16)
+
+      if (Number.isNaN(value)) {
+        return null
+      }
+
+      return [
+        (value >> 16) & 255,
+        (value >> 8) & 255,
+        value & 255,
+        255,
+      ] as const
+    }
+
+    const fillArea = (
+      context: CanvasRenderingContext2D,
+      point: { x: number; y: number },
+    ) => {
+      const canvas = canvasRef.current
+      if (!canvas) return
+
+      const replacement = hexToRgba(color)
+      if (!replacement) return
+
+      const imageData = context.getImageData(
+        0,
+        0,
+        canvas.width,
+        canvas.height,
+      )
+
+      const { data, width, height } = imageData
+
+      const startX = Math.floor(point.x)
+      const startY = Math.floor(point.y)
+
+      if (
+        startX < 0 ||
+        startY < 0 ||
+        startX >= width ||
+        startY >= height
+      ) {
+        return
+      }
+
+      const startPixel =
+        startY * width + startX
+
+      const startOffset =
+        startPixel * 4
+
+      const target = [
+        data[startOffset],
+        data[startOffset + 1],
+        data[startOffset + 2],
+        data[startOffset + 3],
+      ] as const
+
+      if (
+        target[0] === replacement[0] &&
+        target[1] === replacement[1] &&
+        target[2] === replacement[2] &&
+        target[3] === replacement[3]
+      ) {
+        return
+      }
+
+      const matchesTarget = (
+        pixelIndex: number,
+      ) => {
+        const offset = pixelIndex * 4
+
+        return (
+          data[offset] === target[0] &&
+          data[offset + 1] === target[1] &&
+          data[offset + 2] === target[2] &&
+          data[offset + 3] === target[3]
+        )
+      }
+
+      const paintPixel = (
+        pixelIndex: number,
+      ) => {
+        const offset = pixelIndex * 4
+
+        data[offset] = replacement[0]
+        data[offset + 1] = replacement[1]
+        data[offset + 2] = replacement[2]
+        data[offset + 3] = replacement[3]
+      }
+
+      const stack = [startPixel]
+
+      paintPixel(startPixel)
+
+      while (stack.length > 0) {
+        const currentPixel = stack.pop()
+
+        if (currentPixel === undefined) {
+          break
+        }
+
+        const x = currentPixel % width
+        const y = Math.floor(
+          currentPixel / width,
+        )
+
+        if (x > 0) {
+          const left =
+            currentPixel - 1
+
+          if (matchesTarget(left)) {
+            paintPixel(left)
+            stack.push(left)
+          }
+        }
+
+        if (x < width - 1) {
+          const right =
+            currentPixel + 1
+
+          if (matchesTarget(right)) {
+            paintPixel(right)
+            stack.push(right)
+          }
+        }
+
+        if (y > 0) {
+          const above =
+            currentPixel - width
+
+          if (matchesTarget(above)) {
+            paintPixel(above)
+            stack.push(above)
+          }
+        }
+
+        if (y < height - 1) {
+          const below =
+            currentPixel + width
+
+          if (matchesTarget(below)) {
+            paintPixel(below)
+            stack.push(below)
+          }
+        }
+      }
+
+      context.putImageData(
+        imageData,
+        0,
+        0,
+      )
+    }
+
     const isShapeTool =
       tool === 'line' ||
       tool === 'rectangle' ||
@@ -102,6 +265,14 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(
       if (!context) return
 
       const point = getPointerPosition(event)
+
+      if (tool === 'fill') {
+        fillArea(
+          context,
+          point,
+        )
+        return
+      }
 
       drawingRef.current = true
       lastPointRef.current = point
