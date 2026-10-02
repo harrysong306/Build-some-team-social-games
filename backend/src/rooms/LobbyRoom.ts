@@ -7,7 +7,7 @@ import {
 import { generateGameWords } from "../utils/WordGen.js";
 import { wordPacks, type WordPackTheme } from "../utils/sketchRecallWords.js";
 
-const VALID_GAME_MODES = ["sketchRecall", "anonymousRecall", "test"] as const;
+const VALID_GAME_MODES = ["sketchRecall", "anonymousRecall", "buzzerRecall", "test"] as const;
 type GameMode = typeof VALID_GAME_MODES[number];
 
 const VALID_DRAWING_SPEEDS = [
@@ -159,6 +159,23 @@ const ABILITIES = ["hint", "reveal"] as const;
 type Ability = typeof ABILITIES[number];
 const REVEAL_SECONDS = 5;
 
+/*
+ * BE-21/22: buzzerRecall mode. In each Recall
+ * round, alive players race to buzz; only the
+ * first buzzer may answer, within
+ * BUZZ_ANSWER_SECONDS. A right answer (worth at
+ * least BUZZER_CORRECT_POINTS) ends the round.
+ * A wrong answer or running out of time reopens
+ * buzzing for players who haven't had a turn on
+ * this drawing yet. Only the right answer scores,
+ * and only players who buzzed and got it wrong
+ * lose a life.
+ */
+const BUZZER_RECALL_MODE = "buzzerRecall";
+const BUZZER_ROUND_SECONDS = 20;
+const BUZZ_ANSWER_SECONDS = 5;
+const BUZZER_CORRECT_POINTS = 3;
+
 export class LobbyRoom extends Room {
   maxClients = 8;
   state = new GameState();
@@ -167,6 +184,13 @@ export class LobbyRoom extends Room {
   private abilityVotes =
     new Map<string, Ability>();
   private abilityUsedThisRound = false;
+
+  // BE-21/22: who holds the buzzer this round,
+  // who already had a turn, and a counter so an
+  // old answer timer can tell it's stale.
+  private buzzerHolder: string | null = null;
+  private buzzedThisRound = new Set<string>();
+  private buzzerTurn = 0;
 
   // Drawings don't need to be constantly synced.
   private drawings =
@@ -609,6 +633,7 @@ export class LobbyRoom extends Room {
 
       this.abilityVotes.clear();
       this.abilityUsedThisRound = false;
+      this.resetBuzzer();
     },
 
     /*
@@ -666,6 +691,7 @@ export class LobbyRoom extends Room {
 
       this.abilityVotes.clear();
       this.abilityUsedThisRound = false;
+      this.resetBuzzer();
     },
 
     /*
@@ -702,8 +728,14 @@ export class LobbyRoom extends Room {
       }
 
       this.recallStarted = true;
+
+      // Buzzer rounds need time for several turns.
+      const roundMs = this.isBuzzerMode()
+        ? BUZZER_ROUND_SECONDS * 1000
+        : 10_000;
+
       this.recallDeadline =
-        Date.now() + 10_000;
+        Date.now() + roundMs;
 
       const roundIndex =
         this.recallRound;
@@ -731,6 +763,13 @@ export class LobbyRoom extends Room {
         return;
       }
 
+      if (this.isBuzzerMode()) {
+        this.broadcast("buzzerOpen", {
+          roundIndex,
+          eligible: this.buzzerEligibleIds(),
+        });
+      }
+
       this.clock.setTimeout(() => {
         if (
           this.recallStarted &&
@@ -739,7 +778,66 @@ export class LobbyRoom extends Room {
         ) {
           this.finishRecallRound();
         }
-      }, 10_000);
+      }, roundMs);
+    },
+
+    /*
+     * BE-21: the first alive player to buzz
+     * gets to answer. Messages are handled one
+     * at a time, so the first one to arrive
+     * wins and later ones see the buzzer locked.
+     */
+    buzz: (
+      client: Client,
+      message: {
+        roundIndex: number;
+      },
+    ) => {
+      if (
+        !this.isBuzzerMode() ||
+        !this.recallStarted ||
+        message?.roundIndex !==
+          this.recallRound ||
+        Date.now() >
+          this.recallDeadline ||
+        this.buzzerHolder !== null ||
+        !this.buzzerEligibleIds().includes(
+          client.sessionId,
+        )
+      ) {
+        return;
+      }
+
+      this.buzzerHolder = client.sessionId;
+      this.buzzedThisRound.add(client.sessionId);
+      this.buzzerTurn += 1;
+
+      const roundIndex = this.recallRound;
+      const turn = this.buzzerTurn;
+      const answerDeadline = Math.min(
+        Date.now() + BUZZ_ANSWER_SECONDS * 1000,
+        this.recallDeadline,
+      );
+
+      this.broadcast("buzzerLocked", {
+        roundIndex,
+        sessionId: client.sessionId,
+        playerName:
+          this.state.players.get(client.sessionId)
+            ?.name ?? "",
+        deadline: answerDeadline,
+      });
+
+      // BE-22: no answer in time counts as wrong.
+      this.clock.setTimeout(() => {
+        if (
+          this.recallStarted &&
+          this.recallRound === roundIndex &&
+          this.buzzerTurn === turn
+        ) {
+          this.reopenBuzzer("timeout");
+        }
+      }, answerDeadline - Date.now());
     },
 
     /*
@@ -763,7 +861,11 @@ export class LobbyRoom extends Room {
         this.recallAnswers.has(
           client.sessionId,
         ) ||
-        !this.isAlive(client.sessionId)
+        !this.isAlive(client.sessionId) ||
+        // BE-21: in buzzer mode only the player
+        // holding the buzzer may answer.
+        (this.isBuzzerMode() &&
+          this.buzzerHolder !== client.sessionId)
       ) {
         return;
       }
@@ -783,6 +885,24 @@ export class LobbyRoom extends Room {
           submittedAt: Date.now(),
         },
       );
+
+      if (this.isBuzzerMode()) {
+        const correctWord =
+          this.state.gameWords[
+            this.recallRound
+          ] ?? "";
+
+        if (
+          scoreRecallAnswer(answer, correctWord) >=
+          BUZZER_CORRECT_POINTS
+        ) {
+          this.finishRecallRound();
+        } else {
+          this.reopenBuzzer("wrong");
+        }
+
+        return;
+      }
 
       // No need to wait for the remaining
       // timer if everybody answered.
@@ -953,9 +1073,11 @@ export class LobbyRoom extends Room {
       .map((entry) => ({
         ...entry,
         pointsEarned:
-          scoreRecallAnswer(
-            entry.answer,
-            correctWord,
+          this.roundPoints(
+            scoreRecallAnswer(
+              entry.answer,
+              correctWord,
+            ),
           ),
       }))
       .sort(
@@ -990,9 +1112,13 @@ export class LobbyRoom extends Room {
 
         // A 0-point answer costs a life, but
         // only for players who were still in.
+        // In buzzer mode, not buzzing is free;
+        // only a wrong buzz costs a life.
         const lostLife =
           pointsEarned === 0 &&
-          player.lives > 0;
+          player.lives > 0 &&
+          (!this.isBuzzerMode() ||
+            this.buzzedThisRound.has(sessionId));
 
         if (lostLife) {
           player.lives -= 1;
@@ -1047,6 +1173,7 @@ export class LobbyRoom extends Room {
     this.recallStarted = false;
     this.abilityVotes.clear();
     this.abilityUsedThisRound = false;
+    this.resetBuzzer();
 
     if (this.isGameOver()) {
       // Manifest only: no image bytes here.
@@ -1060,6 +1187,67 @@ export class LobbyRoom extends Room {
         },
       );
     }
+  }
+
+  // BE-21/22: buzzer mode helpers.
+  private isBuzzerMode() {
+    return (
+      this.state.gameMode ===
+      BUZZER_RECALL_MODE
+    );
+  }
+
+  // Alive players who haven't had a turn on
+  // this drawing yet.
+  private buzzerEligibleIds() {
+    return this.alivePlayerIds().filter(
+      (sessionId) =>
+        !this.buzzedThisRound.has(sessionId),
+    );
+  }
+
+  // BE-22: after a wrong answer or a timeout,
+  // let the remaining players buzz. If nobody
+  // is left, the round is over.
+  private reopenBuzzer(
+    reason: "wrong" | "timeout",
+  ) {
+    const lastSessionId = this.buzzerHolder;
+
+    this.buzzerHolder = null;
+    this.buzzerTurn += 1;
+
+    const eligible = this.buzzerEligibleIds();
+
+    if (eligible.length === 0) {
+      this.finishRecallRound();
+      return;
+    }
+
+    this.broadcast("buzzerOpen", {
+      roundIndex: this.recallRound,
+      eligible,
+      reason,
+      lastSessionId,
+    });
+  }
+
+  private resetBuzzer() {
+    this.buzzerHolder = null;
+    this.buzzedThisRound.clear();
+    this.buzzerTurn += 1;
+  }
+
+  // In buzzer mode only a right answer scores.
+  private roundPoints(points: number) {
+    if (
+      this.isBuzzerMode() &&
+      points < BUZZER_CORRECT_POINTS
+    ) {
+      return 0;
+    }
+
+    return points;
   }
 
   private isAlive(sessionId: string) {
