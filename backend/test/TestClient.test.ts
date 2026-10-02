@@ -1872,5 +1872,165 @@ client2.send("markReady", { ready: true });
         assert.strictEqual(room.state.usedAbilities.length, 0);
       });
     });
+
+    /*
+     * BE-21/22: buzzerRecall mode.
+     */
+    describe("buzzer recall (BE-21/22)", () => {
+      const setupBuzzerGame = async (names: string[]) => {
+        const game = await setupGame(names, ["cat", "dog"]);
+        game.room.state.gameMode = "buzzerRecall";
+        return game;
+      };
+
+      it("opens buzzing to every alive player when the round starts", async () => {
+        const { room, clients: [client1, client2] } = await setupBuzzerGame(["Jordan", "Sam"]);
+
+        const opened = client1.waitForMessage("buzzerOpen");
+        await startRound(room, [client1, client2]);
+
+        assert.deepStrictEqual(await opened, {
+          roundIndex: 0,
+          eligible: [client1.sessionId, client2.sessionId],
+        });
+      });
+
+      it("locks the buzzer for the first player and ignores later buzzes", async () => {
+        const { room, clients: [client1, client2] } = await setupBuzzerGame(["Jordan", "Sam"]);
+        await startRound(room, [client1, client2]);
+
+        const locked = client2.waitForMessage("buzzerLocked");
+        await sendAndWait(room, client2, "buzz", { roundIndex: 0 });
+        await sendAndWait(room, client1, "buzz", { roundIndex: 0 });
+
+        const message: any = await locked;
+        assert.strictEqual(message.sessionId, client2.sessionId);
+        assert.strictEqual(message.playerName, "Sam");
+        assert.strictEqual((room as any).buzzerHolder, client2.sessionId);
+      });
+
+      it("only lets the buzzer holder answer", async () => {
+        const { room, clients: [client1, client2] } = await setupBuzzerGame(["Jordan", "Sam"]);
+        await startRound(room, [client1, client2]);
+
+        // Nobody has buzzed yet.
+        await sendAndWait(room, client1, "submitRecallAnswer", { roundIndex: 0, answer: "cat" });
+        assert.strictEqual((room as any).recallAnswers.size, 0);
+
+        await sendAndWait(room, client2, "buzz", { roundIndex: 0 });
+        await sendAndWait(room, client1, "submitRecallAnswer", { roundIndex: 0, answer: "cat" });
+        assert.strictEqual((room as any).recallAnswers.size, 0);
+      });
+
+      it("ends the round on a right answer and only scores the buzzer", async () => {
+        const { room, clients: [client1, client2] } = await setupBuzzerGame(["Jordan", "Sam"]);
+        await startRound(room, [client1, client2]);
+
+        const result = client1.waitForMessage("recallRoundResult");
+        await sendAndWait(room, client1, "buzz", { roundIndex: 0 });
+        await sendAndWait(room, client1, "submitRecallAnswer", { roundIndex: 0, answer: "cat" });
+        const message: any = await result;
+
+        assert.strictEqual((room as any).recallRound, 1);
+        assert.strictEqual(player(room, client1).score, 4);
+        assert.strictEqual(player(room, client2).score, 0);
+
+        // Not buzzing doesn't cost a life.
+        const samResult = message.results.find((r: any) => r.sessionId === client2.sessionId);
+        assert.strictEqual(samResult.lostLife, false);
+        assert.strictEqual(player(room, client2).lives, 3);
+      });
+
+      it("reopens buzzing for the others after a wrong answer", async () => {
+        const { room, clients: [client1, client2, client3] } = await setupBuzzerGame(["Jordan", "Sam", "Alex"]);
+        await startRound(room, [client1, client2, client3]);
+
+        await sendAndWait(room, client1, "buzz", { roundIndex: 0 });
+
+        const reopened = client2.waitForMessage("buzzerOpen");
+        await sendAndWait(room, client1, "submitRecallAnswer", { roundIndex: 0, answer: "zebra" });
+
+        assert.deepStrictEqual(await reopened, {
+          roundIndex: 0,
+          eligible: [client2.sessionId, client3.sessionId],
+          reason: "wrong",
+          lastSessionId: client1.sessionId,
+        });
+        assert.strictEqual((room as any).recallRound, 0);
+
+        // Jordan already had a turn on this drawing.
+        await sendAndWait(room, client1, "buzz", { roundIndex: 0 });
+        assert.strictEqual((room as any).buzzerHolder, null);
+
+        await sendAndWait(room, client3, "buzz", { roundIndex: 0 });
+        assert.strictEqual((room as any).buzzerHolder, client3.sessionId);
+      });
+
+      it("reopens buzzing when the buzzer runs out of time", async () => {
+        const { room, clients: [client1, client2] } = await setupBuzzerGame(["Jordan", "Sam"]);
+        await startRound(room, [client1, client2]);
+        await sendAndWait(room, client1, "buzz", { roundIndex: 0 });
+
+        // Same call the answer timer makes after 5s.
+        const reopened = client2.waitForMessage("buzzerOpen");
+        (room as any).reopenBuzzer("timeout");
+
+        const message: any = await reopened;
+        assert.strictEqual(message.reason, "timeout");
+        assert.deepStrictEqual(message.eligible, [client2.sessionId]);
+      });
+
+      it("ends the round once everyone had a turn, and wrong buzzers lose a life", async () => {
+        const { room, clients: [client1, client2] } = await setupBuzzerGame(["Jordan", "Sam"]);
+        await startRound(room, [client1, client2]);
+
+        const result = client1.waitForMessage("recallRoundResult");
+
+        await sendAndWait(room, client1, "buzz", { roundIndex: 0 });
+        await sendAndWait(room, client1, "submitRecallAnswer", { roundIndex: 0, answer: "zebra" });
+        await sendAndWait(room, client2, "buzz", { roundIndex: 0 });
+        await sendAndWait(room, client2, "submitRecallAnswer", { roundIndex: 0, answer: "bird" });
+
+        const message: any = await result;
+
+        assert.strictEqual((room as any).recallRound, 1);
+        assert.strictEqual(player(room, client1).lives, 2);
+        assert.strictEqual(player(room, client2).lives, 2);
+        assert.ok(message.results.every((r: any) => r.pointsEarned === 0));
+      });
+
+      it("doesn't let players who are out of lives buzz", async () => {
+        const { room, clients: [client1, client2] } = await setupBuzzerGame(["Jordan", "Sam"]);
+        player(room, client1).lives = 0;
+        await startRound(room, [client1, client2]);
+
+        await sendAndWait(room, client1, "buzz", { roundIndex: 0 });
+        assert.strictEqual((room as any).buzzerHolder, null);
+      });
+
+      it("starts the next round with a fresh buzzer", async () => {
+        const { room, clients: [client1, client2] } = await setupBuzzerGame(["Jordan", "Sam"]);
+        await startRound(room, [client1, client2]);
+
+        await sendAndWait(room, client1, "buzz", { roundIndex: 0 });
+        await sendAndWait(room, client1, "submitRecallAnswer", { roundIndex: 0, answer: "cat" });
+
+        await startRound(room, [client1, client2], 1);
+        await sendAndWait(room, client1, "buzz", { roundIndex: 1 });
+        assert.strictEqual((room as any).buzzerHolder, client1.sessionId);
+      });
+
+      it("leaves the normal modes unchanged", async () => {
+        const { room, clients: [client1, client2] } = await setupGame(["Jordan", "Sam"], ["cat"]);
+        await startRound(room, [client1, client2]);
+
+        await sendAndWait(room, client1, "buzz", { roundIndex: 0 });
+        assert.strictEqual((room as any).buzzerHolder, null);
+
+        // Everyone can still answer without buzzing.
+        await sendAndWait(room, client2, "submitRecallAnswer", { roundIndex: 0, answer: "cat" });
+        assert.strictEqual((room as any).recallAnswers.has(client2.sessionId), true);
+      });
+    });
   });
 });
