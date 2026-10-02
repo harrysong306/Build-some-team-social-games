@@ -4,6 +4,7 @@ import type { Room } from '@colyseus/sdk'
 import type { PlayerView } from '../multiplayer/useLobbyState'
 import DistractionPhase from './DistractionPhase'
 import DrawingPhase from './DrawingPhase'
+import FinalGallery from './FinalGallery'
 import InstructionsScreen from './InstructionsScreen'
 import MultiplayerResultsScreen from './MultiplayerResultsScreen'
 import RecallPhase from './RecallPhase'
@@ -146,6 +147,7 @@ function SketchRecallGame({
   if (phase === 'results') {
     if (room) {
       return (
+        <>
         <MultiplayerResultsScreen
           players={players}
           sessionId={room.sessionId}
@@ -157,6 +159,13 @@ function SketchRecallGame({
             onExit()
           }}
         />
+
+        {/* FE-102: everyone's drawings, below the final leaderboard */}
+        <FinalGallery
+          room={room}
+          words={gameWords}
+        />
+        </>
       )
     }
 
