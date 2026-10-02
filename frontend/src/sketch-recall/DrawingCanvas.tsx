@@ -13,7 +13,8 @@ export type SavedDrawing = {
 }
 
 export type DrawingCanvasHandle = {
-  clear: () => void
+  clear: (saveForUndo?: boolean) => void
+  undo: () => void
   getDrawing: () => Promise<SavedDrawing | null>
 }
 
@@ -29,29 +30,88 @@ type DrawingCanvasProps = {
   tool: DrawingTool
   brushSize: number
   color: string
+  onUndoStateChange?: (canUndo: boolean) => void
 }
 
+const MAX_UNDO_STATES = 10
+
 const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(
-  ({ tool, brushSize, color }, ref) => {
+  ({ tool, brushSize, color, onUndoStateChange }, ref) => {
     const canvasRef = useRef<HTMLCanvasElement>(null)
     const drawingRef = useRef(false)
     const lastPointRef = useRef({ x: 0, y: 0 })
+    const historyRef = useRef<ImageData[]>([])
 
-    const clearCanvas = () => {
+    const notifyUndoState = () => {
+      onUndoStateChange?.(historyRef.current.length > 0)
+    }
+
+    const resetHistory = () => {
+      historyRef.current = []
+      notifyUndoState()
+    }
+
+    const saveHistory = (
+      context: CanvasRenderingContext2D,
+    ) => {
+      const canvas = canvasRef.current
+      if (!canvas) return
+
+      historyRef.current.push(
+        context.getImageData(
+          0,
+          0,
+          canvas.width,
+          canvas.height,
+        ),
+      )
+
+      if (historyRef.current.length > MAX_UNDO_STATES) {
+        historyRef.current.shift()
+      }
+
+      notifyUndoState()
+    }
+
+    const clearCanvas = (saveForUndo = false) => {
       const canvas = canvasRef.current
       if (!canvas) return
 
       const context = canvas.getContext('2d')
       if (!context) return
 
+      if (saveForUndo) {
+        saveHistory(context)
+      }
+
       context.save()
       context.fillStyle = '#fffdf7'
       context.fillRect(0, 0, canvas.width, canvas.height)
       context.restore()
+
+      if (!saveForUndo) {
+        resetHistory()
+      }
+    }
+
+    const undo = () => {
+      const canvas = canvasRef.current
+      if (!canvas) return
+
+      const context = canvas.getContext('2d')
+      if (!context) return
+
+      const previous = historyRef.current.pop()
+      if (!previous) return
+
+      drawingRef.current = false
+      context.putImageData(previous, 0, 0)
+      notifyUndoState()
     }
 
     useImperativeHandle(ref, () => ({
       clear: clearCanvas,
+      undo,
 
       getDrawing: async () => {
         const canvas = canvasRef.current
@@ -161,6 +221,8 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(
       ) {
         return
       }
+
+      saveHistory(context)
 
       const matchesTarget = (
         pixelIndex: number,
@@ -282,6 +344,8 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(
       if (isShapeTool) {
         return
       }
+
+      saveHistory(context)
 
       context.beginPath()
       context.arc(
@@ -405,6 +469,8 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(
           if (context) {
             const currentPoint =
               getPointerPosition(event)
+
+            saveHistory(context)
 
             drawShape(
               context,

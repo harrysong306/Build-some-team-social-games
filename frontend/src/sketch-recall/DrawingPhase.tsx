@@ -88,6 +88,8 @@ function DrawingPhase({
       DRAWING_COLORS[0].value,
     )
 
+  const [canUndo, setCanUndo] = useState(false)
+
   const [timeLeft, setTimeLeft] =
     useState(() => getDrawingTime(drawingSpeed))
 
@@ -300,8 +302,23 @@ function DrawingPhase({
 
               <button
                 type="button"
+                disabled={!canUndo}
                 onClick={() =>
-                  canvasRef.current?.clear()
+                  canvasRef.current?.undo()
+                }
+                className={`rounded-lg border border-amber-500/30 px-5 py-2 text-sm font-semibold ${
+                  canUndo
+                    ? 'bg-[#211006] text-white'
+                    : 'cursor-not-allowed bg-[#160b06] text-white/30'
+                }`}
+              >
+                Undo
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  canvasRef.current?.clear(true)
                 }
                 className="rounded-lg border border-amber-500/30 bg-[#211006] px-5 py-2 text-sm font-semibold text-white"
               >
@@ -378,6 +395,7 @@ function DrawingPhase({
               tool={tool}
               brushSize={brushSize}
               color={color}
+              onUndoStateChange={setCanUndo}
             />
 
             <button

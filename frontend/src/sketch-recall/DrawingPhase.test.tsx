@@ -24,10 +24,13 @@ describe('DrawingPhase component tests', () => {
     fillRect: vi.fn(),
     beginPath: vi.fn(),
     arc: vi.fn(),
+    rect: vi.fn(),
     fill: vi.fn(),
     moveTo: vi.fn(),
     lineTo: vi.fn(),
     stroke: vi.fn(),
+    getImageData: vi.fn(),
+    putImageData: vi.fn(),
 
     fillStyle: '',
     strokeStyle: '',
@@ -35,6 +38,15 @@ describe('DrawingPhase component tests', () => {
     lineCap: 'butt',
     lineJoin: 'miter',
   }
+
+  const makeSnapshot = () =>
+    ({
+      width: 900,
+      height: 500,
+      data: new Uint8ClampedArray(
+        900 * 500 * 4,
+      ),
+    }) as ImageData
 
   beforeEach(() => {
     vi.clearAllMocks()
@@ -44,6 +56,13 @@ describe('DrawingPhase component tests', () => {
     context.lineWidth = 0
     context.lineCap = 'butt'
     context.lineJoin = 'miter'
+
+    context.getImageData.mockReset()
+    context.putImageData.mockReset()
+
+    context.getImageData.mockImplementation(
+      () => makeSnapshot(),
+    )
 
     vi.spyOn(
       HTMLCanvasElement.prototype,
@@ -353,6 +372,207 @@ describe('DrawingPhase component tests', () => {
     ).not.toHaveClass(
       'bg-amber-400',
     )
+  })
+
+  it('enables Undo after drawing and restores the last action', () => {
+    const snapshot = makeSnapshot()
+
+    context.getImageData.mockReturnValueOnce(
+      snapshot,
+    )
+
+    const { container } = render(
+      <DrawingPhase
+        words={['Apple']}
+        drawingSpeed="normal"
+        onBack={vi.fn()}
+        onComplete={vi.fn()}
+      />,
+    )
+
+    const undoButton =
+      screen.getByRole('button', {
+        name: /^undo$/i,
+      })
+
+    expect(
+      undoButton,
+    ).toBeDisabled()
+
+    const canvas =
+      container.querySelector('canvas')
+
+    expect(canvas).not.toBeNull()
+
+    if (!canvas) return
+
+    vi.spyOn(
+      canvas,
+      'getBoundingClientRect',
+    ).mockReturnValue({
+      x: 0,
+      y: 0,
+      left: 0,
+      top: 0,
+      right: 900,
+      bottom: 500,
+      width: 900,
+      height: 500,
+      toJSON: () => {},
+    })
+
+    fireEvent.pointerDown(canvas, {
+      clientX: 100,
+      clientY: 100,
+      pointerId: 1,
+    })
+
+    fireEvent.pointerUp(canvas, {
+      clientX: 150,
+      clientY: 150,
+      pointerId: 1,
+    })
+
+    expect(
+      undoButton,
+    ).not.toBeDisabled()
+
+    fireEvent.click(undoButton)
+
+    expect(
+      context.putImageData,
+    ).toHaveBeenCalledWith(
+      snapshot,
+      0,
+      0,
+    )
+
+    expect(
+      undoButton,
+    ).toBeDisabled()
+  })
+
+  it('allows Clear to be undone', () => {
+    const snapshot = makeSnapshot()
+
+    context.getImageData.mockReturnValueOnce(
+      snapshot,
+    )
+
+    render(
+      <DrawingPhase
+        words={['Apple']}
+        drawingSpeed="normal"
+        onBack={vi.fn()}
+        onComplete={vi.fn()}
+      />,
+    )
+
+    const clearButton =
+      screen.getByRole('button', {
+        name: /^clear$/i,
+      })
+
+    const undoButton =
+      screen.getByRole('button', {
+        name: /^undo$/i,
+      })
+
+    expect(
+      undoButton,
+    ).toBeDisabled()
+
+    fireEvent.click(clearButton)
+
+    expect(
+      undoButton,
+    ).not.toBeDisabled()
+
+    fireEvent.click(undoButton)
+
+    expect(
+      context.putImageData,
+    ).toHaveBeenCalledWith(
+      snapshot,
+      0,
+      0,
+    )
+
+    expect(
+      undoButton,
+    ).toBeDisabled()
+  })
+
+  it('resets Undo history when moving to the next drawing', async () => {
+    const { container } = render(
+      <DrawingPhase
+        words={['Apple', 'Tree']}
+        drawingSpeed="normal"
+        onBack={vi.fn()}
+        onComplete={vi.fn()}
+      />,
+    )
+
+    const canvas =
+      container.querySelector('canvas')
+
+    expect(canvas).not.toBeNull()
+
+    if (!canvas) return
+
+    vi.spyOn(
+      canvas,
+      'getBoundingClientRect',
+    ).mockReturnValue({
+      x: 0,
+      y: 0,
+      left: 0,
+      top: 0,
+      right: 900,
+      bottom: 500,
+      width: 900,
+      height: 500,
+      toJSON: () => {},
+    })
+
+    const undoButton =
+      screen.getByRole('button', {
+        name: /^undo$/i,
+      })
+
+    fireEvent.pointerDown(canvas, {
+      clientX: 100,
+      clientY: 100,
+      pointerId: 1,
+    })
+
+    fireEvent.pointerUp(canvas, {
+      clientX: 150,
+      clientY: 150,
+      pointerId: 1,
+    })
+
+    expect(
+      undoButton,
+    ).not.toBeDisabled()
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: /save & next/i,
+      }),
+    )
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('Tree'),
+      ).toBeInTheDocument()
+    })
+
+    expect(
+      screen.getByRole('button', {
+        name: /^undo$/i,
+      }),
+    ).toBeDisabled()
   })
 
   it('counts the drawing timer down every second', () => {
