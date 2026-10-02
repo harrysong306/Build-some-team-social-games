@@ -24,6 +24,7 @@ describe('DrawingCanvas component tests', () => {
     fillRect: vi.fn(),
     beginPath: vi.fn(),
     arc: vi.fn(),
+    rect: vi.fn(),
     fill: vi.fn(),
     moveTo: vi.fn(),
     lineTo: vi.fn(),
@@ -282,6 +283,111 @@ describe('DrawingCanvas component tests', () => {
     expect(
       context.lineWidth,
     ).toBe(12)
+
+    expect(
+      context.stroke,
+    ).toHaveBeenCalledTimes(1)
+  })
+
+  it('draws a rectangle from pointer down to pointer up', () => {
+    const { container } = render(
+      <DrawingCanvas
+        tool="rectangle"
+        brushSize={10}
+        color="#22c55e"
+      />,
+    )
+
+    const canvas =
+      container.querySelector('canvas')
+
+    expect(canvas).not.toBeNull()
+
+    if (!canvas) return
+
+    mockCanvasRect(canvas)
+
+    fireEvent.pointerDown(canvas, {
+      clientX: 100,
+      clientY: 80,
+      pointerId: 1,
+    })
+
+    fireEvent.pointerUp(canvas, {
+      clientX: 300,
+      clientY: 200,
+      pointerId: 1,
+    })
+
+    expect(
+      context.rect,
+    ).toHaveBeenCalledWith(
+      100,
+      80,
+      200,
+      120,
+    )
+
+    expect(
+      context.strokeStyle,
+    ).toBe('#22c55e')
+
+    expect(
+      context.lineWidth,
+    ).toBe(10)
+
+    expect(
+      context.stroke,
+    ).toHaveBeenCalledTimes(1)
+  })
+
+  it('draws a circle using the drag distance as its diameter', () => {
+    const { container } = render(
+      <DrawingCanvas
+        tool="circle"
+        brushSize={6}
+        color="#a855f7"
+      />,
+    )
+
+    const canvas =
+      container.querySelector('canvas')
+
+    expect(canvas).not.toBeNull()
+
+    if (!canvas) return
+
+    mockCanvasRect(canvas)
+
+    fireEvent.pointerDown(canvas, {
+      clientX: 100,
+      clientY: 100,
+      pointerId: 1,
+    })
+
+    fireEvent.pointerUp(canvas, {
+      clientX: 200,
+      clientY: 100,
+      pointerId: 1,
+    })
+
+    expect(
+      context.arc,
+    ).toHaveBeenCalledWith(
+      150,
+      100,
+      50,
+      0,
+      Math.PI * 2,
+    )
+
+    expect(
+      context.strokeStyle,
+    ).toBe('#a855f7')
+
+    expect(
+      context.lineWidth,
+    ).toBe(6)
 
     expect(
       context.stroke,

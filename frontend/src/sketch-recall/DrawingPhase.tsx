@@ -190,6 +190,15 @@ function DrawingPhase({
     )
   }
 
+  const toolButtonClass = (
+    drawingTool: DrawingTool,
+  ) =>
+    `rounded-lg px-5 py-2 text-sm font-semibold ${
+      tool === drawingTool
+        ? 'bg-amber-400 text-black'
+        : 'border border-amber-500/30 bg-[#211006] text-white'
+    }`
+
   return (
     <main className="min-h-[calc(100vh-80px)] bg-[#0d0704] px-6 py-8 text-white">
 
@@ -244,11 +253,7 @@ function DrawingPhase({
               <button
                 type="button"
                 onClick={() => setTool('brush')}
-                className={`rounded-lg px-5 py-2 text-sm font-semibold ${
-                  tool === 'brush'
-                    ? 'bg-amber-400 text-black'
-                    : 'border border-amber-500/30 bg-[#211006] text-white'
-                }`}
+                className={toolButtonClass('brush')}
               >
                 Pencil
               </button>
@@ -256,23 +261,31 @@ function DrawingPhase({
               <button
                 type="button"
                 onClick={() => setTool('line')}
-                className={`rounded-lg px-5 py-2 text-sm font-semibold ${
-                  tool === 'line'
-                    ? 'bg-amber-400 text-black'
-                    : 'border border-amber-500/30 bg-[#211006] text-white'
-                }`}
+                className={toolButtonClass('line')}
               >
                 Line
               </button>
 
               <button
                 type="button"
+                onClick={() => setTool('rectangle')}
+                className={toolButtonClass('rectangle')}
+              >
+                Rectangle
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setTool('circle')}
+                className={toolButtonClass('circle')}
+              >
+                Circle
+              </button>
+
+              <button
+                type="button"
                 onClick={() => setTool('eraser')}
-                className={`rounded-lg px-5 py-2 text-sm font-semibold ${
-                  tool === 'eraser'
-                    ? 'bg-amber-400 text-black'
-                    : 'border border-amber-500/30 bg-[#211006] text-white'
-                }`}
+                className={toolButtonClass('eraser')}
               >
                 Eraser
               </button>

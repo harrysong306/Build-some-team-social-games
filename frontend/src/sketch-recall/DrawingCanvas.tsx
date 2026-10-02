@@ -21,6 +21,8 @@ export type DrawingTool =
   | 'brush'
   | 'eraser'
   | 'line'
+  | 'rectangle'
+  | 'circle'
 
 type DrawingCanvasProps = {
   tool: DrawingTool
@@ -85,6 +87,11 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(
       }
     }
 
+    const isShapeTool =
+      tool === 'line' ||
+      tool === 'rectangle' ||
+      tool === 'circle'
+
     const startDrawing = (
       event: React.PointerEvent<HTMLCanvasElement>,
     ) => {
@@ -101,7 +108,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(
 
       event.currentTarget.setPointerCapture(event.pointerId)
 
-      if (tool === 'line') {
+      if (isShapeTool) {
         return
       }
 
@@ -127,7 +134,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(
     ) => {
       if (!drawingRef.current) return
 
-      if (tool === 'line') return
+      if (isShapeTool) return
 
       const canvas = canvasRef.current
       if (!canvas) return
@@ -158,12 +165,67 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(
       lastPointRef.current = currentPoint
     }
 
+    const drawShape = (
+      context: CanvasRenderingContext2D,
+      startPoint: { x: number; y: number },
+      endPoint: { x: number; y: number },
+    ) => {
+      context.lineCap = 'round'
+      context.lineJoin = 'round'
+      context.lineWidth = brushSize
+      context.strokeStyle = color
+
+      context.beginPath()
+
+      if (tool === 'line') {
+        context.moveTo(
+          startPoint.x,
+          startPoint.y,
+        )
+        context.lineTo(
+          endPoint.x,
+          endPoint.y,
+        )
+      }
+
+      if (tool === 'rectangle') {
+        context.rect(
+          startPoint.x,
+          startPoint.y,
+          endPoint.x - startPoint.x,
+          endPoint.y - startPoint.y,
+        )
+      }
+
+      if (tool === 'circle') {
+        const centerX =
+          (startPoint.x + endPoint.x) / 2
+        const centerY =
+          (startPoint.y + endPoint.y) / 2
+
+        const diameter = Math.hypot(
+          endPoint.x - startPoint.x,
+          endPoint.y - startPoint.y,
+        )
+
+        context.arc(
+          centerX,
+          centerY,
+          diameter / 2,
+          0,
+          Math.PI * 2,
+        )
+      }
+
+      context.stroke()
+    }
+
     const stopDrawing = (
       event: React.PointerEvent<HTMLCanvasElement>,
     ) => {
       if (!drawingRef.current) return
 
-      if (tool === 'line') {
+      if (isShapeTool) {
         const canvas = canvasRef.current
 
         if (canvas) {
@@ -173,21 +235,11 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(
             const currentPoint =
               getPointerPosition(event)
 
-            context.lineCap = 'round'
-            context.lineJoin = 'round'
-            context.lineWidth = brushSize
-            context.strokeStyle = color
-
-            context.beginPath()
-            context.moveTo(
-              lastPointRef.current.x,
-              lastPointRef.current.y,
+            drawShape(
+              context,
+              lastPointRef.current,
+              currentPoint,
             )
-            context.lineTo(
-              currentPoint.x,
-              currentPoint.y,
-            )
-            context.stroke()
           }
         }
       }

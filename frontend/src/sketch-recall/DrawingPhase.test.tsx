@@ -271,6 +271,49 @@ describe('DrawingPhase component tests', () => {
     ).toHaveBeenCalled()
   })
 
+  it('lets the user select rectangle and circle tools', () => {
+    render(
+      <DrawingPhase
+        words={['Apple']}
+        drawingSpeed="normal"
+        onBack={vi.fn()}
+        onComplete={vi.fn()}
+      />,
+    )
+
+    const rectangleButton =
+      screen.getByRole('button', {
+        name: /^rectangle$/i,
+      })
+
+    const circleButton =
+      screen.getByRole('button', {
+        name: /^circle$/i,
+      })
+
+    fireEvent.click(rectangleButton)
+
+    expect(
+      rectangleButton,
+    ).toHaveClass(
+      'bg-amber-400',
+    )
+
+    fireEvent.click(circleButton)
+
+    expect(
+      circleButton,
+    ).toHaveClass(
+      'bg-amber-400',
+    )
+
+    expect(
+      rectangleButton,
+    ).not.toHaveClass(
+      'bg-amber-400',
+    )
+  })
+
   it('counts the drawing timer down every second', () => {
     vi.useFakeTimers()
 
