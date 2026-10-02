@@ -7,6 +7,7 @@ import {
 
 import DrawingCanvas, {
   type DrawingCanvasHandle,
+  type DrawingTool,
 } from './DrawingCanvas'
 
 type DrawingPhaseProps = {
@@ -19,6 +20,36 @@ type DrawingPhaseProps = {
   ) => void
   onComplete: (drawings: (string | null)[]) => void
 }
+
+const DRAWING_COLORS = [
+  {
+    name: 'Black',
+    value: '#25150b',
+  },
+  {
+    name: 'Red',
+    value: '#ef4444',
+  },
+  {
+    name: 'Blue',
+    value: '#3b82f6',
+  },
+  {
+    name: 'Green',
+    value: '#22c55e',
+  },
+  {
+    name: 'Purple',
+    value: '#a855f7',
+  },
+  {
+    name: 'Orange',
+    value: '#f97316',
+  },
+] as const
+
+type DrawingColor =
+  (typeof DRAWING_COLORS)[number]['value']
 
 function getDrawingTime(drawingSpeed: string) {
   if (drawingSpeed === 'hard') {
@@ -46,9 +77,19 @@ function DrawingPhase({
   const isAdvancingRef = useRef(false)
 
   const [currentIndex, setCurrentIndex] = useState(0)
+
   const [tool, setTool] =
-    useState<'brush' | 'eraser'>('brush')
+    useState<DrawingTool>('brush')
+
   const [brushSize, setBrushSize] = useState(8)
+
+  const [color, setColor] =
+    useState<DrawingColor>(
+      DRAWING_COLORS[0].value,
+    )
+
+  const [canUndo, setCanUndo] = useState(false)
+
   const [timeLeft, setTimeLeft] =
     useState(() => getDrawingTime(drawingSpeed))
 
@@ -58,8 +99,6 @@ function DrawingPhase({
     )
 
   const [finished, setFinished] = useState(false)
-
-
 
   const saveAndNext = useCallback(async () => {
     if (isAdvancingRef.current) return
@@ -93,7 +132,12 @@ function DrawingPhase({
     window.setTimeout(() => {
       isAdvancingRef.current = false
     }, 500)
-  }, [currentIndex, words.length, onSubmitDrawing, drawingSpeed])
+  }, [
+    currentIndex,
+    words.length,
+    onSubmitDrawing,
+    drawingSpeed,
+  ])
 
   useEffect(() => {
     if (finished) return
@@ -147,6 +191,15 @@ function DrawingPhase({
       </main>
     )
   }
+
+  const toolButtonClass = (
+    drawingTool: DrawingTool,
+  ) =>
+    `rounded-lg px-5 py-2 text-sm font-semibold ${
+      tool === drawingTool
+        ? 'bg-amber-400 text-black'
+        : 'border border-amber-500/30 bg-[#211006] text-white'
+    }`
 
   return (
     <main className="min-h-[calc(100vh-80px)] bg-[#0d0704] px-6 py-8 text-white">
@@ -202,36 +255,117 @@ function DrawingPhase({
               <button
                 type="button"
                 onClick={() => setTool('brush')}
-                className={`rounded-lg px-5 py-2 text-sm font-semibold ${
-                  tool === 'brush'
-                    ? 'bg-amber-400 text-black'
-                    : 'border border-amber-500/30 bg-[#211006] text-white'
-                }`}
+                className={toolButtonClass('brush')}
               >
                 Pencil
               </button>
 
               <button
                 type="button"
+                onClick={() => setTool('line')}
+                className={toolButtonClass('line')}
+              >
+                Line
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setTool('rectangle')}
+                className={toolButtonClass('rectangle')}
+              >
+                Rectangle
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setTool('circle')}
+                className={toolButtonClass('circle')}
+              >
+                Circle
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setTool('fill')}
+                className={toolButtonClass('fill')}
+              >
+                Fill
+              </button>
+
+              <button
+                type="button"
                 onClick={() => setTool('eraser')}
-                className={`rounded-lg px-5 py-2 text-sm font-semibold ${
-                  tool === 'eraser'
-                    ? 'bg-amber-400 text-black'
-                    : 'border border-amber-500/30 bg-[#211006] text-white'
-                }`}
+                className={toolButtonClass('eraser')}
               >
                 Eraser
               </button>
 
               <button
                 type="button"
+                disabled={!canUndo}
                 onClick={() =>
-                  canvasRef.current?.clear()
+                  canvasRef.current?.undo()
+                }
+                className={`rounded-lg border border-amber-500/30 px-5 py-2 text-sm font-semibold ${
+                  canUndo
+                    ? 'bg-[#211006] text-white'
+                    : 'cursor-not-allowed bg-[#160b06] text-white/30'
+                }`}
+              >
+                Undo
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  canvasRef.current?.clear(true)
                 }
                 className="rounded-lg border border-amber-500/30 bg-[#211006] px-5 py-2 text-sm font-semibold text-white"
               >
                 Clear
               </button>
+
+              <div
+                role="group"
+                aria-label="Drawing colours"
+                className="flex items-center gap-2"
+              >
+                <span className="text-xs text-white/50">
+                  Colour
+                </span>
+
+                {DRAWING_COLORS.map(
+                  (drawingColor) => {
+                    const selected =
+                      color === drawingColor.value
+
+                    return (
+                      <button
+                        key={drawingColor.value}
+                        type="button"
+                        aria-label={`${drawingColor.name} drawing colour`}
+                        aria-pressed={selected}
+                        title={drawingColor.name}
+                        onClick={() =>
+                          setColor(
+                            drawingColor.value,
+                          )
+                        }
+                        style={{
+                          backgroundColor:
+                            drawingColor.value,
+                        }}
+                        className={`h-7 w-7 rounded-full border-2 transition ${
+                          selected
+                            ? 'border-white ring-2 ring-amber-400'
+                            : 'border-white/30 hover:border-white/70'
+                        }`}
+                      />
+                    )
+                  },
+                )}
+
+              </div>
 
               <div className="ml-auto flex items-center gap-3">
 
@@ -260,6 +394,8 @@ function DrawingPhase({
               ref={canvasRef}
               tool={tool}
               brushSize={brushSize}
+              color={color}
+              onUndoStateChange={setCanUndo}
             />
 
             <button
