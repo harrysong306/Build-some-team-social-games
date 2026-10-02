@@ -155,6 +155,12 @@ export class LobbyRoom extends Room {
   // synchronized to the lobby through the Player schema.
   private playerQuestions = new Map<string, ServerPlayerQuestion[]>();
 
+  // BE-32: which player questions each player was given this game
+  // (recipient sessionId -> "ownerSessionId:questionIndex"), and the
+  // result of each player's first answer to them.
+  private assignedPlayerQuestionIds = new Map<string, Set<string>>();
+  private playerQuestionResults = new Map<string, boolean>();
+
   messages = {
     yourMessageType: (
       client: Client,
@@ -253,17 +259,31 @@ export class LobbyRoom extends Room {
           answerIndex: number;
         },
       ) => {
+        const questionId =
+          `${message?.ownerSessionId}:${message?.questionIndex}`;
+
+        // BE-32: player questions never block the distraction phase, so
+        // every answer gets a result, even a rejected one (counted as
+        // wrong). Otherwise the client would wait for a reply forever.
+        const reply = (correct: boolean) => {
+          client.send("player_question_result", {
+            questionId,
+            correct,
+          });
+        };
+
         const questionIndex = Number(
-          message.questionIndex,
+          message?.questionIndex,
         );
         const answerIndex = Number(
-          message.answerIndex,
+          message?.answerIndex,
         );
 
         if (
           !Number.isInteger(questionIndex) ||
           !Number.isInteger(answerIndex)
         ) {
+          reply(false);
           return;
         }
 
@@ -271,19 +291,37 @@ export class LobbyRoom extends Room {
           message.ownerSessionId,
         )?.[questionIndex];
 
+        // Only the player a question was assigned to can answer it, so
+        // nobody (including its author) can probe for the right option.
+        const assigned = this.assignedPlayerQuestionIds
+          .get(client.sessionId)
+          ?.has(questionId);
+
         if (
+          this.state.phase !== "playing" ||
+          !assigned ||
           !question ||
           answerIndex < 0 ||
           answerIndex >= QUESTION_OPTION_COUNT
         ) {
+          reply(false);
           return;
         }
 
-        client.send("player_question_result", {
-          questionId: `${message.ownerSessionId}:${message.questionIndex}`,
-          correct:
-          answerIndex === Number(question.correctOption),
-        });
+        // The first answer counts; answering again can't change it.
+        const resultKey = `${client.sessionId}|${questionId}`;
+        const previous = this.playerQuestionResults.get(resultKey);
+
+        if (previous !== undefined) {
+          reply(previous);
+          return;
+        }
+
+        const correct =
+          answerIndex === Number(question.correctOption);
+
+        this.playerQuestionResults.set(resultKey, correct);
+        reply(correct);
       },
 
     changeName: (
@@ -541,6 +579,23 @@ export class LobbyRoom extends Room {
           )
           ?.send("assigned_player_questions", questions);
           }
+
+      // BE-32: remember who may answer which question this game.
+      this.assignedPlayerQuestionIds.clear();
+      this.playerQuestionResults.clear();
+
+      for (const [recipientSessionId, questions] of assignedQuestions) {
+        this.assignedPlayerQuestionIds.set(
+          recipientSessionId,
+          new Set(
+            questions.map(
+              (question) =>
+                `${question.ownerSessionId}:${question.questionIndex}`,
+            ),
+          ),
+        );
+      }
+
       // Start each new game with a clean scoreboard.
       for (
         const currentPlayer of

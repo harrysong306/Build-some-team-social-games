@@ -153,41 +153,146 @@ describe("LobbyRoom", () => {
 
   it("checks player-question answers on the server", async () => {
     const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
-    const client = await colyseus.connectTo(room, { name: "Jordan" });
+    const client1 = await colyseus.connectTo(room, { name: "Jordan" });
+    const client2 = await colyseus.connectTo(room, { name: "Sam" });
 
-    client.send("submitPlayerQuestion", {
-      prompt: "What is my favourite colour?",
-      options: ["Red", "Blue", "Green", "Yellow"],
-      correctOption: 0,
-    });
+    // submitQuestions marks option `index` correct for question `index`.
+    await submitQuestions(client1, room);
+    await submitQuestions(client2, room);
+
+    // With two players, each one gets both of the other's questions.
+    const assigned = client2.waitForMessage("assigned_player_questions");
+
+    client1.send("markReady", { ready: true });
+    client2.send("markReady", { ready: true });
     await room.waitForNextPatch();
 
-    const results = new Promise<boolean[]>((resolve) => {
-      const received: boolean[] = [];
+    client1.send("startGame", {});
 
-      client.onMessage("player_question_result", (message) => {
-        assert.strictEqual(message.questionId, `${client.sessionId}:0`);
-        received.push(message.correct);
+    const questions = await assigned;
+    assert.deepStrictEqual(
+      questions.map((question: any) => question.ownerSessionId),
+      [client1.sessionId, client1.sessionId],
+    );
 
-        if (received.length === 2) {
-          resolve(received);
-        }
-      });
-
+    const answer = async (
+      client: any,
+      ownerSessionId: string,
+      questionIndex: any,
+      answerIndex: any,
+    ) => {
+      const result = client.waitForMessage("player_question_result");
       client.send("submitPlayerQuestionAnswer", {
-        ownerSessionId: client.sessionId,
-        questionIndex: 0,
-        answerIndex: 0,
+        ownerSessionId,
+        questionIndex,
+        answerIndex,
       });
+      return result;
+    };
 
-      client.send("submitPlayerQuestionAnswer", {
-        ownerSessionId: client.sessionId,
-        questionIndex: 0,
-        answerIndex: 1,
-      });
+    assert.deepStrictEqual(
+      await answer(client2, client1.sessionId, 1, 1),
+      { questionId: `${client1.sessionId}:1`, correct: true },
+    );
+    assert.deepStrictEqual(
+      await answer(client2, client1.sessionId, 0, 3),
+      { questionId: `${client1.sessionId}:0`, correct: false },
+    );
+  });
+
+  describe("player questions are non-blocking (BE-32)", () => {
+    async function startTwoPlayerGame() {
+      const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
+      const client1 = await colyseus.connectTo(room, { name: "Jordan" });
+      const client2 = await colyseus.connectTo(room, { name: "Sam" });
+
+      await submitQuestions(client1, room);
+      await submitQuestions(client2, room);
+
+      const assigned = client2.waitForMessage("assigned_player_questions");
+
+      client1.send("markReady", { ready: true });
+      client2.send("markReady", { ready: true });
+      await room.waitForNextPatch();
+
+      client1.send("startGame", {});
+      await assigned;
+
+      return { room, client1, client2 };
+    }
+
+    const answer = (
+      client: any,
+      message: any,
+    ) => {
+      const result = client.waitForMessage("player_question_result");
+      client.send("submitPlayerQuestionAnswer", message);
+      return result;
+    };
+
+    it("only the assigned player can answer, not the author", async () => {
+      const { client1 } = await startTwoPlayerGame();
+
+      // Option 0 is the right answer, but client1 wrote this question.
+      assert.deepStrictEqual(
+        await answer(client1, {
+          ownerSessionId: client1.sessionId,
+          questionIndex: 0,
+          answerIndex: 0,
+        }),
+        { questionId: `${client1.sessionId}:0`, correct: false },
+      );
     });
 
-    assert.deepStrictEqual(await results, [true, false]);
+    it("keeps the first answer, so guessing again can't find the right option", async () => {
+      const { client1, client2 } = await startTwoPlayerGame();
+
+      const message = (answerIndex: number) => ({
+        ownerSessionId: client1.sessionId,
+        questionIndex: 0,
+        answerIndex,
+      });
+
+      assert.strictEqual((await answer(client2, message(2))).correct, false);
+      assert.strictEqual((await answer(client2, message(0))).correct, false);
+    });
+
+    it("still replies to invalid answers so the client never hangs", async () => {
+      const { client1, client2 } = await startTwoPlayerGame();
+
+      assert.deepStrictEqual(
+        await answer(client2, {
+          ownerSessionId: client1.sessionId,
+          questionIndex: 0,
+          answerIndex: 9,
+        }),
+        { questionId: `${client1.sessionId}:0`, correct: false },
+      );
+
+      assert.deepStrictEqual(
+        await answer(client2, {
+          ownerSessionId: "nobody",
+          questionIndex: "x",
+          answerIndex: 0,
+        }),
+        { questionId: "nobody:x", correct: false },
+      );
+    });
+
+    it("rejects answers outside a game", async () => {
+      const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
+      const client = await colyseus.connectTo(room, { name: "Jordan" });
+      await submitQuestions(client, room);
+
+      assert.strictEqual(
+        (await answer(client, {
+          ownerSessionId: client.sessionId,
+          questionIndex: 0,
+          answerIndex: 0,
+        })).correct,
+        false,
+      );
+    });
   });
 
   it("changeName rejects an empty name and leaves state unchanged", async () => {
