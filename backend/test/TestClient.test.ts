@@ -544,6 +544,8 @@ client2.send("markReady", { ready: true });
         count: 10,
       });
 
+      await submitQuestions(host, room);
+
       host.send("markReady", {
         ready: true,
       });
