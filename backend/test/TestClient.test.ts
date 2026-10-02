@@ -12,6 +12,7 @@ import {
   similarWordGroups,
   wordPacks,
 } from "../src/utils/sketchRecallWords.js";
+import { distractionQuestions } from "../src/utils/distractionQuestions.js";
 
 async function submitQuestions(
   client: any,
@@ -190,14 +191,13 @@ describe("LobbyRoom", () => {
       return result;
     };
 
-    assert.deepStrictEqual(
-      await answer(client2, client1.sessionId, 1, 1),
-      { questionId: `${client1.sessionId}:1`, correct: true },
-    );
-    assert.deepStrictEqual(
-      await answer(client2, client1.sessionId, 0, 3),
-      { questionId: `${client1.sessionId}:0`, correct: false },
-    );
+    const right = await answer(client2, client1.sessionId, 1, 1);
+    assert.strictEqual(right.questionId, `${client1.sessionId}:1`);
+    assert.strictEqual(right.correct, true);
+
+    const wrong = await answer(client2, client1.sessionId, 0, 3);
+    assert.strictEqual(wrong.questionId, `${client1.sessionId}:0`);
+    assert.strictEqual(wrong.correct, false);
   });
 
   describe("player questions are non-blocking (BE-32)", () => {
@@ -234,14 +234,14 @@ describe("LobbyRoom", () => {
       const { client1 } = await startTwoPlayerGame();
 
       // Option 0 is the right answer, but client1 wrote this question.
-      assert.deepStrictEqual(
-        await answer(client1, {
-          ownerSessionId: client1.sessionId,
-          questionIndex: 0,
-          answerIndex: 0,
-        }),
-        { questionId: `${client1.sessionId}:0`, correct: false },
-      );
+      const result = await answer(client1, {
+        ownerSessionId: client1.sessionId,
+        questionIndex: 0,
+        answerIndex: 0,
+      });
+
+      assert.strictEqual(result.questionId, `${client1.sessionId}:0`);
+      assert.strictEqual(result.correct, false);
     });
 
     it("keeps the first answer, so guessing again can't find the right option", async () => {
@@ -260,23 +260,23 @@ describe("LobbyRoom", () => {
     it("still replies to invalid answers so the client never hangs", async () => {
       const { client1, client2 } = await startTwoPlayerGame();
 
-      assert.deepStrictEqual(
-        await answer(client2, {
-          ownerSessionId: client1.sessionId,
-          questionIndex: 0,
-          answerIndex: 9,
-        }),
-        { questionId: `${client1.sessionId}:0`, correct: false },
-      );
+      const outOfRange = await answer(client2, {
+        ownerSessionId: client1.sessionId,
+        questionIndex: 0,
+        answerIndex: 9,
+      });
 
-      assert.deepStrictEqual(
-        await answer(client2, {
-          ownerSessionId: "nobody",
-          questionIndex: "x",
-          answerIndex: 0,
-        }),
-        { questionId: "nobody:x", correct: false },
-      );
+      assert.strictEqual(outOfRange.questionId, `${client1.sessionId}:0`);
+      assert.strictEqual(outOfRange.correct, false);
+
+      const unknown = await answer(client2, {
+        ownerSessionId: "nobody",
+        questionIndex: "x",
+        answerIndex: 0,
+      });
+
+      assert.strictEqual(unknown.questionId, "nobody:x");
+      assert.strictEqual(unknown.correct, false);
     });
 
     it("rejects answers outside a game", async () => {
@@ -305,6 +305,170 @@ describe("LobbyRoom", () => {
     const player = client1.state.players.get(client1.sessionId);
 
     assert.strictEqual(player?.name, "Jordan");
+  });
+
+  describe("distraction questions on the server (BE-15)", () => {
+    async function startSoloGame() {
+      const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
+      const client = await colyseus.connectTo(room, { name: "Jordan" });
+
+      await submitQuestions(client, room);
+      client.send("markReady", { ready: true });
+      await room.waitForNextPatch();
+
+      client.send("startGame", {});
+      await room.waitForNextPatch();
+
+      return { room, client };
+    }
+
+    const nextQuestion = (client: any) => {
+      const question = client.waitForMessage("distractionQuestion");
+      client.send("requestDistractionQuestion", {});
+      return question;
+    };
+
+    const submit = (client: any, questionId: any, answer: string) => {
+      const result = client.waitForMessage("distractionResult");
+      client.send("submitDistractionAnswer", { questionId, answer });
+      return result;
+    };
+
+    it("serves bank questions without their answers", async () => {
+      const { client } = await startSoloGame();
+
+      const question = await nextQuestion(client);
+      const bankQuestion = distractionQuestions[question.questionId];
+
+      assert.strictEqual(question.question, bankQuestion.question);
+      assert.deepStrictEqual(
+        [...question.options].sort(),
+        [...bankQuestion.options].sort(),
+      );
+      assert.strictEqual("answer" in question, false);
+    });
+
+    it("resends the same question until it is answered", async () => {
+      const { client } = await startSoloGame();
+
+      const first = await nextQuestion(client);
+      const again = await nextQuestion(client);
+
+      assert.strictEqual(again.questionId, first.questionId);
+    });
+
+    it("needs 5 answers with 3 correct before the phase is complete", async () => {
+      const { client } = await startSoloGame();
+      let progress: any;
+
+      // 2 wrong (one of them a timeout), then 3 right.
+      for (const answerRight of [false, false, true, true, true]) {
+        const question = await nextQuestion(client);
+        const bankQuestion = distractionQuestions[question.questionId];
+        const answer = answerRight
+          ? bankQuestion.answer
+          : progress === undefined
+            ? ""
+            : bankQuestion.options.find(
+                (option) => option !== bankQuestion.answer,
+              )!;
+
+        assert.strictEqual(progress?.complete ?? false, false);
+
+        const result = await submit(client, question.questionId, answer);
+        assert.strictEqual(result.correct, answerRight);
+        progress = result.progress;
+      }
+
+      assert.deepStrictEqual(progress, {
+        answered: 5,
+        correct: 3,
+        required: 3,
+        complete: true,
+      });
+    });
+
+    it("keeps asking after 5 answers until 3 are correct", async () => {
+      const { client } = await startSoloGame();
+      let progress: any;
+
+      for (let index = 0; index < 5; index += 1) {
+        const question = await nextQuestion(client);
+        progress = (await submit(client, question.questionId, "")).progress;
+      }
+
+      assert.strictEqual(progress.answered, 5);
+      assert.strictEqual(progress.complete, false);
+
+      // The bank keeps going (and reshuffles once used up).
+      const question = await nextQuestion(client);
+      assert.ok(distractionQuestions[question.questionId]);
+    });
+
+    it("ignores answers to a question that wasn't served", async () => {
+      const { client } = await startSoloGame();
+
+      const question = await nextQuestion(client);
+      const otherId =
+        (question.questionId + 1) % distractionQuestions.length;
+
+      const result = await submit(
+        client,
+        otherId,
+        distractionQuestions[otherId].answer,
+      );
+
+      assert.strictEqual(result.correct, false);
+      assert.strictEqual(result.progress.answered, 0);
+    });
+
+    it("counts answers to player-submitted questions too", async () => {
+      const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
+      const client1 = await colyseus.connectTo(room, { name: "Jordan" });
+      const client2 = await colyseus.connectTo(room, { name: "Sam" });
+
+      await submitQuestions(client1, room);
+      await submitQuestions(client2, room);
+
+      const assigned = client2.waitForMessage("assigned_player_questions");
+      client1.send("markReady", { ready: true });
+      client2.send("markReady", { ready: true });
+      await room.waitForNextPatch();
+      client1.send("startGame", {});
+      await assigned;
+
+      const result = client2.waitForMessage("player_question_result");
+      client2.send("submitPlayerQuestionAnswer", {
+        ownerSessionId: client1.sessionId,
+        questionIndex: 0,
+        answerIndex: 0,
+      });
+
+      assert.deepStrictEqual((await result).progress, {
+        answered: 1,
+        correct: 1,
+        required: 3,
+        complete: false,
+      });
+    });
+
+    it("starts every new game from zero", async () => {
+      const { room, client } = await startSoloGame();
+
+      const question = await nextQuestion(client);
+      await submit(client, question.questionId, "");
+
+      (room as any).distractionProgress.get(client.sessionId).answered = 9;
+      (room as any).state.phase = "lobby";
+      client.send("markReady", { ready: true });
+      await room.waitForNextPatch();
+      client.send("startGame", {});
+      await room.waitForNextPatch();
+
+      const next = await nextQuestion(client);
+      const result = await submit(client, next.questionId, "");
+      assert.strictEqual(result.progress.answered, 1);
+    });
   });
 
   it("changeName rejects a duplicate name (case-insensitive) and leaves state unchanged", async () => {

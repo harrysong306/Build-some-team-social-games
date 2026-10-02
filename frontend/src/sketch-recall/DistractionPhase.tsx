@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useRef,
   useState,
 } from 'react'
 
@@ -16,6 +17,21 @@ type GameQuestion = DistractionQuestion & {
   questionIndex?: number
   ownerName?: string
   optionIndexes?: number[]
+  // BE-15: set on bank questions served by the server.
+  serverQuestionId?: number
+}
+
+// BE-15: progress the server sends back with every answer.
+type DistractionProgress = {
+  answered: number
+  correct: number
+  required: number
+  complete: boolean
+}
+
+type AnswerResult = {
+  correct: boolean
+  progress?: DistractionProgress
 }
 
 type DistractionPhaseProps = {
@@ -83,6 +99,12 @@ function DistractionPhase({
   playerQuestions = [],
   onComplete,
 }: DistractionPhaseProps) {
+  // BE-15: in a multiplayer room the server serves the bank questions,
+  // checks every answer and decides when the phase is complete.
+  // Without a room (single player) the local bank is used as before.
+  const useServer =
+    typeof room?.onMessage === 'function'
+
   const [questions, setQuestions] = useState<GameQuestion[]>(() => [
     ...playerQuestions.map((question) => {
       const options = shuffleArray(
@@ -102,7 +124,7 @@ function DistractionPhase({
         ownerName: question.ownerName,
       }
     }),
-    ...shuffleArray(distractionQuestions).map((question) => {
+    ...(useServer ? [] : shuffleArray(distractionQuestions)).map((question) => {
       const options = randomizeOptions(
         question.options,
         question.options.indexOf(question.answer),
@@ -133,8 +155,53 @@ function DistractionPhase({
   const currentQuestion =
     questions[questionIndex]
 
+  // BE-15: ask the server for the next bank question whenever the
+  // player has run out of questions to answer.
+  const requestedRef = useRef(false)
+
+  useEffect(() => {
+    if (!useServer || !room) return
+
+    return room.onMessage(
+      'distractionQuestion',
+      (message: {
+        questionId: number
+        question: string
+        options: string[]
+      }) => {
+        requestedRef.current = false
+        setQuestions((current) => [
+          ...current,
+          {
+            question: message.question,
+            options: message.options,
+            answer: '',
+            serverQuestionId: message.questionId,
+          },
+        ])
+      },
+    )
+  }, [useServer, room])
+
+  useEffect(() => {
+    if (
+      !useServer ||
+      !room ||
+      currentQuestion ||
+      finished ||
+      requestedRef.current
+    ) {
+      return
+    }
+
+    requestedRef.current = true
+    room.send('requestDistractionQuestion', {})
+  }, [useServer, room, currentQuestion, finished])
+
   const moveToNextQuestion = useCallback(() => {
-    if (questionIndex >= questions.length - 1) {
+    if (useServer) {
+      setQuestionIndex((current) => current + 1)
+    } else if (questionIndex >= questions.length - 1) {
       setQuestions(
         shuffleArray(distractionQuestions).map((question) => {
           const options = randomizeOptions(
@@ -159,23 +226,28 @@ function DistractionPhase({
     setSelectedAnswer('')
     setTimeLeft(10)
   }, [
+    useServer,
     questionIndex,
     questions.length,
   ])
 
   const checkPlayerAnswer = (question: GameQuestion, answerIndex: number) =>
-    new Promise<boolean>((resolve) => {
+    new Promise<AnswerResult>((resolve) => {
       if (!room || !question.ownerSessionId || question.questionIndex === undefined) {
-        resolve(false)
+        resolve({ correct: false })
         return
       }
 
       const removeListener = room.onMessage(
         'player_question_result',
-        (message: { questionId: string; correct: boolean }) => {
+        (message: {
+          questionId: string
+          correct: boolean
+          progress?: DistractionProgress
+        }) => {
           if (message.questionId !== `${question.ownerSessionId}:${question.questionIndex}`) return
           removeListener?.()
-          resolve(message.correct)
+          resolve(message)
         },
       )
 
@@ -186,7 +258,37 @@ function DistractionPhase({
       })
     })
 
-  const finishQuestion = (isCorrect: boolean) => {
+  // BE-15: the server checks bank answers. An empty answer is a timeout.
+  const checkServerAnswer = (question: GameQuestion, answer: string) =>
+    new Promise<AnswerResult>((resolve) => {
+      if (!room) {
+        resolve({ correct: false })
+        return
+      }
+
+      const removeListener = room.onMessage(
+        'distractionResult',
+        (message: {
+          questionId: number
+          correct: boolean
+          progress?: DistractionProgress
+        }) => {
+          if (message.questionId !== question.serverQuestionId) return
+          removeListener?.()
+          resolve(message)
+        },
+      )
+
+      room.send('submitDistractionAnswer', {
+        questionId: question.serverQuestionId,
+        answer,
+      })
+    })
+
+  const finishQuestion = (
+    isCorrect: boolean,
+    progress?: DistractionProgress,
+  ) => {
     const nextScore =
       score + (isCorrect ? 1 : 0)
 
@@ -196,10 +298,13 @@ function DistractionPhase({
     setScore(nextScore)
     setAnsweredCount(nextAnsweredCount)
 
-    if (
-      nextAnsweredCount >= INITIAL_QUESTIONS &&
-      nextScore >= REQUIRED_CORRECT
-    ) {
+    // In a room only the server decides when the phase is complete.
+    const complete = useServer
+      ? progress?.complete === true
+      : nextAnsweredCount >= INITIAL_QUESTIONS &&
+        nextScore >= REQUIRED_CORRECT
+
+    if (complete) {
       setFinished(true)
       return
     }
@@ -215,19 +320,40 @@ function DistractionPhase({
     const displayedIndex = currentQuestion.options.indexOf(selectedAnswer)
     const selectedIndex =
       currentQuestion.optionIndexes?.[displayedIndex] ?? displayedIndex
-    const isCorrect = currentQuestion.ownerSessionId
+    const result: AnswerResult = currentQuestion.ownerSessionId
       ? await checkPlayerAnswer(currentQuestion, selectedIndex)
-      : selectedAnswer === currentQuestion.answer
+      : currentQuestion.serverQuestionId !== undefined
+        ? await checkServerAnswer(currentQuestion, selectedAnswer)
+        : { correct: selectedAnswer === currentQuestion.answer }
 
-    finishQuestion(isCorrect)
+    finishQuestion(result.correct, result.progress)
+  }
+
+  // BE-15: a timeout still has to reach the server so it moves on.
+  const timeOutQuestion = async () => {
+    setSubmitting(true)
+
+    const result: AnswerResult =
+      currentQuestion?.serverQuestionId !== undefined
+        ? await checkServerAnswer(currentQuestion, '')
+        : { correct: false }
+
+    finishQuestion(false, result.progress)
   }
 
   useEffect(() => {
-    if (finished) return
+    // Waiting for the server's next question.
+    if (finished || !currentQuestion) return
 
     if (timeLeft === 0) {
       // Treat timeout as an incorrect answer
-      if (!submitting) finishQuestion(false)
+      if (!submitting) {
+        if (useServer) {
+          void timeOutQuestion()
+        } else {
+          finishQuestion(false)
+        }
+      }
 
       return
     }
@@ -241,11 +367,20 @@ function DistractionPhase({
   }, [
     timeLeft,
     finished,
+    currentQuestion,
     answeredCount,
     score,
     moveToNextQuestion,
     nextQuestion,
   ])
+
+  if (!finished && !currentQuestion) {
+    return (
+      <main className="flex min-h-[calc(100vh-80px)] items-center justify-center bg-[#0d0704] px-6 text-white">
+        <p className="text-white/60">Loading question…</p>
+      </main>
+    )
+  }
 
   if (finished) {
     return (

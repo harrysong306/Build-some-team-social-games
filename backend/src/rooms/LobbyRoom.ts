@@ -6,6 +6,7 @@ import {
 } from "./schema/GameState.js";
 import { generateGameWords } from "../utils/WordGen.js";
 import { wordPacks, type WordPackTheme } from "../utils/sketchRecallWords.js";
+import { distractionQuestions } from "../utils/distractionQuestions.js";
 
 const VALID_GAME_MODES = ["sketchRecall", "test"] as const;
 type GameMode = typeof VALID_GAME_MODES[number];
@@ -19,6 +20,34 @@ type DrawingSpeed = typeof VALID_DRAWING_SPEEDS[number];
 
 const REQUIRED_PLAYER_QUESTIONS = 2;
 const QUESTION_OPTION_COUNT = 4;
+
+// BE-15: a player finishes the distraction phase after answering at
+// least DISTRACTION_MIN_ANSWERS questions with DISTRACTION_CORRECT_REQUIRED
+// of them right (the same rule as the frontend's DistractionPhase).
+// Answers to player-submitted questions count too.
+const DISTRACTION_MIN_ANSWERS = 5;
+const DISTRACTION_CORRECT_REQUIRED = 3;
+
+type DistractionProgress = {
+  // Shuffled bank indexes and how far through them the player is.
+  order: number[];
+  position: number;
+  // The bank question currently shown to the player, if any.
+  current: number | null;
+  answered: number;
+  correct: number;
+};
+
+const shuffled = <T>(items: T[]) => {
+  const copy = [...items];
+
+  for (let index = copy.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    [copy[index], copy[swapIndex]] = [copy[swapIndex], copy[index]];
+  }
+
+  return copy;
+};
 
 type ServerPlayerQuestion = {
   prompt: string;
@@ -161,6 +190,9 @@ export class LobbyRoom extends Room {
   private assignedPlayerQuestionIds = new Map<string, Set<string>>();
   private playerQuestionResults = new Map<string, boolean>();
 
+  // BE-15: each player's progress through the distraction phase.
+  private distractionProgress = new Map<string, DistractionProgress>();
+
   messages = {
     yourMessageType: (
       client: Client,
@@ -269,6 +301,7 @@ export class LobbyRoom extends Room {
           client.send("player_question_result", {
             questionId,
             correct,
+            progress: this.distractionStatus(client.sessionId),
           });
         };
 
@@ -321,7 +354,76 @@ export class LobbyRoom extends Room {
           answerIndex === Number(question.correctOption);
 
         this.playerQuestionResults.set(resultKey, correct);
+        this.recordDistractionAnswer(client.sessionId, correct);
         reply(correct);
+      },
+
+      // BE-15: send the player their next bank question, without the
+      // answer. Asking again before answering resends the same one.
+      requestDistractionQuestion: (
+        client: Client,
+        _message: any,
+      ) => {
+        if (this.state.phase !== "playing") return;
+
+        const progress = this.getDistractionProgress(client.sessionId);
+
+        if (progress.current === null) {
+          if (progress.position >= progress.order.length) {
+            progress.order = shuffled(progress.order);
+            progress.position = 0;
+          }
+
+          progress.current = progress.order[progress.position];
+          progress.position += 1;
+        }
+
+        const question = distractionQuestions[progress.current];
+
+        client.send("distractionQuestion", {
+          questionId: progress.current,
+          question: question.question,
+          options: shuffled(question.options),
+        });
+      },
+
+      // BE-15: check an answer to the current bank question. An empty
+      // answer means the player ran out of time, which counts as wrong.
+      submitDistractionAnswer: (
+        client: Client,
+        message: {
+          questionId: number;
+          answer: string;
+        },
+      ) => {
+        const progress = this.getDistractionProgress(client.sessionId);
+        const questionId = message?.questionId;
+
+        if (
+          this.state.phase !== "playing" ||
+          progress.current === null ||
+          questionId !== progress.current
+        ) {
+          client.send("distractionResult", {
+            questionId,
+            correct: false,
+            progress: this.distractionStatus(client.sessionId),
+          });
+          return;
+        }
+
+        const correct =
+          message.answer ===
+          distractionQuestions[progress.current].answer;
+
+        progress.current = null;
+        this.recordDistractionAnswer(client.sessionId, correct);
+
+        client.send("distractionResult", {
+          questionId,
+          correct,
+          progress: this.distractionStatus(client.sessionId),
+        });
       },
 
     changeName: (
@@ -583,6 +685,7 @@ export class LobbyRoom extends Room {
       // BE-32: remember who may answer which question this game.
       this.assignedPlayerQuestionIds.clear();
       this.playerQuestionResults.clear();
+      this.distractionProgress.clear();
 
       for (const [recipientSessionId, questions] of assignedQuestions) {
         this.assignedPlayerQuestionIds.set(
@@ -857,6 +960,51 @@ export class LobbyRoom extends Room {
       });
     },
   };
+
+  // BE-15: distraction phase helpers.
+  private getDistractionProgress(sessionId: string) {
+    let progress = this.distractionProgress.get(sessionId);
+
+    if (!progress) {
+      progress = {
+        order: shuffled(
+          distractionQuestions.map((_question, index) => index),
+        ),
+        position: 0,
+        current: null,
+        answered: 0,
+        correct: 0,
+      };
+      this.distractionProgress.set(sessionId, progress);
+    }
+
+    return progress;
+  }
+
+  private recordDistractionAnswer(
+    sessionId: string,
+    correct: boolean,
+  ) {
+    const progress = this.getDistractionProgress(sessionId);
+
+    progress.answered += 1;
+    if (correct) progress.correct += 1;
+  }
+
+  private distractionStatus(sessionId: string) {
+    const progress = this.distractionProgress.get(sessionId);
+    const answered = progress?.answered ?? 0;
+    const correct = progress?.correct ?? 0;
+
+    return {
+      answered,
+      correct,
+      required: DISTRACTION_CORRECT_REQUIRED,
+      complete:
+        answered >= DISTRACTION_MIN_ANSWERS &&
+        correct >= DISTRACTION_CORRECT_REQUIRED,
+    };
+  }
 
   private finishRecallRound() {
     if (!this.recallStarted) return;
