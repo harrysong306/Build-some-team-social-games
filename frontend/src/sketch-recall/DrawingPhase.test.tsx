@@ -39,6 +39,12 @@ describe('DrawingPhase component tests', () => {
   beforeEach(() => {
     vi.clearAllMocks()
 
+    context.fillStyle = ''
+    context.strokeStyle = ''
+    context.lineWidth = 0
+    context.lineCap = 'butt'
+    context.lineJoin = 'miter'
+
     vi.spyOn(
       HTMLCanvasElement.prototype,
       'getContext',
@@ -111,6 +117,89 @@ describe('DrawingPhase component tests', () => {
     ).toBeInTheDocument()
 
     expect(onComplete).not.toHaveBeenCalled()
+  })
+
+  it('lets the user choose a drawing colour', () => {
+    const { container } = render(
+      <DrawingPhase
+        words={['Apple']}
+        drawingSpeed="normal"
+        onBack={vi.fn()}
+        onComplete={vi.fn()}
+      />,
+    )
+
+    const blackButton =
+      screen.getByRole('button', {
+        name: /black drawing colour/i,
+      })
+
+    const blueButton =
+      screen.getByRole('button', {
+        name: /blue drawing colour/i,
+      })
+
+    expect(
+      blackButton,
+    ).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+
+    expect(
+      blueButton,
+    ).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    )
+
+    fireEvent.click(blueButton)
+
+    expect(
+      blueButton,
+    ).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+
+    expect(
+      blackButton,
+    ).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    )
+
+    const canvas =
+      container.querySelector('canvas')
+
+    expect(canvas).not.toBeNull()
+
+    if (!canvas) return
+
+    vi.spyOn(
+      canvas,
+      'getBoundingClientRect',
+    ).mockReturnValue({
+      x: 0,
+      y: 0,
+      left: 0,
+      top: 0,
+      right: 900,
+      bottom: 500,
+      width: 900,
+      height: 500,
+      toJSON: () => {},
+    })
+
+    fireEvent.pointerDown(canvas, {
+      clientX: 100,
+      clientY: 100,
+      pointerId: 1,
+    })
+
+    expect(
+      context.fillStyle,
+    ).toBe('#3b82f6')
   })
 
   it('counts the drawing timer down every second', () => {

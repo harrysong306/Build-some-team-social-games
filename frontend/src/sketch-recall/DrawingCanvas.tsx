@@ -20,10 +20,11 @@ export type DrawingCanvasHandle = {
 type DrawingCanvasProps = {
   tool: 'brush' | 'eraser'
   brushSize: number
+  color: string
 }
 
 const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(
-  ({ tool, brushSize }, ref) => {
+  ({ tool, brushSize, color }, ref) => {
     const canvasRef = useRef<HTMLCanvasElement>(null)
     const drawingRef = useRef(false)
     const lastPointRef = useRef({ x: 0, y: 0 })
@@ -105,7 +106,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(
       context.fillStyle =
         tool === 'eraser'
           ? '#fffdf7'
-          : '#25150b'
+          : color
 
       context.fill()
 
@@ -132,7 +133,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(
       if (tool === 'eraser') {
         context.strokeStyle = '#fffdf7'
       } else {
-        context.strokeStyle = '#25150b'
+        context.strokeStyle = color
       }
 
       context.beginPath()

@@ -65,6 +65,7 @@ describe('DrawingCanvas component tests', () => {
       <DrawingCanvas
         tool="brush"
         brushSize={8}
+        color="#25150b"
       />,
     )
 
@@ -98,6 +99,7 @@ describe('DrawingCanvas component tests', () => {
       <DrawingCanvas
         tool="brush"
         brushSize={8}
+        color="#25150b"
       />,
     )
 
@@ -170,9 +172,62 @@ describe('DrawingCanvas component tests', () => {
     ).toHaveBeenCalledTimes(1)
   })
 
+  it('uses the selected drawing colour for brush marks', () => {
+    const { container } = render(
+      <DrawingCanvas
+        tool="brush"
+        brushSize={8}
+        color="#3b82f6"
+      />,
+    )
+
+    const canvas =
+      container.querySelector('canvas')
+
+    expect(canvas).not.toBeNull()
+
+    if (!canvas) return
+
+    vi.spyOn(
+      canvas,
+      'getBoundingClientRect',
+    ).mockReturnValue({
+      x: 0,
+      y: 0,
+      left: 0,
+      top: 0,
+      right: 900,
+      bottom: 500,
+      width: 900,
+      height: 500,
+      toJSON: () => {},
+    })
+
+    fireEvent.pointerDown(canvas, {
+      clientX: 100,
+      clientY: 100,
+      pointerId: 1,
+    })
+
+    expect(
+      context.fillStyle,
+    ).toBe('#3b82f6')
+
+    fireEvent.pointerMove(canvas, {
+      clientX: 150,
+      clientY: 150,
+      pointerId: 1,
+    })
+
+    expect(
+      context.strokeStyle,
+    ).toBe('#3b82f6')
+  })
+
   it('returns the drawing as saved drawing data', async () => {
     const ref =
       createRef<DrawingCanvasHandle>()
+
     const blob = new Blob(
       [new Uint8Array([1, 2, 3])],
       { type: 'image/png' },
@@ -195,6 +250,7 @@ describe('DrawingCanvas component tests', () => {
         ref={ref}
         tool="brush"
         brushSize={8}
+        color="#25150b"
       />,
     )
 
@@ -214,6 +270,7 @@ describe('DrawingCanvas component tests', () => {
       <DrawingCanvas
         tool="eraser"
         brushSize={8}
+        color="#3b82f6"
       />,
     )
 
@@ -273,6 +330,7 @@ describe('DrawingCanvas component tests', () => {
         ref={ref}
         tool="brush"
         brushSize={8}
+        color="#25150b"
       />,
     )
 
@@ -303,6 +361,7 @@ describe('DrawingCanvas component tests', () => {
       <DrawingCanvas
         tool="brush"
         brushSize={20}
+        color="#25150b"
       />,
     )
 
@@ -360,6 +419,7 @@ describe('DrawingCanvas component tests', () => {
       <DrawingCanvas
         tool="brush"
         brushSize={8}
+        color="#25150b"
       />,
     )
 
