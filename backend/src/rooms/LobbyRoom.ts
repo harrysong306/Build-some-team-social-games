@@ -7,7 +7,7 @@ import {
 import { generateGameWords } from "../utils/WordGen.js";
 import { wordPacks, type WordPackTheme } from "../utils/sketchRecallWords.js";
 
-const VALID_GAME_MODES = ["sketchRecall", "test"] as const;
+const VALID_GAME_MODES = ["sketchRecall", "anonymousRecall", "test"] as const;
 type GameMode = typeof VALID_GAME_MODES[number];
 
 const VALID_DRAWING_SPEEDS = [
@@ -130,9 +130,43 @@ function scoreRecallAnswer(
   );
 }
 
+/*
+ * anonymousRecall mode (BE-16): same flow as
+ * sketchRecall, but in Recall each player
+ * guesses someone else's drawing, sent without
+ * the artist's identity.
+ */
+const ANONYMOUS_RECALL_MODE = "anonymousRecall";
+
+/*
+ * Lives, on top of the 0-4 Recall scoring: an
+ * answer worth 0 points (wrong or no answer)
+ * costs a life. A player with no lives left is
+ * out: they keep watching but can't answer or
+ * vote.
+ */
+const STARTING_LIVES = 3;
+
+/*
+ * BE-20: team abilities. Players vote during
+ * a Recall round; once more than half of the
+ * players still in the game pick the same
+ * ability, it activates for everyone. Each
+ * ability can be used once per game, and at
+ * most one ability per round.
+ */
+const ABILITIES = ["hint", "reveal"] as const;
+type Ability = typeof ABILITIES[number];
+const REVEAL_SECONDS = 5;
+
 export class LobbyRoom extends Room {
   maxClients = 8;
   state = new GameState();
+
+  // BE-20: this round's ability votes.
+  private abilityVotes =
+    new Map<string, Ability>();
+  private abilityUsedThisRound = false;
 
   // Drawings don't need to be constantly synced.
   private drawings =
@@ -547,8 +581,11 @@ export class LobbyRoom extends Room {
         this.state.players.values()
       ) {
         currentPlayer.score = 0;
+        currentPlayer.lives = STARTING_LIVES;
 
       }
+
+      this.state.usedAbilities.clear();
 
       this.state.phase = "playing";
 
@@ -563,6 +600,9 @@ export class LobbyRoom extends Room {
       // drawing metadata from a previous game.
       this.drawings.clear();
       this.pendingDrawingIndexes.clear();
+
+      this.abilityVotes.clear();
+      this.abilityUsedThisRound = false;
     },
 
     /*
@@ -617,6 +657,9 @@ export class LobbyRoom extends Room {
 
       this.drawings.clear();
       this.pendingDrawingIndexes.clear();
+
+      this.abilityVotes.clear();
+      this.abilityUsedThisRound = false;
     },
 
     /*
@@ -668,6 +711,20 @@ export class LobbyRoom extends Room {
         },
       );
 
+      if (
+        this.state.gameMode ===
+        ANONYMOUS_RECALL_MODE
+      ) {
+        this.sendAnonymousDrawings();
+      }
+
+      // Everyone is out of lives: nobody can
+      // answer, so don't make them wait 10s.
+      if (this.alivePlayerIds().length === 0) {
+        this.finishRecallRound();
+        return;
+      }
+
       this.clock.setTimeout(() => {
         if (
           this.recallStarted &&
@@ -699,7 +756,8 @@ export class LobbyRoom extends Room {
           this.recallDeadline ||
         this.recallAnswers.has(
           client.sessionId,
-        )
+        ) ||
+        !this.isAlive(client.sessionId)
       ) {
         return;
       }
@@ -723,10 +781,71 @@ export class LobbyRoom extends Room {
       // No need to wait for the remaining
       // timer if everybody answered.
       if (
-        this.recallAnswers.size ===
-        this.state.players.size
+        this.recallAnswers.size >=
+        this.alivePlayerIds().length
       ) {
         this.finishRecallRound();
+      }
+    },
+
+    /*
+     * BE-20: vote for a team ability during
+     * the current Recall round.
+     */
+    voteAbility: (
+      client: Client,
+      message: {
+        roundIndex: number;
+        ability: string;
+      },
+    ) => {
+      const ability =
+        message.ability as Ability;
+
+      if (
+        !this.recallStarted ||
+        message.roundIndex !==
+          this.recallRound ||
+        !ABILITIES.includes(ability) ||
+        this.state.usedAbilities.includes(
+          ability,
+        ) ||
+        this.abilityUsedThisRound ||
+        !this.isAlive(client.sessionId)
+      ) {
+        return;
+      }
+
+      this.abilityVotes.set(
+        client.sessionId,
+        ability,
+      );
+
+      // Only count votes from players still in
+      // the game (someone may have left since).
+      const alive = this.alivePlayerIds();
+      const needed =
+        Math.floor(alive.length / 2) + 1;
+
+      const counts = Object.fromEntries(
+        ABILITIES.map((name) => [
+          name,
+          alive.filter(
+            (sessionId) =>
+              this.abilityVotes.get(sessionId) ===
+              name,
+          ).length,
+        ]),
+      ) as Record<Ability, number>;
+
+      this.broadcast("abilityVotes", {
+        roundIndex: this.recallRound,
+        counts,
+        needed,
+      });
+
+      if (counts[ability] >= needed) {
+        this.activateAbility(ability);
       }
     },
 
@@ -863,6 +982,16 @@ export class LobbyRoom extends Room {
         player.score +=
           pointsEarned;
 
+        // A 0-point answer costs a life, but
+        // only for players who were still in.
+        const lostLife =
+          pointsEarned === 0 &&
+          player.lives > 0;
+
+        if (lostLife) {
+          player.lives -= 1;
+        }
+
         return {
           sessionId,
           playerName:
@@ -878,6 +1007,8 @@ export class LobbyRoom extends Room {
           pointsEarned,
           totalScore:
             player.score,
+          lostLife,
+          lives: player.lives,
         };
       },
     );
@@ -908,6 +1039,8 @@ export class LobbyRoom extends Room {
     this.recallAnswers.clear();
     this.recallDeadline = 0;
     this.recallStarted = false;
+    this.abilityVotes.clear();
+    this.abilityUsedThisRound = false;
 
     if (this.isGameOver()) {
       // Manifest only: no image bytes here.
@@ -921,6 +1054,148 @@ export class LobbyRoom extends Room {
         },
       );
     }
+  }
+
+  private isAlive(sessionId: string) {
+    return (
+      (this.state.players.get(sessionId)
+        ?.lives ?? 0) > 0
+    );
+  }
+
+  private alivePlayerIds() {
+    return [
+      ...this.state.players.keys(),
+    ].filter((sessionId) =>
+      this.isAlive(sessionId),
+    );
+  }
+
+  // Picks someone else's drawing of this
+  // round's word for each client. offset
+  // shifts the pick, so two calls in the same
+  // round can hand out different drawings.
+  private sendOtherDrawings(
+    offset: number,
+    buildMessage: (image: string | null) => object,
+    type: string,
+    allowOwnDrawing: boolean,
+  ) {
+    const roundIndex = this.recallRound;
+
+    const artists = [
+      ...this.state.players.keys(),
+    ].filter((sessionId) =>
+      this.drawings.has(
+        `${sessionId}:${roundIndex}`,
+      ),
+    );
+
+    this.clients.forEach((client, position) => {
+      const others = artists.filter(
+        (sessionId) =>
+          sessionId !== client.sessionId,
+      );
+
+      const artist =
+        others.length > 0
+          ? others[
+              (position + roundIndex + offset) %
+                others.length
+            ]
+          : allowOwnDrawing &&
+              artists.includes(client.sessionId)
+            ? client.sessionId
+            : undefined;
+
+      const drawing =
+        artist !== undefined
+          ? this.drawings.get(
+              `${artist}:${roundIndex}`,
+            )
+          : undefined;
+
+      // Only the image is sent - never the
+      // artist's sessionId or name.
+      client.send(
+        type,
+        buildMessage(
+          drawing
+            ? Buffer.from(drawing).toString(
+                "base64",
+              )
+            : null,
+        ),
+      );
+    });
+  }
+
+  /*
+   * BE-16: each player gets someone else's
+   * drawing of this round's word, without the
+   * artist's identity. Falls back to their own
+   * drawing when nobody else drew it (e.g. a
+   * one-player room).
+   */
+  private sendAnonymousDrawings() {
+    const roundIndex = this.recallRound;
+
+    this.sendOtherDrawings(
+      0,
+      (image) => ({ roundIndex, image }),
+      "recallDrawing",
+      true,
+    );
+  }
+
+  /*
+   * BE-20: apply an ability for everyone.
+   *   hint:   first letter and length of
+   *           this round's word
+   *   reveal: another drawing of this word,
+   *           shown for a few seconds
+   */
+  private activateAbility(ability: Ability) {
+    const roundIndex = this.recallRound;
+
+    this.state.usedAbilities.push(ability);
+    this.abilityUsedThisRound = true;
+    this.abilityVotes.clear();
+
+    if (ability === "hint") {
+      const word =
+        this.state.gameWords[roundIndex] ?? "";
+      const letters =
+        word.replace(/\s+/g, "").length;
+      const words =
+        word.trim().split(/\s+/).length;
+
+      this.broadcast("abilityActivated", {
+        roundIndex,
+        ability,
+        hint:
+          `Starts with "${word.charAt(0).toUpperCase()}", ` +
+          `${letters} letters` +
+          (words > 1 ? ` (${words} words)` : ""),
+      });
+
+      return;
+    }
+
+    // Offset by one from the anonymous Recall
+    // pick, so it's usually a different
+    // drawing from the one already on screen.
+    this.sendOtherDrawings(
+      1,
+      (image) => ({
+        roundIndex,
+        ability,
+        seconds: REVEAL_SECONDS,
+        image,
+      }),
+      "abilityActivated",
+      false,
+    );
   }
 
   private isGameOver() {

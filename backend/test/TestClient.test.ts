@@ -1651,4 +1651,226 @@ client2.send("markReady", { ready: true });
       assert.strictEqual(drawings.size, 0);
     });
   });
+
+  /*
+   * Lives, BE-16 (anonymous recall) and BE-20
+   * (team abilities).
+   *
+   * These wait for the server to actually handle
+   * each message instead of waiting for a patch
+   * tick, so they don't depend on timing.
+   */
+  describe("lives, anonymous recall and team abilities", () => {
+    const sendAndWait = async (room: any, client: any, type: string, message: any = {}) => {
+      const handled = room.waitForMessage(type);
+      client.send(type, message);
+      await handled;
+    };
+
+    const player = (room: any, client: any) =>
+      room.state.players.get(client.sessionId);
+
+    // Players in a started game with full lives.
+    const setupGame = async (names: string[], words: string[]) => {
+      const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
+      const clients = [];
+      for (const name of names) {
+        clients.push(await colyseus.connectTo(room, { name }));
+      }
+
+      room.state.phase = "playing";
+      room.state.gameWords.push(...words);
+      room.state.players.forEach((current: any) => { current.lives = 3; });
+
+      return { room, clients };
+    };
+
+    const startRound = async (room: any, clients: any[], roundIndex = 0) => {
+      for (const client of clients) {
+        await sendAndWait(room, client, "readyRecallRound", { roundIndex });
+      }
+    };
+
+    describe("lives", () => {
+      it("gives every player 3 lives when a game starts", async () => {
+        const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
+        const client1 = await colyseus.connectTo(room, { name: "Jordan" });
+        player(room, client1).lives = 0;
+
+        // Set directly: readying up may have its own
+        // requirements (e.g. player questions).
+        room.state.players.forEach((current: any) => { current.ready = true; });
+        await sendAndWait(room, client1, "startGame");
+
+        assert.strictEqual(player(room, client1).lives, 3);
+      });
+
+      it("takes a life for a 0-point answer or no answer, not for a scoring one", async () => {
+        const { room, clients: [client1, client2] } = await setupGame(["Jordan", "Sam"], ["cat", "dog"]);
+        await startRound(room, [client1, client2]);
+
+        const result = client1.waitForMessage("recallRoundResult");
+        await sendAndWait(room, client1, "submitRecallAnswer", { roundIndex: 0, answer: "cat" });
+        (room as any).finishRecallRound(); // Sam never answers
+        const message: any = await result;
+
+        assert.strictEqual(player(room, client1).lives, 3);
+        assert.strictEqual(player(room, client2).lives, 2);
+
+        const samResult = message.results.find((r: any) => r.sessionId === client2.sessionId);
+        assert.strictEqual(samResult.lostLife, true);
+        assert.strictEqual(samResult.lives, 2);
+      });
+
+      it("stops a player with no lives left from answering", async () => {
+        const { room, clients: [client1, client2] } = await setupGame(["Jordan", "Sam"], ["cat", "dog"]);
+        player(room, client2).lives = 0;
+        await startRound(room, [client1, client2]);
+
+        await sendAndWait(room, client2, "submitRecallAnswer", { roundIndex: 0, answer: "cat" });
+        assert.strictEqual((room as any).recallAnswers.has(client2.sessionId), false);
+
+        // Only Jordan is still in, so his answer ends the round.
+        await sendAndWait(room, client1, "submitRecallAnswer", { roundIndex: 0, answer: "cat" });
+
+        assert.strictEqual((room as any).recallRound, 1);
+        assert.strictEqual(player(room, client2).lives, 0); // can't go below 0
+      });
+
+      it("ends the round straight away when everyone is out", async () => {
+        const { room, clients: [client1] } = await setupGame(["Jordan"], ["cat", "dog"]);
+        player(room, client1).lives = 0;
+
+        const result = client1.waitForMessage("recallRoundResult");
+        await startRound(room, [client1]);
+        await result;
+
+        assert.strictEqual((room as any).recallRound, 1);
+      });
+    });
+
+    describe("anonymous recall (BE-16)", () => {
+      it("sends each player someone else's drawing without the artist's identity", async () => {
+        const { room, clients: [client1, client2] } = await setupGame(["Jordan", "Sam"], ["cat"]);
+        room.state.gameMode = "anonymousRecall";
+        (room as any).drawings.set(`${client1.sessionId}:0`, new Uint8Array([1]));
+        (room as any).drawings.set(`${client2.sessionId}:0`, new Uint8Array([2]));
+
+        const received1 = client1.waitForMessage("recallDrawing");
+        const received2 = client2.waitForMessage("recallDrawing");
+        await startRound(room, [client1, client2]);
+        const [message1, message2]: any[] = await Promise.all([received1, received2]);
+
+        assert.deepStrictEqual([...Buffer.from(message1.image, "base64")], [2]);
+        assert.deepStrictEqual([...Buffer.from(message2.image, "base64")], [1]);
+        assert.deepStrictEqual(Object.keys(message1).sort(), ["image", "roundIndex"]);
+        assert.deepStrictEqual(Object.keys(message2).sort(), ["image", "roundIndex"]);
+      });
+
+      it("falls back to the player's own drawing when nobody else drew", async () => {
+        const { room, clients: [client1] } = await setupGame(["Jordan"], ["cat"]);
+        room.state.gameMode = "anonymousRecall";
+        (room as any).drawings.set(`${client1.sessionId}:0`, new Uint8Array([7]));
+
+        const received = client1.waitForMessage("recallDrawing");
+        await startRound(room, [client1]);
+        const message: any = await received;
+
+        assert.deepStrictEqual([...Buffer.from(message.image, "base64")], [7]);
+      });
+
+      it("does not send drawings in the normal sketchRecall mode", async () => {
+        const { room, clients: [client1] } = await setupGame(["Jordan"], ["cat"]);
+        (room as any).drawings.set(`${client1.sessionId}:0`, new Uint8Array([7]));
+
+        let receivedDrawing = false;
+        client1.onMessage("recallDrawing", () => { receivedDrawing = true; });
+
+        const started = client1.waitForMessage("recallRoundStarted");
+        await startRound(room, [client1]);
+        await started;
+
+        assert.strictEqual(receivedDrawing, false);
+      });
+    });
+
+    describe("team abilities (BE-20)", () => {
+      it("activates a hint once more than half the players vote for it", async () => {
+        const { room, clients: [client1, client2] } = await setupGame(["Jordan", "Sam"], ["Pine Tree", "dog"]);
+        await startRound(room, [client1, client2]);
+
+        await sendAndWait(room, client1, "voteAbility", { roundIndex: 0, ability: "hint" });
+        assert.strictEqual(room.state.usedAbilities.length, 0); // 1 of 2 isn't a majority
+
+        const activated = client2.waitForMessage("abilityActivated");
+        await sendAndWait(room, client2, "voteAbility", { roundIndex: 0, ability: "hint" });
+        const message: any = await activated;
+
+        assert.deepStrictEqual([...room.state.usedAbilities], ["hint"]);
+        assert.strictEqual(message.hint, 'Starts with "P", 8 letters (2 words)');
+      });
+
+      it("only allows each ability once per game and one ability per round", async () => {
+        const { room, clients: [client1, client2] } = await setupGame(["Jordan", "Sam"], ["cat", "dog"]);
+        await startRound(room, [client1, client2]);
+
+        await sendAndWait(room, client1, "voteAbility", { roundIndex: 0, ability: "hint" });
+        await sendAndWait(room, client2, "voteAbility", { roundIndex: 0, ability: "hint" });
+
+        // Another ability in the same round is ignored.
+        await sendAndWait(room, client1, "voteAbility", { roundIndex: 0, ability: "reveal" });
+        await sendAndWait(room, client2, "voteAbility", { roundIndex: 0, ability: "reveal" });
+        assert.deepStrictEqual([...room.state.usedAbilities], ["hint"]);
+
+        // Next round: hint is already spent.
+        (room as any).finishRecallRound();
+        await startRound(room, [client1, client2], 1);
+        await sendAndWait(room, client1, "voteAbility", { roundIndex: 1, ability: "hint" });
+        await sendAndWait(room, client2, "voteAbility", { roundIndex: 1, ability: "hint" });
+
+        assert.deepStrictEqual([...room.state.usedAbilities], ["hint"]);
+      });
+
+      it("reveal sends another player's drawing without the artist's identity", async () => {
+        const { room, clients: [client1, client2] } = await setupGame(["Jordan", "Sam"], ["cat"]);
+        (room as any).drawings.set(`${client1.sessionId}:0`, new Uint8Array([1]));
+        (room as any).drawings.set(`${client2.sessionId}:0`, new Uint8Array([2]));
+        await startRound(room, [client1, client2]);
+
+        const received1 = client1.waitForMessage("abilityActivated");
+        const received2 = client2.waitForMessage("abilityActivated");
+        await sendAndWait(room, client1, "voteAbility", { roundIndex: 0, ability: "reveal" });
+        await sendAndWait(room, client2, "voteAbility", { roundIndex: 0, ability: "reveal" });
+        const [message1, message2]: any[] = await Promise.all([received1, received2]);
+
+        assert.deepStrictEqual([...Buffer.from(message1.image, "base64")], [2]);
+        assert.deepStrictEqual([...Buffer.from(message2.image, "base64")], [1]);
+        assert.deepStrictEqual(Object.keys(message1).sort(), ["ability", "image", "roundIndex", "seconds"]);
+      });
+
+      it("ignores votes from players who are out of lives", async () => {
+        const { room, clients: [client1, client2] } = await setupGame(["Jordan", "Sam"], ["cat"]);
+        player(room, client2).lives = 0;
+        await startRound(room, [client1, client2]);
+
+        await sendAndWait(room, client2, "voteAbility", { roundIndex: 0, ability: "hint" });
+        assert.strictEqual((room as any).abilityVotes.size, 0);
+
+        // Jordan is the only one left, so his vote alone is a majority.
+        await sendAndWait(room, client1, "voteAbility", { roundIndex: 0, ability: "hint" });
+        assert.deepStrictEqual([...room.state.usedAbilities], ["hint"]);
+      });
+
+      it("clears used abilities when a new game starts", async () => {
+        const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
+        const client1 = await colyseus.connectTo(room, { name: "Jordan" });
+        room.state.usedAbilities.push("hint");
+
+        room.state.players.forEach((current: any) => { current.ready = true; });
+        await sendAndWait(room, client1, "startGame");
+
+        assert.strictEqual(room.state.usedAbilities.length, 0);
+      });
+    });
+  });
 });

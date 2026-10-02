@@ -4,6 +4,7 @@ import Header from './components/Header'
 import GameCollectionPage from './GameCollectionPage'
 import CreateRoomScreen from './multiplayer/CreateRoomScreen'
 import JoinRoomScreen from './multiplayer/JoinRoomScreen'
+import { LeaveRoomContext } from './multiplayer/LeaveRoomContext'
 
 type Screen =
   | 'collection'
@@ -43,9 +44,13 @@ function App() {
           </div>
         </main>
       ) : screen === 'create-room' ? (
-        <CreateRoomScreen />
+        <LeaveRoomContext.Provider value={() => setScreen('collection')}>
+          <CreateRoomScreen />
+        </LeaveRoomContext.Provider>
       ) : screen === 'join-room' ? (
-        <JoinRoomScreen />
+        <LeaveRoomContext.Provider value={() => setScreen('collection')}>
+          <JoinRoomScreen />
+        </LeaveRoomContext.Provider>
       ) : (
         <GameCollectionPage
           onPlay={() => setScreen('room-choice')}

@@ -1,5 +1,8 @@
-import { useState } from 'react'
+import { useContext, useState } from 'react'
 import type { Room } from '@colyseus/sdk'
+
+import { LeaveRoomContext } from '../multiplayer/LeaveRoomContext'
+import { useGameSession } from '../multiplayer/useGameSession'
 
 import type { PlayerView } from '../multiplayer/useLobbyState'
 import DistractionPhase from './DistractionPhase'
@@ -50,6 +53,12 @@ function SketchRecallGame({
 
   const [recallScore, setRecallScore] =
     useState(0)
+
+  // Multiplayer: lives, game mode and used
+  // team abilities from the server.
+  const session = useGameSession(room)
+
+  const goToGames = useContext(LeaveRoomContext)
 
   const clearSavedDrawings = () => {
     savedDrawings.forEach((drawing) => {
@@ -136,6 +145,9 @@ function SketchRecallGame({
         room={room}
         drawings={savedDrawings}
         words={gameWords}
+        anonymous={session.gameMode === 'anonymousRecall'}
+        lives={room ? session.lives[room.sessionId] : undefined}
+        usedAbilities={session.usedAbilities}
         onComplete={(score) => {
           setRecallScore(score)
           setPhase('results')
@@ -151,6 +163,12 @@ function SketchRecallGame({
         <MultiplayerResultsScreen
           players={players}
           sessionId={room.sessionId}
+          lives={session.lives}
+          onLeave={() => {
+            clearSavedDrawings()
+            room.leave()
+            goToGames?.()
+          }}
           onPlayAgain={
             requestMultiplayerReplay
           }
