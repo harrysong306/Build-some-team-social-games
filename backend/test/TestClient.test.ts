@@ -5,6 +5,7 @@ import { ColyseusTestServer, boot } from "@colyseus/testing";
 // import "app.config.ts"
 import appConfig from "../src/app.config.js";
 import { GameState } from "../src/rooms/schema/GameState.js";
+import { JoinError } from "../src/rooms/LobbyRoom.js";
 
 import { generateGameWords } from "../src/utils/WordGen.js";
 import {
@@ -369,6 +370,57 @@ client2.send("markReady", { ready: true });
       room.state.players.get(client2.sessionId)?.score,
       0,
     );
+  });
+
+  describe("joining a room (BE-3)", () => {
+    it("rejects a room code that doesn't exist", async () => {
+      await assert.rejects(
+        colyseus.sdk.joinById("NOPE", { name: "Sam" }),
+        (error: any) => error.code === 522,
+      );
+    });
+
+    it("rejects joining a game that has already started", async () => {
+      const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
+      const client1 = await colyseus.connectTo(room, { name: "Jordan" });
+
+      await submitQuestions(client1, room);
+      client1.send("markReady", { ready: true });
+      await room.waitForNextPatch();
+
+      client1.send("startGame", {});
+      await room.waitForNextPatch();
+
+      assert.strictEqual(room.state.phase, "playing");
+
+      await assert.rejects(
+        colyseus.connectTo(room, { name: "Late" }),
+        (error: any) =>
+          error.code === JoinError.GAME_IN_PROGRESS &&
+          error.message === "This game has already started.",
+      );
+
+      assert.strictEqual(room.state.players.size, 1);
+    });
+
+    it("rejects a 9th player once the room is full", async () => {
+      const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
+
+      for (let index = 0; index < 8; index += 1) {
+        await colyseus.connectTo(room, { name: `Player ${index + 1}` });
+      }
+
+      assert.strictEqual(room.state.players.size, 8);
+
+      await assert.rejects(
+        colyseus.connectTo(room, { name: "Extra" }),
+        (error: any) =>
+          error.code === JoinError.ROOM_FULL &&
+          error.message === "This room is full.",
+      );
+
+      assert.strictEqual(room.state.players.size, 8);
+    });
   });
 
   describe("setDrawingCount (FE-99)", () => {
