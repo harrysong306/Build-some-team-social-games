@@ -381,6 +381,11 @@ export class LobbyRoom extends Room {
 
       if (!player?.isHost) return;
 
+      // BE-27: the mode can only change between
+      // games (in the lobby, e.g. after Play Again),
+      // never in the middle of one.
+      if (this.state.phase !== "lobby") return;
+
       if (
         !VALID_GAME_MODES.includes(
           message.mode as GameMode,
@@ -660,6 +665,18 @@ export class LobbyRoom extends Room {
 
       this.abilityVotes.clear();
       this.abilityUsedThisRound = false;
+    },
+
+    /*
+     * BE-27: leave the room. The client is
+     * disconnected, and onLeave removes them
+     * from the room state.
+     */
+    leaveRoom: (
+      client: Client,
+      _message: any,
+    ) => {
+      client.leave();
     },
 
     /*
@@ -1337,6 +1354,20 @@ export class LobbyRoom extends Room {
       client.sessionId,
     );
 
+    // BE-27: forget everything else that belongs
+    // to the player who left.
+    this.abilityVotes.delete(client.sessionId);
+    this.pendingDrawingIndexes.delete(client.sessionId);
+
+    // Their questions may already be assigned to
+    // someone in a running game, so only drop
+    // them while still in the lobby.
+    if (this.state.phase === "lobby") {
+      this.playerQuestions.delete(client.sessionId);
+    }
+
+    this.continueRecallAfterLeave();
+
     if (
       wasHost &&
       this.state.players.size > 0
@@ -1353,6 +1384,54 @@ export class LobbyRoom extends Room {
       "left!",
       code,
     );
+  }
+
+  /*
+   * BE-27: a Recall round waits for every player
+   * to be ready, then for every alive player to
+   * answer. If the player we were waiting for
+   * leaves, the others would wait forever, so
+   * check again with the players who are left.
+   */
+  private continueRecallAfterLeave() {
+    if (
+      this.state.phase !== "playing" ||
+      this.state.players.size === 0
+    ) {
+      return;
+    }
+
+    if (this.recallStarted) {
+      if (
+        this.recallAnswers.size >=
+        this.alivePlayerIds().length
+      ) {
+        this.finishRecallRound();
+      }
+
+      return;
+    }
+
+    // Everyone left is ready: replay a ready
+    // message from one of them so the round
+    // starts exactly as it normally would.
+    const readyClient = this.clients.find(
+      (connectedClient) =>
+        this.recallReady.has(
+          connectedClient.sessionId,
+        ),
+    );
+
+    if (
+      readyClient &&
+      this.recallReady.size ===
+        this.state.players.size
+    ) {
+      this.messages.readyRecallRound(
+        readyClient,
+        { roundIndex: this.recallRound },
+      );
+    }
   }
 
   onDispose() {
