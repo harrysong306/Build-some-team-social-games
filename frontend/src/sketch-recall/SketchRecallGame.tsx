@@ -8,6 +8,7 @@ import type { PlayerView } from '../multiplayer/useLobbyState'
 import DistractionPhase from './DistractionPhase'
 import DrawingPhase from './DrawingPhase'
 import FinalGallery from './FinalGallery'
+import GuessAwards from './GuessAwards'
 import InstructionsScreen from './InstructionsScreen'
 import MultiplayerResultsScreen from './MultiplayerResultsScreen'
 import RecallPhase from './RecallPhase'
@@ -177,6 +178,9 @@ function SketchRecallGame({
             onExit()
           }}
         />
+
+        {/* FE-48: Best / Funniest Guess podiums */}
+        <GuessAwards room={room} />
 
         {/* FE-102: everyone's drawings, below the final leaderboard */}
         <FinalGallery

@@ -4,6 +4,7 @@ import {
   Player,
   PlayerQuestion,
 } from "./schema/GameState.js";
+import { GuessAwards } from "./GuessAwards.js";
 import { generateGameWords } from "../utils/WordGen.js";
 import { wordPacks, type WordPackTheme } from "../utils/sketchRecallWords.js";
 
@@ -184,6 +185,10 @@ export class LobbyRoom extends Room {
     new Map<string, RecallAnswer>();
   private recallDeadline = 0;
   private recallStarted = false;
+
+  // FE-48: every answer this game, for the
+  // Best / Funniest Guess podiums.
+  private guessAwards = new GuessAwards();
 
   // Correct options stay private on the server; only prompts and options are
   // synchronized to the lobby through the Player schema.
@@ -920,6 +925,47 @@ export class LobbyRoom extends Room {
           ).toString("base64"),
       });
     },
+
+    /*
+     * FE-48: the Best / Funniest Guess podiums,
+     * only once the game has finished (like the
+     * final gallery).
+     */
+    requestGuessAwards: (
+      client: Client,
+      _message: any,
+    ) => {
+      if (!this.isGameOver()) return;
+
+      client.send(
+        "guessAwards",
+        this.guessAwards.summary(),
+      );
+    },
+
+    // FE-48: vote for the funniest answer.
+    voteFunniestGuess: (
+      client: Client,
+      message: {
+        guessId: string;
+      },
+    ) => {
+      if (
+        !this.isGameOver() ||
+        !this.state.players.has(client.sessionId) ||
+        !this.guessAwards.vote(
+          client.sessionId,
+          String(message?.guessId),
+        )
+      ) {
+        return;
+      }
+
+      this.broadcast(
+        "guessAwards",
+        this.guessAwards.summary(),
+      );
+    },
   };
 
   private finishRecallRound() {
@@ -1011,6 +1057,23 @@ export class LobbyRoom extends Room {
           lives: player.lives,
         };
       },
+    );
+
+    // FE-48: keep this round's answers for the
+    // end-of-game podiums.
+    this.guessAwards.recordRound(
+      roundIndex,
+      correctWord,
+      this.recallDeadline,
+      ranked.map((entry) => ({
+        sessionId: entry.sessionId,
+        playerName:
+          this.state.players.get(entry.sessionId)
+            ?.name ?? "",
+        answer: entry.answer,
+        points: entry.pointsEarned,
+        submittedAt: entry.submittedAt,
+      })),
     );
 
     /*

@@ -1272,6 +1272,90 @@ client2.send("markReady", { ready: true });
     });
   });
 
+  describe("guess podiums (FE-48)", () => {
+    const sendAndWait = async (room: any, client: any, type: string, message: any = {}) => {
+      const handled = room.waitForMessage(type);
+      client.send(type, message);
+      await handled;
+    };
+
+    // Plays a 1-word game: Jordan exact, Sam wrong.
+    const playGame = async () => {
+      const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
+      const jordan = await colyseus.connectTo(room, { name: "Jordan" });
+      const sam = await colyseus.connectTo(room, { name: "Sam" });
+
+      room.state.phase = "playing";
+      room.state.gameWords.push("cat");
+
+      for (const client of [jordan, sam]) {
+        await sendAndWait(room, client, "readyRecallRound", { roundIndex: 0 });
+      }
+
+      await sendAndWait(room, jordan, "submitRecallAnswer", { roundIndex: 0, answer: "cat" });
+      await sendAndWait(room, sam, "submitRecallAnswer", { roundIndex: 0, answer: "a hairy potato" });
+
+      return { room, jordan, sam };
+    };
+
+    it("doesn't share the podiums before the game is over", async () => {
+      const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
+      const client = await colyseus.connectTo(room, { name: "Jordan" });
+
+      room.state.phase = "playing";
+      room.state.gameWords.push("cat");
+
+      let received = false;
+      client.onMessage("guessAwards", () => { received = true; });
+      await sendAndWait(room, client, "requestGuessAwards");
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      assert.strictEqual(received, false);
+    });
+
+    it("sends the best guesses and funniest candidates once the game is over", async () => {
+      const { room, jordan } = await playGame();
+
+      const awards = jordan.waitForMessage("guessAwards");
+      await sendAndWait(room, jordan, "requestGuessAwards");
+      const message: any = await awards;
+
+      // Jordan's exact answer is the best one.
+      assert.deepStrictEqual(
+        [message.best[0].playerName, message.best[0].answer, message.best[0].points],
+        ["Jordan", "cat", 4],
+      );
+      assert.deepStrictEqual(
+        message.candidates.map((guess: any) => [guess.playerName, guess.answer, guess.word]),
+        [["Sam", "a hairy potato", "cat"]],
+      );
+    });
+
+    it("broadcasts funniest votes to everyone", async () => {
+      const { room, jordan, sam } = await playGame();
+
+      const samSees = sam.waitForMessage("guessAwards");
+      await sendAndWait(room, jordan, "voteFunniestGuess", { guessId: `0:${sam.sessionId}` });
+      const message: any = await samSees;
+
+      assert.deepStrictEqual(
+        message.funniest.map((guess: any) => [guess.answer, guess.votes]),
+        [["a hairy potato", 1]],
+      );
+    });
+
+    it("ignores a vote for your own answer", async () => {
+      const { room, sam } = await playGame();
+
+      let received = false;
+      sam.onMessage("guessAwards", () => { received = true; });
+      await sendAndWait(room, sam, "voteFunniestGuess", { guessId: `0:${sam.sessionId}` });
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      assert.strictEqual(received, false);
+    });
+  });
+
   describe("drawing uploads", () => {
     it("stores submitted drawing bytes with the submitted drawing index", async () => {
       const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
