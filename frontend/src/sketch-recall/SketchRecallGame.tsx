@@ -146,6 +146,7 @@ function SketchRecallGame({
         drawings={savedDrawings}
         words={gameWords}
         anonymous={session.gameMode === 'anonymousRecall'}
+        buzzer={session.gameMode === 'buzzerRecall'}
         lives={room ? session.lives[room.sessionId] : undefined}
         usedAbilities={session.usedAbilities}
         onComplete={(score) => {

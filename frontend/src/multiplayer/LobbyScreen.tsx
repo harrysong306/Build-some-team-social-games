@@ -12,6 +12,7 @@ type LobbyScreenProps = {
 const GAME_MODES = [
   { value: "sketchRecall", label: "Sketch Recall" },
   { value: "anonymousRecall", label: "Sketch Recall: Anonymous Swap" },
+  { value: "buzzerRecall", label: "Sketch Recall: Buzzer" },
 ];
 
 const DRAWING_SPEEDS = [

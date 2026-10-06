@@ -8,6 +8,8 @@ import type { Room } from '@colyseus/sdk'
 
 import { scoreGuess } from './scoreUtils'
 import TeamAbilities from './TeamAbilities'
+import BuzzerPanel from './BuzzerPanel'
+import { useBuzzer } from './useBuzzer'
 
 type RecallPlayerResult = {
   sessionId: string
@@ -34,6 +36,9 @@ type RecallPhaseProps = {
   // BE-16: guess someone else's drawing,
   // sent by the server without the artist.
   anonymous?: boolean
+  // BE-21/22: players buzz in, and only the
+  // player holding the buzzer may answer.
+  buzzer?: boolean
   // Multiplayer only: this player's lives and
   // the team abilities already used.
   lives?: number
@@ -46,6 +51,7 @@ function RecallPhase({
   drawings,
   words,
   anonymous = false,
+  buzzer = false,
   lives,
   usedAbilities = [],
   onComplete,
@@ -115,6 +121,13 @@ function RecallPhase({
   // undefined means no lives (single player).
   const isOut =
     room !== null && lives !== undefined && lives <= 0
+
+  // Buzzer mode: only the buzzer holder may answer.
+  const buzzerState = useBuzzer(room, currentIndex, buzzer)
+  const buzzerBlocked =
+    buzzer &&
+    room !== null &&
+    buzzerState.holderId !== room.sessionId
 
   const currentDrawing = showAnonymous
     ? anonymousDrawing?.roundIndex === currentIndex
@@ -316,6 +329,7 @@ function RecallPhase({
       if (
         !room ||
         isOut ||
+        buzzerBlocked ||
         !roundStarted ||
         submitted ||
         !answer.trim()
@@ -731,7 +745,8 @@ function RecallPhase({
                 room
                   ? !roundStarted ||
                     submitted ||
-                    isOut
+                    isOut ||
+                    buzzerBlocked
                   : checked
               }
               onChange={(event) =>
@@ -801,6 +816,20 @@ function RecallPhase({
               </p>
             )}
 
+            {room && buzzer && (
+              <BuzzerPanel
+                buzzer={buzzerState}
+                mySessionId={room.sessionId}
+                roundStarted={roundStarted}
+                disabled={isOut}
+                onBuzz={() =>
+                  room.send('buzz', {
+                    roundIndex: currentIndex,
+                  })
+                }
+              />
+            )}
+
             {room && (
               <TeamAbilities
                 key={currentIndex}
@@ -834,6 +863,7 @@ function RecallPhase({
                     !roundStarted ||
                     submitted ||
                     isOut ||
+                    buzzerBlocked ||
                     !answer.trim()
                   }
                   onClick={
