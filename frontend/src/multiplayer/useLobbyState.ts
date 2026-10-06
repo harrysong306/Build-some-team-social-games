@@ -27,6 +27,8 @@ export function useLobbyState(room: Room | null) {
   const [drawingSpeed, setDrawingSpeedState] = useState<string>("normal");
   const [drawingCount, setDrawingCountState] = useState<number>(25);
   const [wordTheme, setWordThemeState] = useState<string>("general");
+  const [playerQuestionsEnabled, setPlayerQuestionsEnabledState] =
+     useState<boolean>(true);
   const [phase, setPhase] = useState<string>("lobby");
   const [gameWords, setGameWords] = useState<string[]>([]);
   const [assignedPlayerQuestions, setAssignedPlayerQuestions] =
@@ -43,11 +45,13 @@ export function useLobbyState(room: Room | null) {
       setDrawingSpeedState(state.drawingSpeed ?? "normal");
       setDrawingCountState(state.drawingCount ?? 25);
       setWordThemeState(state.wordTheme ?? "general");
+      setPlayerQuestionsEnabledState(
+        state.playerQuestionsEnabled ?? true,
+      );
 
       setPhase(state.phase);
       setGameWords(Array.from(state.gameWords ?? []));
     };
-
     room.onStateChange(handleStateChange);
 
     const removeAssignedQuestionsListener = room.onMessage?.(
@@ -61,7 +65,11 @@ export function useLobbyState(room: Room | null) {
       room.onStateChange.remove(handleStateChange);
       removeAssignedQuestionsListener?.();
     };
-  }, [room]);
+  }, 
+  [room]);
+  const setPlayerQuestionsEnabled = (enabled: boolean) => {
+     room?.send("setPlayerQuestionsEnabled", { enabled });
+     };
 
   const toggleReady = () => {
     if (!room) return;
@@ -118,6 +126,7 @@ export function useLobbyState(room: Room | null) {
     drawingSpeed,
     drawingCount,
     wordTheme,
+    playerQuestionsEnabled,
     phase,
     gameWords,
     assignedPlayerQuestions,
@@ -128,6 +137,7 @@ export function useLobbyState(room: Room | null) {
     submitPlayerQuestion,
     setDrawingCount,
     setWordTheme,
+    setPlayerQuestionsEnabled,
     startGame,
     returnToLobby,
   };
