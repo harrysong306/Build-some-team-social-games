@@ -473,6 +473,25 @@ export class LobbyRoom extends Room {
       this.state.drawingCount =
         count;
     },
+    setPlayerQuestionsEnabled: (
+     client: Client,
+     message: { enabled: boolean },
+    ) => {
+      const player =
+        this.state.players.get(
+          client.sessionId,
+        );
+
+     // Only the host can change this setting.
+     if (!player?.isHost) return;
+
+     if (typeof message.enabled !== "boolean") {
+     return;
+     }
+
+     this.state.playerQuestionsEnabled =
+     message.enabled;
+    },
 
     setWordTheme: (
       client: Client,
