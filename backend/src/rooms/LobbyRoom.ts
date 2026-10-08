@@ -242,6 +242,7 @@ export class LobbyRoom extends Room {
     ) => {
       const player = this.state.players.get(client.sessionId);
       if (!player || player.ready) return;
+      if (!this.state.playerQuestionsEnabled) return;
 
       const prompt = message.prompt?.trim().slice(0, 120);
       const options = Array.isArray(message.options)
