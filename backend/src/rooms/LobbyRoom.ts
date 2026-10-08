@@ -552,49 +552,52 @@ export class LobbyRoom extends Room {
         ...generateGameWords(wordCount, this.state.wordTheme as WordPackTheme),
       );
 
-      // Assign each personal question to one random player other than its
-      // author. The author never receives their own question.
-      const players = [...this.state.players.entries()];
-      const assignedQuestions = new Map<string, AssignedPlayerQuestion[]>();
+if (this.state.playerQuestionsEnabled) {
+  // Assign each personal question to one random player other than its
+  // author. The author never receives their own question.
+  const players = [...this.state.players.entries()];
+  const assignedQuestions = new Map<string, AssignedPlayerQuestion[]>();
 
-      for (const [ownerSessionId, owner] of players) {
-        const eligiblePlayers = players.filter(
-          ([sessionId]) => sessionId !== ownerSessionId,
-        );
+  for (const [ownerSessionId, owner] of players) {
+    const eligiblePlayers = players.filter(
+      ([sessionId]) => sessionId !== ownerSessionId,
+    );
 
-        for (const [questionIndex, question] of (
-          this.playerQuestions.get(ownerSessionId) ?? []
-        ).entries()) {
-          if (eligiblePlayers.length === 0) continue;
+    for (const [questionIndex, question] of (
+      this.playerQuestions.get(ownerSessionId) ?? []
+    ).entries()) {
+      if (eligiblePlayers.length === 0) continue;
 
-          const [recipientSessionId] = eligiblePlayers[
-            Math.floor(Math.random() * eligiblePlayers.length)
-          ];
+      const [recipientSessionId] = eligiblePlayers[
+        Math.floor(Math.random() * eligiblePlayers.length)
+      ];
 
-          const recipientQuestions =
-            assignedQuestions.get(recipientSessionId) ?? [];
+      const recipientQuestions =
+        assignedQuestions.get(recipientSessionId) ?? [];
 
-          recipientQuestions.push({
-            ownerSessionId,
-            questionIndex,
-            ownerName: owner.name,
-            prompt: question.prompt,
-            options: question.options,
-          });
-          assignedQuestions.set(
-            recipientSessionId,
-            recipientQuestions,
-          );
-        }
-      }
+      recipientQuestions.push({
+        ownerSessionId,
+        questionIndex,
+        ownerName: owner.name,
+        prompt: question.prompt,
+        options: question.options,
+      });
 
-      for (const [recipientSessionId, questions] of assignedQuestions) {
-        this.clients
-          .find((connectedClient) =>
-            connectedClient.sessionId === recipientSessionId,
-          )
-          ?.send("assigned_player_questions", questions);
-          }
+      assignedQuestions.set(
+        recipientSessionId,
+        recipientQuestions,
+      );
+    }
+  }
+
+  for (const [recipientSessionId, questions] of assignedQuestions) {
+    this.clients
+      .find((connectedClient) =>
+        connectedClient.sessionId === recipientSessionId,
+      )
+      ?.send("assigned_player_questions", questions);
+  }
+}
       // Start each new game with a clean scoreboard.
       for (
         const currentPlayer of
