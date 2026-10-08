@@ -71,7 +71,8 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
 
   const isHost = me?.isHost ?? false;
   const questionCount = me?.questions?.length ?? 0;
-  const questionsComplete = questionCount === 2;
+  const questionsComplete =
+  !playerQuestionsEnabled || questionCount === 2;
 
   const allReady =
     playerList.length > 0 &&
@@ -185,7 +186,9 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
           )}
         </ul>
 
-        {!questionsComplete && !me?.ready && (
+        {playerQuestionsEnabled &&
+          !questionsComplete &&
+          !me?.ready && (
           <section className="mt-6 rounded-lg border border-amber-500/30 bg-[#160b06] p-4">
             <p className="text-sm font-semibold text-amber-300">
               Personal questions ({questionCount}/2)
