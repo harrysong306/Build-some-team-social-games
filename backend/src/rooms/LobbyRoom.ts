@@ -213,9 +213,10 @@ export class LobbyRoom extends Room {
       if (player) {
         if (
           message.ready &&
+          this.state.playerQuestionsEnabled &&
           (this.playerQuestions.get(client.sessionId)?.length ?? 0) !==
             REQUIRED_PLAYER_QUESTIONS
-        ) {
+) {
           client.send("questions_required", {
             reason: `Submit ${REQUIRED_PLAYER_QUESTIONS} questions before readying up.`,
           });
@@ -492,6 +493,10 @@ export class LobbyRoom extends Room {
 
      this.state.playerQuestionsEnabled =
      message.enabled;
+    
+     for (const player of this.state.players.values()) {
+    player.ready = false;
+  }
     },
 
     setWordTheme: (
@@ -524,7 +529,7 @@ export class LobbyRoom extends Room {
     startGame: (
       client: Client,
       _message: any,
-    ) => {
+    ) => {  
       const player =
         this.state.players.get(
           client.sessionId,
