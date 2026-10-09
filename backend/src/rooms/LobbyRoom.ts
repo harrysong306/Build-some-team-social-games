@@ -251,9 +251,10 @@ export class LobbyRoom extends Room {
       if (player) {
         if (
           message.ready &&
+          this.state.playerQuestionsEnabled &&
           (this.playerQuestions.get(client.sessionId)?.length ?? 0) !==
             REQUIRED_PLAYER_QUESTIONS
-        ) {
+) {
           client.send("questions_required", {
             reason: `Submit ${REQUIRED_PLAYER_QUESTIONS} questions before readying up.`,
           });
@@ -269,6 +270,21 @@ export class LobbyRoom extends Room {
         player.ready = message.ready;
       }
     },
+    replacePlayerQuestions: (
+      client: Client,
+      _message: any,
+    ) => {
+      const player = this.state.players.get(
+       client.sessionId,
+      );
+
+      if (!player || player.ready) return;
+      if (!this.state.playerQuestionsEnabled) return;
+      if (this.state.phase !== "lobby") return;
+
+      this.playerQuestions.set(client.sessionId, []);
+      player.questions.clear();
+    },
 
     submitPlayerQuestion: (
       client: Client,
@@ -280,6 +296,7 @@ export class LobbyRoom extends Room {
     ) => {
       const player = this.state.players.get(client.sessionId);
       if (!player || player.ready) return;
+      if (!this.state.playerQuestionsEnabled) return;
 
       const prompt = message.prompt?.trim().slice(0, 120);
       const options = Array.isArray(message.options)
@@ -613,6 +630,29 @@ export class LobbyRoom extends Room {
       this.state.drawingCount =
         count;
     },
+    setPlayerQuestionsEnabled: (
+     client: Client,
+     message: { enabled: boolean },
+    ) => {
+      const player =
+        this.state.players.get(
+          client.sessionId,
+        );
+
+     // Only the host can change this setting.
+     if (!player?.isHost) return;
+
+     if (typeof message.enabled !== "boolean") {
+     return;
+     }
+
+     this.state.playerQuestionsEnabled =
+     message.enabled;
+    
+     for (const player of this.state.players.values()) {
+    player.ready = false;
+  }
+    },
 
     setWordTheme: (
       client: Client,
@@ -644,7 +684,7 @@ export class LobbyRoom extends Room {
     startGame: (
       client: Client,
       _message: any,
-    ) => {
+    ) => {  
       const player =
         this.state.players.get(
           client.sessionId,
@@ -672,67 +712,73 @@ export class LobbyRoom extends Room {
         ...generateGameWords(wordCount, this.state.wordTheme as WordPackTheme),
       );
 
-      // Assign each personal question to one random player other than its
-      // author. The author never receives their own question.
-      const players = [...this.state.players.entries()];
-      const assignedQuestions = new Map<string, AssignedPlayerQuestion[]>();
-
-      for (const [ownerSessionId, owner] of players) {
-        const eligiblePlayers = players.filter(
-          ([sessionId]) => sessionId !== ownerSessionId,
-        );
-
-        for (const [questionIndex, question] of (
-          this.playerQuestions.get(ownerSessionId) ?? []
-        ).entries()) {
-          if (eligiblePlayers.length === 0) continue;
-
-          const [recipientSessionId] = eligiblePlayers[
-            Math.floor(Math.random() * eligiblePlayers.length)
-          ];
-
-          const recipientQuestions =
-            assignedQuestions.get(recipientSessionId) ?? [];
-
-          recipientQuestions.push({
-            ownerSessionId,
-            questionIndex,
-            ownerName: owner.name,
-            prompt: question.prompt,
-            options: question.options,
-          });
-          assignedQuestions.set(
-            recipientSessionId,
-            recipientQuestions,
-          );
-        }
-      }
-
-      for (const [recipientSessionId, questions] of assignedQuestions) {
-        this.clients
-          .find((connectedClient) =>
-            connectedClient.sessionId === recipientSessionId,
-          )
-          ?.send("assigned_player_questions", questions);
-          }
-
-      // BE-32: remember who may answer which question this game.
+      // Reset distraction state for every new game.
       this.assignedPlayerQuestionIds.clear();
       this.playerQuestionResults.clear();
       this.distractionProgress.clear();
 
-      for (const [recipientSessionId, questions] of assignedQuestions) {
-        this.assignedPlayerQuestionIds.set(
-          recipientSessionId,
-          new Set(
-            questions.map(
-              (question) =>
-                `${question.ownerSessionId}:${question.questionIndex}`,
-            ),
-          ),
-        );
-      }
+      const assignedQuestions = new Map<
+        string,
+        AssignedPlayerQuestion[]
+      >();
 
+      if (this.state.playerQuestionsEnabled) {
+        // Assign each personal question to a random player other than its author.
+        const players = [...this.state.players.entries()];
+
+        for (const [ownerSessionId, owner] of players) {
+          const eligiblePlayers = players.filter(
+            ([sessionId]) => sessionId !== ownerSessionId,
+          );
+
+          for (const [questionIndex, question] of (
+            this.playerQuestions.get(ownerSessionId) ?? []
+          ).entries()) {
+            if (eligiblePlayers.length === 0) continue;
+
+            const [recipientSessionId] = eligiblePlayers[
+              Math.floor(Math.random() * eligiblePlayers.length)
+            ];
+
+            const recipientQuestions =
+              assignedQuestions.get(recipientSessionId) ?? [];
+
+            recipientQuestions.push({
+              ownerSessionId,
+              questionIndex,
+              ownerName: owner.name,
+              prompt: question.prompt,
+              options: question.options,
+            });
+
+            assignedQuestions.set(
+              recipientSessionId,
+              recipientQuestions,
+            );
+          }
+        }
+
+        for (const [recipientSessionId, questions] of assignedQuestions) {
+          this.clients
+            .find((connectedClient) =>
+              connectedClient.sessionId === recipientSessionId,
+            )
+            ?.send("assigned_player_questions", questions);
+        }
+
+        // Remember which personal questions each player may answer.
+        for (const [recipientSessionId, questions] of assignedQuestions) {
+          this.assignedPlayerQuestionIds.set(
+            recipientSessionId,
+            new Set(
+              questions.map(
+                (question) =>
+                  `${question.ownerSessionId}:${question.questionIndex}`,
+              ),
+            ),
+          );
+        }
+      }
       // Start each new game with a clean scoreboard.
       for (
         const currentPlayer of

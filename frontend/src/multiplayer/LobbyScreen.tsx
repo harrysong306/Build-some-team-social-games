@@ -40,6 +40,7 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
     drawingSpeed,
     drawingCount,
     wordTheme,
+    playerQuestionsEnabled,
     phase,
     gameWords,
     assignedPlayerQuestions,
@@ -49,8 +50,10 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
     setDrawingSpeed,
     setDrawingCount,
     setWordTheme,
+    setPlayerQuestionsEnabled,
     startGame,
     submitPlayerQuestion,
+    replacePlayerQuestions,
     returnToLobby,
   } = useLobbyState(room);
 
@@ -69,7 +72,8 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
 
   const isHost = me?.isHost ?? false;
   const questionCount = me?.questions?.length ?? 0;
-  const questionsComplete = questionCount === 2;
+  const questionsComplete =
+  !playerQuestionsEnabled || questionCount === 2;
 
   const allReady =
     playerList.length > 0 &&
@@ -183,7 +187,20 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
           )}
         </ul>
 
-        {!questionsComplete && !me?.ready && (
+        {playerQuestionsEnabled &&
+         questionCount === 2 &&
+         !me?.ready && (
+          <button
+           type="button"
+            onClick={replacePlayerQuestions}
+            className="mt-4 w-full rounded-lg border border-amber-500/40 px-4 py-3 text-sm font-semibold text-amber-300 hover:bg-amber-500/10"
+          >
+            CHANGE QUESTIONS
+          </button>
+        )}
+        {playerQuestionsEnabled &&
+          !questionsComplete &&
+          !me?.ready && (
           <section className="mt-6 rounded-lg border border-amber-500/30 bg-[#160b06] p-4">
             <p className="text-sm font-semibold text-amber-300">
               Personal questions ({questionCount}/2)
@@ -387,6 +404,38 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
             {WORD_THEMES.find(
               (theme) => theme.value === wordTheme,
             )?.label ?? wordTheme}
+          </p>
+        )}
+                {isHost ? (
+          <div className="mt-4">
+            <label
+              htmlFor="player-questions"
+              className="mb-2 block text-sm text-white/60"
+            >
+              Player-created questions
+            </label>
+
+            <button
+              id="player-questions"
+              type="button"
+              onClick={() =>
+                setPlayerQuestionsEnabled(
+                  !playerQuestionsEnabled,
+                )
+              }
+              className="w-full rounded-lg border border-amber-500/30 bg-[#211006] px-4 py-3 text-left text-white"
+            >
+              {playerQuestionsEnabled
+                ? "Enabled"
+                : "Disabled"}
+            </button>
+          </div>
+        ) : (
+          <p className="mt-4 text-sm text-white/60">
+            Player-created questions:{" "}
+            {playerQuestionsEnabled
+              ? "Enabled"
+              : "Disabled"}
           </p>
         )}
 
