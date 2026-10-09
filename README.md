@@ -36,8 +36,19 @@ Notes:
 
 ### Starting:
 
-1. `npm install` in base directory. Ensure node 22+ is installed.
+1. `npm install` in base directory. Ensure node 22+ is installed. or better 'npm ci' for better safer lock.json package handeling.
 2. Reference each directory README for specific instructions.
+
+### Testing procedure:
+1. in the frontend run npm test.
+2. again in the front end run npm run build.
+3. in the back end run npm test.
+these steps would make it so we know the tests and build run properly.
+
+To run the game in test sessions:
+1. in frontend npm run dev
+2. in back end in another terminal run npm run dev.
+we can have multiple player in differnt lobby in the same system from different browser page. 
 
 
  ### Current Games:
