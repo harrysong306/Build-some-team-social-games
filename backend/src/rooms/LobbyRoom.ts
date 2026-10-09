@@ -232,6 +232,21 @@ export class LobbyRoom extends Room {
         player.ready = message.ready;
       }
     },
+    replacePlayerQuestions: (
+      client: Client,
+      _message: any,
+    ) => {
+      const player = this.state.players.get(
+       client.sessionId,
+      );
+
+      if (!player || player.ready) return;
+      if (!this.state.playerQuestionsEnabled) return;
+      if (this.state.phase !== "lobby") return;
+
+      this.playerQuestions.set(client.sessionId, []);
+      player.questions.clear();
+    },
 
     submitPlayerQuestion: (
       client: Client,

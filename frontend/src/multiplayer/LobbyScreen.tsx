@@ -53,6 +53,7 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
     setPlayerQuestionsEnabled,
     startGame,
     submitPlayerQuestion,
+    replacePlayerQuestions,
     returnToLobby,
   } = useLobbyState(room);
 
@@ -186,6 +187,17 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
           )}
         </ul>
 
+        {playerQuestionsEnabled &&
+         questionCount === 2 &&
+         !me?.ready && (
+          <button
+           type="button"
+            onClick={replacePlayerQuestions}
+            className="mt-4 w-full rounded-lg border border-amber-500/40 px-4 py-3 text-sm font-semibold text-amber-300 hover:bg-amber-500/10"
+          >
+            CHANGE QUESTIONS
+          </button>
+        )}
         {playerQuestionsEnabled &&
           !questionsComplete &&
           !me?.ready && (
