@@ -634,6 +634,7 @@ export class LobbyRoom extends Room {
      client: Client,
      message: { enabled: boolean },
     ) => {
+      if (this.state.phase !== "lobby") return;
       const player =
         this.state.players.get(
           client.sessionId,
