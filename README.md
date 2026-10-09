@@ -166,9 +166,9 @@ The server is responsible for multiplayer scoring and keeps the players synchron
 
 Players recall the words using their own saved drawings.
 
-### Anonymous Recall
+### Sketch Recall: Anonymous Swap
 
-In Anonymous Recall mode, players can receive another player's drawing without being shown the artist's identity and attempt to recall the original word from it.
+In Sketch Recall: Anonymous Swap mode, players can receive another player's drawing without being shown the artist's identity and attempt to recall the original word from it.
 
 ## Team Abilities
 

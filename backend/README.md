@@ -62,7 +62,7 @@ It handles areas such as:
 - multiplayer scoring
 - drawing uploads
 - final gallery data
-- Anonymous Recall
+- Sketch Recall: Anonymous Swap
 - team abilities
 - returning players to the lobby after a game
 

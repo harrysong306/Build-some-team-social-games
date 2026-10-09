@@ -112,13 +112,15 @@ For multiplayer tests, use two browser windows or tabs and connect both players 
 ### Steps
 
 1. Create a room with two players.
-2. Have only one player select Ready.
-3. Check the host's Start Game button.
-4. Have the second player select Ready.
-5. Start the game.
+2. Ensure player-created questions are disabled. If they are enabled, have each player submit the required two questions before selecting Ready.
+3. Have only one player select Ready.
+4. Check the host's Start Game button.
+5. Have the second player select Ready.
+6. Start the game.
 
 ### Expected Result
 
+- If player-created questions are enabled, players cannot select Ready until their required two questions have been submitted.
 - The game cannot start while a player is not ready.
 - Once all players are ready, the host can start the game.
 - Both players move into the game.
@@ -192,11 +194,12 @@ For multiplayer tests, use two browser windows or tabs and connect both players 
 
 1. Complete all drawings in the round.
 2. Save the final drawing.
+3. On the "Drawing phase complete" screen, select Continue.
 
 ### Expected Result
 
-- The Drawing phase finishes.
-- The Distraction phase starts.
+- The "Drawing phase complete" screen appears after the final drawing is saved.
+- Selecting Continue opens the Distraction phase.
 - The player's saved drawings are kept for the Recall phase.
 
 ---
@@ -280,7 +283,7 @@ Submit several different types of answers:
 
 ---
 
-## AT-14 - Anonymous Recall
+## AT-14 - Sketch Recall: Anonymous Swap
 
 ### Steps
 
