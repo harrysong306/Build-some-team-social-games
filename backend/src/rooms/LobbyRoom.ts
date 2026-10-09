@@ -6,6 +6,7 @@ import {
 } from "./schema/GameState.js";
 import { generateGameWords } from "../utils/WordGen.js";
 import { wordPacks, type WordPackTheme } from "../utils/sketchRecallWords.js";
+import { distractionQuestions } from "../utils/distractionQuestions.js";
 
 const VALID_GAME_MODES = ["sketchRecall", "anonymousRecall", "test"] as const;
 type GameMode = typeof VALID_GAME_MODES[number];
@@ -19,6 +20,34 @@ type DrawingSpeed = typeof VALID_DRAWING_SPEEDS[number];
 
 const REQUIRED_PLAYER_QUESTIONS = 2;
 const QUESTION_OPTION_COUNT = 4;
+
+// BE-15: a player finishes the distraction phase after answering at
+// least DISTRACTION_MIN_ANSWERS questions with DISTRACTION_CORRECT_REQUIRED
+// of them right (the same rule as the frontend's DistractionPhase).
+// Answers to player-submitted questions count too.
+const DISTRACTION_MIN_ANSWERS = 5;
+const DISTRACTION_CORRECT_REQUIRED = 3;
+
+type DistractionProgress = {
+  // Shuffled bank indexes and how far through them the player is.
+  order: number[];
+  position: number;
+  // The bank question currently shown to the player, if any.
+  current: number | null;
+  answered: number;
+  correct: number;
+};
+
+const shuffled = <T>(items: T[]) => {
+  const copy = [...items];
+
+  for (let index = copy.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    [copy[index], copy[swapIndex]] = [copy[swapIndex], copy[index]];
+  }
+
+  return copy;
+};
 
 type ServerPlayerQuestion = {
   prompt: string;
@@ -189,6 +218,15 @@ export class LobbyRoom extends Room {
   // synchronized to the lobby through the Player schema.
   private playerQuestions = new Map<string, ServerPlayerQuestion[]>();
 
+  // BE-32: which player questions each player was given this game
+  // (recipient sessionId -> "ownerSessionId:questionIndex"), and the
+  // result of each player's first answer to them.
+  private assignedPlayerQuestionIds = new Map<string, Set<string>>();
+  private playerQuestionResults = new Map<string, boolean>();
+
+  // BE-15: each player's progress through the distraction phase.
+  private distractionProgress = new Map<string, DistractionProgress>();
+
   messages = {
     yourMessageType: (
       client: Client,
@@ -304,17 +342,32 @@ export class LobbyRoom extends Room {
           answerIndex: number;
         },
       ) => {
+        const questionId =
+          `${message?.ownerSessionId}:${message?.questionIndex}`;
+
+        // BE-32: player questions never block the distraction phase, so
+        // every answer gets a result, even a rejected one (counted as
+        // wrong). Otherwise the client would wait for a reply forever.
+        const reply = (correct: boolean) => {
+          client.send("player_question_result", {
+            questionId,
+            correct,
+            progress: this.distractionStatus(client.sessionId),
+          });
+        };
+
         const questionIndex = Number(
-          message.questionIndex,
+          message?.questionIndex,
         );
         const answerIndex = Number(
-          message.answerIndex,
+          message?.answerIndex,
         );
 
         if (
           !Number.isInteger(questionIndex) ||
           !Number.isInteger(answerIndex)
         ) {
+          reply(false);
           return;
         }
 
@@ -322,18 +375,105 @@ export class LobbyRoom extends Room {
           message.ownerSessionId,
         )?.[questionIndex];
 
+        // Only the player a question was assigned to can answer it, so
+        // nobody (including its author) can probe for the right option.
+        const assigned = this.assignedPlayerQuestionIds
+          .get(client.sessionId)
+          ?.has(questionId);
+
         if (
+          this.state.phase !== "playing" ||
+          !assigned ||
           !question ||
           answerIndex < 0 ||
           answerIndex >= QUESTION_OPTION_COUNT
         ) {
+          reply(false);
           return;
         }
 
-        client.send("player_question_result", {
-          questionId: `${message.ownerSessionId}:${message.questionIndex}`,
-          correct:
-          answerIndex === Number(question.correctOption),
+        // The first answer counts; answering again can't change it.
+        const resultKey = `${client.sessionId}|${questionId}`;
+        const previous = this.playerQuestionResults.get(resultKey);
+
+        if (previous !== undefined) {
+          reply(previous);
+          return;
+        }
+
+        const correct =
+          answerIndex === Number(question.correctOption);
+
+        this.playerQuestionResults.set(resultKey, correct);
+        this.recordDistractionAnswer(client.sessionId, correct);
+        reply(correct);
+      },
+
+      // BE-15: send the player their next bank question, without the
+      // answer. Asking again before answering resends the same one.
+      requestDistractionQuestion: (
+        client: Client,
+        _message: any,
+      ) => {
+        if (this.state.phase !== "playing") return;
+
+        const progress = this.getDistractionProgress(client.sessionId);
+
+        if (progress.current === null) {
+          if (progress.position >= progress.order.length) {
+            progress.order = shuffled(progress.order);
+            progress.position = 0;
+          }
+
+          progress.current = progress.order[progress.position];
+          progress.position += 1;
+        }
+
+        const question = distractionQuestions[progress.current];
+
+        client.send("distractionQuestion", {
+          questionId: progress.current,
+          question: question.question,
+          options: shuffled(question.options),
+        });
+      },
+
+      // BE-15: check an answer to the current bank question. An empty
+      // answer means the player ran out of time, which counts as wrong.
+      submitDistractionAnswer: (
+        client: Client,
+        message: {
+          questionId: number;
+          answer: string;
+        },
+      ) => {
+        const progress = this.getDistractionProgress(client.sessionId);
+        const questionId = message?.questionId;
+
+        if (
+          this.state.phase !== "playing" ||
+          progress.current === null ||
+          questionId !== progress.current
+        ) {
+          client.send("distractionResult", {
+            questionId,
+            correct: false,
+            progress: this.distractionStatus(client.sessionId),
+          });
+          return;
+        }
+
+        const correct =
+          message.answer ===
+          distractionQuestions[progress.current].answer;
+
+        progress.current = null;
+        this.recordDistractionAnswer(client.sessionId, correct);
+
+        client.send("distractionResult", {
+          questionId,
+          correct,
+          progress: this.distractionStatus(client.sessionId),
         });
       },
 
@@ -572,52 +712,73 @@ export class LobbyRoom extends Room {
         ...generateGameWords(wordCount, this.state.wordTheme as WordPackTheme),
       );
 
-if (this.state.playerQuestionsEnabled) {
-  // Assign each personal question to one random player other than its
-  // author. The author never receives their own question.
-  const players = [...this.state.players.entries()];
-  const assignedQuestions = new Map<string, AssignedPlayerQuestion[]>();
+      // Reset distraction state for every new game.
+      this.assignedPlayerQuestionIds.clear();
+      this.playerQuestionResults.clear();
+      this.distractionProgress.clear();
 
-  for (const [ownerSessionId, owner] of players) {
-    const eligiblePlayers = players.filter(
-      ([sessionId]) => sessionId !== ownerSessionId,
-    );
+      const assignedQuestions = new Map<
+        string,
+        AssignedPlayerQuestion[]
+      >();
 
-    for (const [questionIndex, question] of (
-      this.playerQuestions.get(ownerSessionId) ?? []
-    ).entries()) {
-      if (eligiblePlayers.length === 0) continue;
+      if (this.state.playerQuestionsEnabled) {
+        // Assign each personal question to a random player other than its author.
+        const players = [...this.state.players.entries()];
 
-      const [recipientSessionId] = eligiblePlayers[
-        Math.floor(Math.random() * eligiblePlayers.length)
-      ];
+        for (const [ownerSessionId, owner] of players) {
+          const eligiblePlayers = players.filter(
+            ([sessionId]) => sessionId !== ownerSessionId,
+          );
 
-      const recipientQuestions =
-        assignedQuestions.get(recipientSessionId) ?? [];
+          for (const [questionIndex, question] of (
+            this.playerQuestions.get(ownerSessionId) ?? []
+          ).entries()) {
+            if (eligiblePlayers.length === 0) continue;
 
-      recipientQuestions.push({
-        ownerSessionId,
-        questionIndex,
-        ownerName: owner.name,
-        prompt: question.prompt,
-        options: question.options,
-      });
+            const [recipientSessionId] = eligiblePlayers[
+              Math.floor(Math.random() * eligiblePlayers.length)
+            ];
 
-      assignedQuestions.set(
-        recipientSessionId,
-        recipientQuestions,
-      );
-    }
-  }
+            const recipientQuestions =
+              assignedQuestions.get(recipientSessionId) ?? [];
 
-  for (const [recipientSessionId, questions] of assignedQuestions) {
-    this.clients
-      .find((connectedClient) =>
-        connectedClient.sessionId === recipientSessionId,
-      )
-      ?.send("assigned_player_questions", questions);
-  }
-}
+            recipientQuestions.push({
+              ownerSessionId,
+              questionIndex,
+              ownerName: owner.name,
+              prompt: question.prompt,
+              options: question.options,
+            });
+
+            assignedQuestions.set(
+              recipientSessionId,
+              recipientQuestions,
+            );
+          }
+        }
+
+        for (const [recipientSessionId, questions] of assignedQuestions) {
+          this.clients
+            .find((connectedClient) =>
+              connectedClient.sessionId === recipientSessionId,
+            )
+            ?.send("assigned_player_questions", questions);
+        }
+
+        // Remember which personal questions each player may answer.
+        for (const [recipientSessionId, questions] of assignedQuestions) {
+          this.assignedPlayerQuestionIds.set(
+            recipientSessionId,
+            new Set(
+              questions.map(
+                (question) =>
+                  `${question.ownerSessionId}:${question.questionIndex}`,
+              ),
+            ),
+          );
+        }
+      }
       // Start each new game with a clean scoreboard.
       for (
         const currentPlayer of
@@ -964,6 +1125,51 @@ if (this.state.playerQuestionsEnabled) {
       });
     },
   };
+
+  // BE-15: distraction phase helpers.
+  private getDistractionProgress(sessionId: string) {
+    let progress = this.distractionProgress.get(sessionId);
+
+    if (!progress) {
+      progress = {
+        order: shuffled(
+          distractionQuestions.map((_question, index) => index),
+        ),
+        position: 0,
+        current: null,
+        answered: 0,
+        correct: 0,
+      };
+      this.distractionProgress.set(sessionId, progress);
+    }
+
+    return progress;
+  }
+
+  private recordDistractionAnswer(
+    sessionId: string,
+    correct: boolean,
+  ) {
+    const progress = this.getDistractionProgress(sessionId);
+
+    progress.answered += 1;
+    if (correct) progress.correct += 1;
+  }
+
+  private distractionStatus(sessionId: string) {
+    const progress = this.distractionProgress.get(sessionId);
+    const answered = progress?.answered ?? 0;
+    const correct = progress?.correct ?? 0;
+
+    return {
+      answered,
+      correct,
+      required: DISTRACTION_CORRECT_REQUIRED,
+      complete:
+        answered >= DISTRACTION_MIN_ANSWERS &&
+        correct >= DISTRACTION_CORRECT_REQUIRED,
+    };
+  }
 
   private finishRecallRound() {
     if (!this.recallStarted) return;
