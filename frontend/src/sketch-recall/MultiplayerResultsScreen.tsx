@@ -5,8 +5,6 @@ type MultiplayerResultsScreenProps = {
   sessionId: string
   onPlayAgain: () => void
   onExit: () => void
-  // Lives left per sessionId, when the game has them.
-  lives?: Record<string, number>
   // Leave the room entirely.
   onLeave?: () => void
 }
@@ -15,6 +13,7 @@ type FinalStanding = {
   sessionId: string
   playerName: string
   score: number
+  averageResponseTimeMs: number | null
   rank: number
 }
 
@@ -23,16 +22,19 @@ function MultiplayerResultsScreen({
   sessionId,
   onPlayAgain,
   onExit,
-  lives,
   onLeave,
 }: MultiplayerResultsScreenProps) {
   /*
-   * Final leaderboard ranking is based
-   * only on the accumulated Recall score.
+   * Final leaderboard ranking:
    *
-   * Equal totals share the same rank.
-   * Player name is used only to keep the
-   * display order deterministic.
+   * 1. Higher accumulated Recall score.
+   * 2. Faster average Recall response time.
+   * 3. Player name only keeps the display order
+   *    deterministic when score and time are
+   *    still exactly tied.
+   *
+   * Anonymous Recall artist rounds are excluded
+   * from the response-time average by the server.
    */
   const sortedPlayers =
     Object.entries(players)
@@ -40,25 +42,92 @@ function MultiplayerResultsScreen({
         ([
           playerSessionId,
           player,
-        ]) => ({
-          sessionId:
-            playerSessionId,
-          playerName:
-            player.name,
-          score:
-            player.score,
-        }),
+        ]) => {
+          const responseCount =
+            player.recallResponseCount ?? 0
+
+          const responseTimeMs =
+            player.recallResponseTimeMs ?? 0
+
+          const averageResponseTimeMs =
+            responseCount > 0
+              ? responseTimeMs /
+                responseCount
+              : null
+
+          return {
+            sessionId:
+              playerSessionId,
+            playerName:
+              player.name,
+            score:
+              player.score,
+            averageResponseTimeMs,
+          }
+        },
       )
       .sort(
-        (left, right) =>
-          right.score -
-            left.score ||
-          left.playerName.localeCompare(
-            right.playerName,
-          ),
+        (left, right) => {
+          if (
+            left.score !==
+            right.score
+          ) {
+            return (
+              right.score -
+              left.score
+            )
+          }
+
+          /*
+           * A player with recorded timing wins
+           * a score tie over one with no eligible
+           * Recall timing data.
+           */
+          if (
+            left.averageResponseTimeMs ===
+              null &&
+            right.averageResponseTimeMs !==
+              null
+          ) {
+            return 1
+          }
+
+          if (
+            left.averageResponseTimeMs !==
+              null &&
+            right.averageResponseTimeMs ===
+              null
+          ) {
+            return -1
+          }
+
+          if (
+            left.averageResponseTimeMs !==
+              null &&
+            right.averageResponseTimeMs !==
+              null &&
+            left.averageResponseTimeMs !==
+              right.averageResponseTimeMs
+          ) {
+            return (
+              left.averageResponseTimeMs -
+              right.averageResponseTimeMs
+            )
+          }
+
+          return (
+            left.playerName.localeCompare(
+              right.playerName,
+            )
+          )
+        },
       )
 
   let previousScore:
+    | number
+    | null = null
+
+  let previousAverageResponseTimeMs:
     | number
     | null = null
 
@@ -68,15 +137,31 @@ function MultiplayerResultsScreen({
     FinalStanding[] =
     sortedPlayers.map(
       (player, index) => {
-        const rank =
+        const sameScore =
           previousScore !== null &&
           player.score ===
             previousScore
+
+        const sameTime =
+          player.averageResponseTimeMs ===
+          previousAverageResponseTimeMs
+
+        /*
+         * Players only share a rank when both
+         * their score and their time tie-break
+         * value are equal.
+         */
+        const rank =
+          sameScore &&
+          sameTime
             ? previousRank
             : index + 1
 
         previousScore =
           player.score
+
+        previousAverageResponseTimeMs =
+          player.averageResponseTimeMs
 
         previousRank = rank
 
@@ -87,17 +172,20 @@ function MultiplayerResultsScreen({
       },
     )
 
+  /*
+   * Winner is now determined by final rank,
+   * rather than score alone. Two players with
+   * the same score are not joint winners if
+   * response time breaks the tie.
+   */
+  const winners =
+    standings.filter(
+      (player) =>
+        player.rank === 1,
+    )
+
   const topScore =
     standings[0]?.score
-
-  const winners =
-    topScore === undefined
-      ? []
-      : standings.filter(
-          (player) =>
-            player.score ===
-            topScore,
-        )
 
   const myStanding =
     standings.find(
@@ -256,11 +344,15 @@ function MultiplayerResultsScreen({
                               ' (You)'}
                           </p>
 
-                          {lives?.[player.sessionId] !== undefined && (
-                            <p className="mt-1 text-xs text-white/50">
-                              {lives[player.sessionId] > 0
-                                ? '❤️'.repeat(lives[player.sessionId])
-                                : 'Out of lives'}
+                          {player.averageResponseTimeMs !==
+                            null && (
+                            <p className="mt-1 text-xs text-white/45">
+                              Avg Recall time:{' '}
+                              {(
+                                player.averageResponseTimeMs /
+                                1000
+                              ).toFixed(2)}
+                              s
                             </p>
                           )}
 

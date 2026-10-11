@@ -153,6 +153,46 @@ describe("LobbyRoom", () => {
     );
   });
 
+  it("replaces one selected player question without clearing the other", async () => {
+    const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
+    const client = await colyseus.connectTo(room, { name: "Jordan" });
+
+    client.send("submitPlayerQuestion", {
+      prompt: "Question one?",
+      options: ["A", "B", "C", "D"],
+      correctOption: 0,
+    });
+    await room.waitForNextPatch();
+
+    client.send("submitPlayerQuestion", {
+      prompt: "Question two?",
+      options: ["E", "F", "G", "H"],
+      correctOption: 1,
+    });
+    await room.waitForNextPatch();
+
+    client.send("replacePlayerQuestion", {
+      index: 0,
+    });
+    await room.waitForNextPatch();
+
+    const publicQuestions =
+      client.state.players.get(client.sessionId)?.questions;
+
+    assert.strictEqual(publicQuestions?.length, 1);
+    assert.strictEqual(publicQuestions?.[0].prompt, "Question two?");
+
+    client.send("submitPlayerQuestion", {
+      prompt: "Question three?",
+      options: ["I", "J", "K", "L"],
+      correctOption: 2,
+    });
+    await room.waitForNextPatch();
+
+    assert.strictEqual(publicQuestions?.length, 2);
+    assert.strictEqual(publicQuestions?.[1].prompt, "Question three?");
+  });
+
   it("checks player-question answers on the server", async () => {
     const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
     const client1 = await colyseus.connectTo(room, { name: "Jordan" });
@@ -689,6 +729,42 @@ client2.send("markReady", { ready: true });
       );
 
       assert.strictEqual(room.state.players.size, 8);
+    });
+  });
+
+  describe("setDrawingSpeed", () => {
+    it("stores valid custom drawing time bounds", async () => {
+      const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
+      const client1 = await colyseus.connectTo(room, { name: "Jordan" });
+
+      client1.send("setDrawingSpeed", {
+        speed: "custom",
+        customMin: 4,
+        customMax: 14,
+      });
+
+      await room.waitForNextPatch();
+
+      assert.strictEqual(client1.state.drawingSpeed, "custom");
+      assert.strictEqual(client1.state.customDrawingMin, 4);
+      assert.strictEqual(client1.state.customDrawingMax, 14);
+    });
+
+    it("rejects invalid custom drawing time bounds", async () => {
+      const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
+      const client1 = await colyseus.connectTo(room, { name: "Jordan" });
+
+      client1.send("setDrawingSpeed", {
+        speed: "custom",
+        customMin: 20,
+        customMax: 10,
+      });
+
+      await new Promise(resolve => setTimeout(resolve, 20));
+
+      assert.strictEqual(client1.state.drawingSpeed, "normal");
+      assert.strictEqual(client1.state.customDrawingMin, 6);
+      assert.strictEqual(client1.state.customDrawingMax, 10);
     });
   });
 
@@ -1254,6 +1330,164 @@ client2.send("markReady", { ready: true });
       assert.strictEqual(samResult.totalScore, 4);
     });
 
+    it("awards Anonymous Recall artist bonus from successful guesses", async () => {
+      const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
+
+      const jordan = await colyseus.connectTo(room, { name: "Jordan" });
+      const sam = await colyseus.connectTo(room, { name: "Sam" });
+      const alex = await colyseus.connectTo(room, { name: "Alex" });
+
+      room.state.gameMode = "anonymousRecall";
+      room.state.gameWords.clear();
+      room.state.gameWords.push("Apple");
+
+      const resultPromise =
+        new Promise<any>((resolve) => {
+          jordan.onMessage(
+            "recallRoundResult",
+            resolve,
+          );
+        });
+
+      const internal = room as any;
+
+      internal.recallRound = 0;
+      internal.recallStarted = true;
+      internal.selectedRecallArtistSessionId =
+        jordan.sessionId;
+      internal.recallDeadline = 20_000;
+
+      internal.recallAnswers =
+        new Map([
+          [
+            sam.sessionId,
+            {
+              sessionId: sam.sessionId,
+              answer: "Apple",
+              submittedAt: 10_400,
+            },
+          ],
+          [
+            alex.sessionId,
+            {
+              sessionId: alex.sessionId,
+              answer: "Aple",
+              submittedAt: 10_700,
+            },
+          ],
+        ]);
+
+      internal.finishRecallRound();
+
+      const result = await resultPromise;
+
+      const artistResult =
+        result.results.find(
+          (entry: any) =>
+            entry.sessionId ===
+            jordan.sessionId,
+        );
+
+      assert.ok(artistResult);
+      assert.strictEqual(artistResult.isArtist, true);
+      assert.strictEqual(artistResult.correctGuessCount, 2);
+      assert.strictEqual(artistResult.pointsEarned, 2);
+      assert.strictEqual(artistResult.totalScore, 2);
+      assert.strictEqual(artistResult.rank, null);
+      assert.strictEqual(artistResult.timedOut, false);
+      assert.strictEqual(artistResult.responseTimeMs, null);
+      assert.strictEqual(artistResult.averageResponseTimeMs, null);
+
+      assert.strictEqual(
+        room.state.players.get(jordan.sessionId)?.score,
+        2,
+      );
+      assert.strictEqual(
+        room.state.players.get(jordan.sessionId)?.recallResponseCount,
+        0,
+      );
+    });
+
+    it("tracks server response time, timeout and running average", async () => {
+      const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
+
+      const jordan = await colyseus.connectTo(room, { name: "Jordan" });
+      const sam = await colyseus.connectTo(room, { name: "Sam" });
+
+      room.state.gameWords.clear();
+      room.state.gameWords.push("Apple");
+
+      const jordanPlayer =
+        room.state.players.get(jordan.sessionId);
+      const samPlayer =
+        room.state.players.get(sam.sessionId);
+
+      assert.ok(jordanPlayer);
+      assert.ok(samPlayer);
+
+      jordanPlayer.recallResponseTimeMs = 400;
+      jordanPlayer.recallResponseCount = 1;
+      samPlayer.recallResponseTimeMs = 2000;
+      samPlayer.recallResponseCount = 1;
+
+      const resultPromise =
+        new Promise<any>((resolve) => {
+          jordan.onMessage(
+            "recallRoundResult",
+            resolve,
+          );
+        });
+
+      const internal = room as any;
+
+      internal.recallRound = 0;
+      internal.recallStarted = true;
+      internal.recallDeadline = 20_000;
+
+      internal.recallAnswers =
+        new Map([
+          [
+            jordan.sessionId,
+            {
+              sessionId: jordan.sessionId,
+              answer: "Apple",
+              submittedAt: 10_600,
+            },
+          ],
+        ]);
+
+      internal.finishRecallRound();
+
+      const result = await resultPromise;
+
+      const jordanResult =
+        result.results.find(
+          (entry: any) =>
+            entry.sessionId ===
+            jordan.sessionId,
+        );
+
+      const samResult =
+        result.results.find(
+          (entry: any) =>
+            entry.sessionId ===
+            sam.sessionId,
+        );
+
+      assert.ok(jordanResult);
+      assert.ok(samResult);
+
+      assert.strictEqual(jordanResult.responseTimeMs, 600);
+      assert.strictEqual(jordanResult.averageResponseTimeMs, 500);
+      assert.strictEqual(jordanPlayer.recallResponseTimeMs, 1000);
+      assert.strictEqual(jordanPlayer.recallResponseCount, 2);
+
+      assert.strictEqual(samResult.responseTimeMs, 10_000);
+      assert.strictEqual(samResult.averageResponseTimeMs, 6000);
+      assert.strictEqual(samPlayer.recallResponseTimeMs, 12_000);
+      assert.strictEqual(samPlayer.recallResponseCount, 2);
+    });
+
     it("accumulates four-mark Recall scores across rounds", async () => {
       const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
 
@@ -1613,6 +1847,37 @@ client2.send("markReady", { ready: true });
 
       assert.strictEqual(room.state.drawingRound, 0);
       assert.ok(room.state.drawingDeadline > Date.now());
+    });
+
+    it("uses custom drawing bounds for the shared drawing timer", async () => {
+      const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
+      const client1 = await colyseus.connectTo(room, { name: "Jordan" });
+
+      await submitQuestions(client1, room);
+
+      client1.send("setDrawingSpeed", {
+        speed: "custom",
+        customMin: 1,
+        customMax: 1,
+      });
+      await room.waitForNextPatch();
+
+      client1.send("markReady", { ready: true });
+      await room.waitForNextPatch();
+
+      client1.send("startGame", {});
+      await room.waitForNextPatch();
+
+      client1.send("drawingPhaseReady", {});
+      await room.waitForNextPatch();
+
+      const remaining =
+        room.state.drawingDeadline - Date.now();
+
+      assert.ok(
+        remaining > 0 && remaining <= 1_000,
+        `expected roughly a 1s custom timer, got ${remaining}ms`,
+      );
     });
 
     it("advances a drawing round as soon as every player is ready", async () => {
@@ -2171,14 +2436,14 @@ client2.send("markReady", { ready: true });
   });
 
   /*
-   * Lives, BE-16 (anonymous recall) and BE-20
-   * (team abilities).
+   * Recall participation, BE-16 (anonymous recall)
+   * and BE-20 (team abilities).
    *
    * These wait for the server to actually handle
    * each message instead of waiting for a patch
    * tick, so they don't depend on timing.
    */
-  describe("lives, anonymous recall and team abilities", () => {
+  describe("Recall participation, anonymous recall and team abilities", () => {
     const sendAndWait = async (room: any, client: any, type: string, message: any = {}) => {
       const handled = room.waitForMessage(type);
       client.send(type, message);
@@ -2188,7 +2453,7 @@ client2.send("markReady", { ready: true });
     const player = (room: any, client: any) =>
       room.state.players.get(client.sessionId);
 
-    // Players in a started game with full lives.
+    // Players in a started game.
     const setupGame = async (names: string[], words: string[]) => {
       const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
       const clients = [];
@@ -2198,7 +2463,6 @@ client2.send("markReady", { ready: true });
 
       room.state.phase = "playing";
       room.state.gameWords.push(...words);
-      room.state.players.forEach((current: any) => { current.lives = 3; });
 
       return { room, clients };
     };
@@ -2209,8 +2473,8 @@ client2.send("markReady", { ready: true });
       }
     };
 
-    describe("lives", () => {
-      it("gives every player 3 lives when a game starts", async () => {
+    describe("Recall participation without elimination", () => {
+      it("does not reset a legacy lives value when a game starts", async () => {
         const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
         const client1 = await colyseus.connectTo(room, { name: "Jordan" });
         player(room, client1).lives = 0;
@@ -2220,11 +2484,13 @@ client2.send("markReady", { ready: true });
         room.state.players.forEach((current: any) => { current.ready = true; });
         await sendAndWait(room, client1, "startGame");
 
-        assert.strictEqual(player(room, client1).lives, 3);
+        assert.strictEqual(player(room, client1).lives, 0);
       });
 
-      it("takes a life for a 0-point answer or no answer, not for a scoring one", async () => {
+      it("does not change lives for a 0-point answer or no answer", async () => {
         const { room, clients: [client1, client2] } = await setupGame(["Jordan", "Sam"], ["cat", "dog"]);
+        player(room, client1).lives = 2;
+        player(room, client2).lives = 1;
         await startRound(room, [client1, client2]);
 
         const result = client1.waitForMessage("recallRoundResult");
@@ -2232,36 +2498,40 @@ client2.send("markReady", { ready: true });
         (room as any).finishRecallRound(); // Sam never answers
         const message: any = await result;
 
-        assert.strictEqual(player(room, client1).lives, 3);
-        assert.strictEqual(player(room, client2).lives, 2);
+        assert.strictEqual(player(room, client1).lives, 2);
+        assert.strictEqual(player(room, client2).lives, 1);
 
         const samResult = message.results.find((r: any) => r.sessionId === client2.sessionId);
-        assert.strictEqual(samResult.lostLife, true);
-        assert.strictEqual(samResult.lives, 2);
+        assert.strictEqual(samResult.pointsEarned, 0);
+        assert.strictEqual(samResult.timedOut, true);
+        assert.strictEqual("lostLife" in samResult, false);
+        assert.strictEqual("lives" in samResult, false);
       });
 
-      it("stops a player with no lives left from answering", async () => {
+      it("allows a player with a zero legacy lives value to answer", async () => {
         const { room, clients: [client1, client2] } = await setupGame(["Jordan", "Sam"], ["cat", "dog"]);
         player(room, client2).lives = 0;
         await startRound(room, [client1, client2]);
 
         await sendAndWait(room, client2, "submitRecallAnswer", { roundIndex: 0, answer: "cat" });
-        assert.strictEqual((room as any).recallAnswers.has(client2.sessionId), false);
+        assert.strictEqual((room as any).recallAnswers.has(client2.sessionId), true);
 
-        // Only Jordan is still in, so his answer ends the round.
         await sendAndWait(room, client1, "submitRecallAnswer", { roundIndex: 0, answer: "cat" });
 
         assert.strictEqual((room as any).recallRound, 1);
-        assert.strictEqual(player(room, client2).lives, 0); // can't go below 0
+        assert.strictEqual(player(room, client2).lives, 0);
       });
 
-      it("ends the round straight away when everyone is out", async () => {
+      it("does not end the round just because the legacy lives value is zero", async () => {
         const { room, clients: [client1] } = await setupGame(["Jordan"], ["cat", "dog"]);
         player(room, client1).lives = 0;
 
-        const result = client1.waitForMessage("recallRoundResult");
         await startRound(room, [client1]);
-        await result;
+
+        assert.strictEqual((room as any).recallStarted, true);
+        assert.strictEqual((room as any).recallRound, 0);
+
+        await sendAndWait(room, client1, "submitRecallAnswer", { roundIndex: 0, answer: "cat" });
 
         assert.strictEqual((room as any).recallRound, 1);
       });
@@ -2564,15 +2834,15 @@ client2.send("markReady", { ready: true });
         assert.notStrictEqual(revealMessage.image, mainImage);
       });
 
-      it("ignores votes from players who are out of lives", async () => {
+      it("allows votes regardless of a player's legacy lives value", async () => {
         const { room, clients: [client1, client2] } = await setupGame(["Jordan", "Sam"], ["cat"]);
         player(room, client2).lives = 0;
         await startRound(room, [client1, client2]);
 
         await sendAndWait(room, client2, "voteAbility", { roundIndex: 0, ability: "hint" });
-        assert.strictEqual((room as any).abilityVotes.size, 0);
+        assert.strictEqual((room as any).abilityVotes.size, 1);
+        assert.strictEqual(room.state.usedAbilities.length, 0);
 
-        // Jordan is the only one left, so his vote alone is a majority.
         await sendAndWait(room, client1, "voteAbility", { roundIndex: 0, ability: "hint" });
         assert.deepStrictEqual([...room.state.usedAbilities], ["hint"]);
       });

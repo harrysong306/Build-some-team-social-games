@@ -1,11 +1,17 @@
 import { useState } from "react";
 import { useJoinRoom } from "./useJoinRoom";
 import LobbyScreen from "./LobbyScreen";
+import {
+  readLobbyPreferences,
+  saveLobbyPreferences,
+} from "./localLobbyPreferences";
 
 // FE-5: Implement Join Room UI using room code or invite link
 function JoinRoomScreen() {
   // draft name typed by the player before joining
-  const [name, setName] = useState("");
+  const [name, setName] = useState(
+    () => readLobbyPreferences().playerName,
+  );
 
   // room code typed by the player
   const [roomCode, setRoomCode] = useState("");
@@ -26,7 +32,12 @@ function JoinRoomScreen() {
 
         <input
           value={name}
-          onChange={(e) => setName(e.target.value)}
+          onChange={(e) => {
+            setName(e.target.value);
+            saveLobbyPreferences({
+              playerName: e.target.value,
+            });
+          }}
           placeholder="Your name"
           maxLength={20}
           className="mt-6 w-full rounded-lg border border-amber-500/30 bg-[#211006] px-4 py-3 text-white placeholder:text-white/40 focus:border-amber-400 focus:outline-none"

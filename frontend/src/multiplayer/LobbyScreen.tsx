@@ -3,10 +3,15 @@ import type { Room } from "@colyseus/sdk";
 import { useLobbyState } from "./useLobbyState";
 import InstructionsScreen from "../sketch-recall/InstructionsScreen";
 import SketchRecallGame from "../sketch-recall/SketchRecallGame";
+import {
+  readLobbyPreferences,
+  saveLobbyPreferences,
+} from "./localLobbyPreferences";
 
 type LobbyScreenProps = {
   room: Room | null;
   roomId: string | null;
+  applySavedSettings?: boolean;
 };
 
 const GAME_MODES = [
@@ -18,6 +23,7 @@ const DRAWING_SPEEDS = [
   { value: "easy", label: "Easy" },
   { value: "normal", label: "Normal" },
   { value: "hard", label: "Hard" },
+  { value: "custom", label: "Custom" },
 ];
 
 // Must stay within MIN_DRAWING_COUNT and
@@ -33,11 +39,127 @@ const WORD_THEMES = [
   { value: "nature", label: "Nature" },
 ];
 
-function LobbyScreen({ room, roomId }: LobbyScreenProps) {
+function questionPreferenceKey(
+  prompt: string,
+  options: readonly string[],
+) {
+  return JSON.stringify({
+    prompt: prompt.trim(),
+    options: options.map((option) => option.trim()),
+  });
+}
+
+type DropdownOption = {
+  value: string;
+  label: string;
+};
+
+type ThemedDropdownProps = {
+  id: string;
+  label: string;
+  value: string;
+  options: readonly DropdownOption[];
+  onChange: (value: string) => void;
+};
+
+function ThemedDropdown({
+  id,
+  label,
+  value,
+  options,
+  onChange,
+}: ThemedDropdownProps) {
+  const [open, setOpen] = useState(false);
+  const selected =
+    options.find((option) => option.value === value) ??
+    options[0];
+  const labelId = `${id}-label`;
+
+  return (
+    <div
+      className="relative"
+      onBlur={(event) => {
+        if (
+          !event.currentTarget.contains(
+            event.relatedTarget as Node | null,
+          )
+        ) {
+          setOpen(false);
+        }
+      }}
+    >
+      <span
+        id={labelId}
+        className="mb-1.5 block text-sm text-white/60"
+      >
+        {label}
+      </span>
+
+      <button
+        type="button"
+        aria-labelledby={labelId}
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        onClick={() => setOpen((current) => !current)}
+        className="flex min-h-11 w-full items-center justify-between gap-3 rounded-lg border border-amber-500/30 bg-[#211006] px-3.5 py-2.5 text-left text-sm font-semibold text-white transition duration-200 hover:border-amber-400 hover:bg-amber-500/10 focus:border-amber-400 focus:outline-none"
+      >
+        <span>{selected?.label ?? value}</span>
+        <span
+          aria-hidden="true"
+          className={`text-amber-300 transition-transform duration-200 ${
+            open ? "rotate-180" : ""
+          }`}
+        >
+          ▾
+        </span>
+      </button>
+
+      {open ? (
+        <div
+          role="listbox"
+          aria-labelledby={labelId}
+          className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-amber-500/40 bg-[#160b06] p-1 shadow-xl shadow-black/40"
+        >
+          {options.map((option) => {
+            const selectedOption = option.value === value;
+
+            return (
+              <button
+                key={option.value}
+                type="button"
+                role="option"
+                aria-selected={selectedOption}
+                onClick={() => {
+                  onChange(option.value);
+                  setOpen(false);
+                }}
+                className={`flex min-h-10 w-full items-center rounded-md px-3 text-left text-sm transition duration-150 ${
+                  selectedOption
+                    ? "border border-amber-400/60 bg-amber-400/15 font-bold text-amber-200"
+                    : "border border-transparent text-white/80 hover:bg-amber-500/10 hover:text-white"
+                }`}
+              >
+                {option.label}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function LobbyScreen({
+  room,
+  roomId,
+  applySavedSettings = false,
+}: LobbyScreenProps) {
   const {
     players,
     gameMode,
     drawingSpeed,
+    customDrawingMin,
+    customDrawingMax,
     drawingCount,
     wordTheme,
     playerQuestionsEnabled,
@@ -57,20 +179,21 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
     setPlayerQuestionsEnabled,
     startGame,
     submitPlayerQuestion,
-    replacePlayerQuestions,
+    replacePlayerQuestion,
     returnToLobby,
     changeName,
   } = useLobbyState(room);
 
   const [roundStarted, setRoundStarted] = useState(false);
-  const [questionPrompt, setQuestionPrompt] = useState("");
-  const [questionOptions, setQuestionOptions] = useState([
-    "",
-    "",
-    "",
-    "",
-  ]);
-  const [correctOption, setCorrectOption] = useState(0);
+  const [questionPrompt, setQuestionPrompt] = useState(
+    () => readLobbyPreferences().questionPrompt,
+  );
+  const [questionOptions, setQuestionOptions] = useState(
+    () => readLobbyPreferences().questionOptions,
+  );
+  const [correctOption, setCorrectOption] = useState(
+    () => readLobbyPreferences().correctOption,
+  );
 
   // whether the player's own row in the list is in edit-name mode
   const [isEditingName, setIsEditingName] = useState(false);
@@ -80,6 +203,17 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
 
   // briefly true right after the room code is copied, to show feedback
   const [codeCopied, setCodeCopied] = useState(false);
+  const [customMinDraft, setCustomMinDraft] =
+    useState(String(customDrawingMin));
+  const [customMaxDraft, setCustomMaxDraft] =
+    useState(String(customDrawingMax));
+  const [customTimeLastEdited, setCustomTimeLastEdited] =
+    useState<"min" | "max">("min");
+  const [settingsExpanded, setSettingsExpanded] = useState(false);
+  const [choosingQuestionToReplace, setChoosingQuestionToReplace] =
+    useState(false);
+  const [replacingQuestion, setReplacingQuestion] = useState(false);
+  const appliedSavedSettingsRef = useRef(false);
 
   // mirrors isEditingName but updates synchronously (unlike the state
   // value), so a stray blur fired by the input unmounting - which can
@@ -99,6 +233,25 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
   const allReady =
     playerList.length > 0 &&
     playerList.every(([, player]) => player.ready);
+  const gameModeLabel =
+    GAME_MODES.find((mode) => mode.value === gameMode)?.label ??
+    gameMode;
+  const drawingSpeedLabel =
+    DRAWING_SPEEDS.find((speed) => speed.value === drawingSpeed)?.label ??
+    drawingSpeed;
+  const wordThemeLabel =
+    WORD_THEMES.find((theme) => theme.value === wordTheme)?.label ??
+    wordTheme;
+  const drawingSpeedSummary =
+    drawingSpeed === "custom"
+      ? `${customDrawingMin}-${customDrawingMax}s`
+      : `${drawingSpeedLabel} speed`;
+  const settingsSummary =
+    `${gameModeLabel} · ${drawingSpeedSummary} · ${drawingCount} drawings`;
+  const showQuestionForm =
+    playerQuestionsEnabled &&
+    !me?.ready &&
+    (!questionsComplete || replacingQuestion);
 
   const submitQuestion = () => {
     const prompt = questionPrompt.trim();
@@ -115,9 +268,166 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
       options,
       correctOption,
     );
+    const saved = readLobbyPreferences();
+    const questionKey = questionPreferenceKey(prompt, options);
+
+    saveLobbyPreferences({
+      questionPrompt: prompt,
+      questionOptions: options,
+      correctOption,
+      questionCorrectOptions: {
+        ...saved.questionCorrectOptions,
+        [questionKey]: correctOption,
+      },
+    });
     setQuestionPrompt("");
     setQuestionOptions(["", "", "", ""]);
     setCorrectOption(0);
+    setReplacingQuestion(false);
+  };
+
+  const updateQuestionPrompt = (prompt: string) => {
+    setQuestionPrompt(prompt);
+    saveLobbyPreferences({
+      questionPrompt: prompt,
+    });
+  };
+
+  const updateQuestionOption = (
+    index: number,
+    value: string,
+  ) => {
+    setQuestionOptions((current) => {
+      const updated = current.map((currentOption, optionIndex) =>
+        optionIndex === index ? value : currentOption,
+      );
+
+      saveLobbyPreferences({
+        questionOptions: updated,
+      });
+
+      return updated;
+    });
+  };
+
+  const updateCorrectOption = (index: number) => {
+    setCorrectOption(index);
+    saveLobbyPreferences({
+      correctOption: index,
+    });
+  };
+
+  const startReplacingQuestion = (index: number) => {
+    const question = me?.questions?.[index];
+
+    if (!question) return;
+
+    const saved = readLobbyPreferences();
+    const questionKey = questionPreferenceKey(
+      question.prompt,
+      question.options,
+    );
+    const savedMatchesQuestion =
+      saved.questionPrompt === question.prompt &&
+      saved.questionOptions.every(
+        (option, optionIndex) =>
+          option === question.options[optionIndex],
+      );
+    const nextCorrectOption =
+      saved.questionCorrectOptions[questionKey] ??
+      (savedMatchesQuestion ? saved.correctOption : 0);
+
+    setQuestionPrompt(question.prompt);
+    setQuestionOptions([...question.options]);
+    setCorrectOption(nextCorrectOption);
+    setReplacingQuestion(true);
+    setChoosingQuestionToReplace(false);
+    saveLobbyPreferences({
+      questionPrompt: question.prompt,
+      questionOptions: [...question.options],
+      correctOption: nextCorrectOption,
+    });
+    replacePlayerQuestion(index);
+  };
+
+  const clampDrawingTime = (
+    value: number,
+    minimum: number,
+    maximum: number,
+  ) => Math.min(
+    maximum,
+    Math.max(
+      minimum,
+      Math.round(value),
+    ),
+  );
+
+  const parseDrawingTimeDraft = (
+    value: string,
+  ) => {
+    if (value === "") return null;
+
+    const parsed = Number(value);
+
+    if (!Number.isFinite(parsed)) return null;
+
+    return clampDrawingTime(
+      parsed,
+      1,
+      120,
+    );
+  };
+
+  const submitCustomDrawingTime = (
+    nextMin: number,
+    nextMax: number,
+  ) => {
+    saveLobbyPreferences({
+      drawingSpeed: "custom",
+      customDrawingMin: nextMin,
+      customDrawingMax: nextMax,
+    });
+
+    setDrawingSpeed(
+      "custom",
+      nextMin,
+      nextMax,
+    );
+  };
+
+  const commitCustomDrawingTime = (
+    editedField: "min" | "max",
+  ) => {
+    const parsedMin =
+      parseDrawingTimeDraft(customMinDraft) ??
+      customDrawingMin;
+    const parsedMax =
+      parseDrawingTimeDraft(customMaxDraft) ??
+      customDrawingMax;
+
+    let nextMin = parsedMin;
+    let nextMax = parsedMax;
+
+    if (nextMin > nextMax) {
+      if (editedField === "min") {
+        nextMax = nextMin;
+      } else {
+        nextMin = nextMax;
+      }
+    }
+
+    setCustomMinDraft(String(nextMin));
+    setCustomMaxDraft(String(nextMax));
+    submitCustomDrawingTime(
+      nextMin,
+      nextMax,
+    );
+  };
+
+  const commitCustomDrawingTimeBeforeStart = () => {
+    if (drawingSpeed !== "custom") return;
+
+    commitCustomDrawingTime(customTimeLastEdited);
   };
 
   const startEditingName = () => {
@@ -172,6 +482,48 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
     }
   }, [phase]);
 
+  useEffect(() => {
+    setCustomMinDraft(String(customDrawingMin));
+    setCustomMaxDraft(String(customDrawingMax));
+  }, [
+    customDrawingMin,
+    customDrawingMax,
+  ]);
+
+  useEffect(() => {
+    if (
+      appliedSavedSettingsRef.current ||
+      !applySavedSettings ||
+      !isHost ||
+      phase !== "lobby"
+    ) {
+      return;
+    }
+
+    const saved = readLobbyPreferences();
+
+    appliedSavedSettingsRef.current = true;
+
+    setGameMode(saved.gameMode);
+    setDrawingSpeed(
+      saved.drawingSpeed,
+      saved.customDrawingMin,
+      saved.customDrawingMax,
+    );
+    setDrawingCount(saved.drawingCount);
+    setWordTheme(saved.wordTheme);
+    setPlayerQuestionsEnabled(saved.playerQuestionsEnabled);
+  }, [
+    isHost,
+    applySavedSettings,
+    phase,
+    setGameMode,
+    setDrawingSpeed,
+    setDrawingCount,
+    setWordTheme,
+    setPlayerQuestionsEnabled,
+  ]);
+
   if (roundStarted && phase === "playing") {
     return (
       <SketchRecallGame
@@ -184,6 +536,8 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
         drawingRound={drawingRound}
         drawingDeadline={drawingDeadline}
         drawingReadyCount={drawingReadyCount}
+        customDrawingMin={customDrawingMin}
+        customDrawingMax={customDrawingMax}
         // the InstructionsScreen below already ran its countdown
         // before roundStarted flipped to true, so don't show it again
         skipInstructions
@@ -301,17 +655,48 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
         {playerQuestionsEnabled &&
          questionCount === 2 &&
          !me?.ready && (
-          <button
-           type="button"
-            onClick={replacePlayerQuestions}
-            className="mt-4 w-full rounded-lg border border-amber-500/40 px-4 py-3 text-sm font-semibold text-amber-300 hover:bg-amber-500/10"
-          >
-            CHANGE QUESTIONS
-          </button>
+          <section className="mt-4 rounded-lg border border-amber-500/30 bg-[#160b06] p-3">
+            <button
+              type="button"
+              onClick={() =>
+                setChoosingQuestionToReplace((current) => !current)
+              }
+              className="flex w-full items-center justify-between gap-3 text-left text-sm font-semibold text-amber-300"
+            >
+              <span>Change a question</span>
+              <span
+                aria-hidden="true"
+                className={`transition-transform duration-200 ${
+                  choosingQuestionToReplace ? "rotate-180" : ""
+                }`}
+              >
+                ▾
+              </span>
+            </button>
+
+            {choosingQuestionToReplace ? (
+              <div className="mt-3 space-y-2">
+                {me?.questions?.map((question, index) => (
+                  <button
+                    key={`${question.prompt}-${index}`}
+                    type="button"
+                    onClick={() => startReplacingQuestion(index)}
+                    className="w-full rounded-lg border border-amber-500/25 bg-[#211006] px-3 py-2 text-left text-sm text-white transition duration-200 hover:border-amber-400 hover:bg-amber-500/10"
+                  >
+                    <span className="block text-xs font-semibold uppercase text-white/45">
+                      Question {index + 1}
+                    </span>
+                    <span className="mt-1 block font-semibold text-white">
+                      {question.prompt}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </section>
         )}
         {playerQuestionsEnabled &&
-          !questionsComplete &&
-          !me?.ready && (
+          showQuestionForm && (
           <section className="mt-6 rounded-lg border border-amber-500/30 bg-[#160b06] p-4">
             <p className="text-sm font-semibold text-amber-300">
               Personal questions ({questionCount}/2)
@@ -324,7 +709,7 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
             <input
               value={questionPrompt}
               onChange={(event) =>
-                setQuestionPrompt(event.target.value)
+                updateQuestionPrompt(event.target.value)
               }
               placeholder="Question about you"
               maxLength={120}
@@ -341,7 +726,7 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
                     type="radio"
                     name="correct-option"
                     checked={correctOption === index}
-                    onChange={() => setCorrectOption(index)}
+                    onChange={() => updateCorrectOption(index)}
                     aria-label={`Option ${index + 1} is correct`}
                     className="accent-amber-500"
                   />
@@ -349,12 +734,9 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
                   <input
                     value={option}
                     onChange={(event) => {
-                      setQuestionOptions((current) =>
-                        current.map((currentOption, optionIndex) =>
-                          optionIndex === index
-                            ? event.target.value
-                            : currentOption,
-                        ),
+                      updateQuestionOption(
+                        index,
+                        event.target.value,
                       );
                     }}
                     placeholder={`Option ${index + 1}`}
@@ -390,170 +772,289 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
         </button>
 
         {isHost ? (
-          <div className="mt-6">
-            <label className="mb-2 block text-sm text-white/60">
-              Game mode
-            </label>
+          <details className="group mt-6 rounded-lg border border-amber-500/30 bg-[#160b06]">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 font-bold text-amber-300 transition duration-200 hover:bg-amber-500/10 [&::-webkit-details-marker]:hidden">
+              <span>Lobby settings</span>
+              <span
+                aria-hidden="true"
+                className="text-lg transition-transform duration-200 group-open:rotate-180"
+              >
+                ▾
+              </span>
+            </summary>
 
-            <select
-              value={gameMode}
-              onChange={(event) =>
-                setGameMode(
-                  event.target.value,
-                )
-              }
-              className="w-full rounded-lg border border-amber-500/30 bg-[#211006] px-4 py-3 text-white focus:border-amber-400 focus:outline-none"
-            >
-              {GAME_MODES.map((mode) => (
-                <option
-                  key={mode.value}
-                  value={mode.value}
-                >
-                  {mode.label}
-                </option>
-              ))}
-            </select>
-          </div>
+            <div className="space-y-3 border-t border-amber-500/20 p-3">
+              <div>
+                <ThemedDropdown
+                  id="game-mode"
+                  label="Game mode"
+                  value={gameMode}
+                  options={GAME_MODES}
+                  onChange={(value) => {
+                    saveLobbyPreferences({
+                      gameMode: value,
+                    });
+                    setGameMode(
+                      value,
+                    );
+                  }}
+                />
+              </div>
+
+              <div>
+                <ThemedDropdown
+                  id="drawing-speed"
+                  label="Drawing speed"
+                  value={drawingSpeed}
+                  options={DRAWING_SPEEDS}
+                  onChange={(value) => {
+                    saveLobbyPreferences({
+                      drawingSpeed: value,
+                      customDrawingMin,
+                      customDrawingMax,
+                    });
+                    setDrawingSpeed(
+                      value,
+                      customDrawingMin,
+                      customDrawingMax,
+                    );
+                  }}
+                />
+
+                {drawingSpeed === "custom" ? (
+                  <div className="mt-2 grid grid-cols-2 gap-3">
+                    <label className="block text-sm text-white/60">
+                      Min seconds
+                      <input
+                        type="number"
+                        min={1}
+                        max={120}
+                        value={customMinDraft}
+                        onChange={(event) => {
+                          setCustomTimeLastEdited("min");
+                          setCustomMinDraft(event.target.value);
+                        }}
+                        onBlur={() =>
+                          commitCustomDrawingTime("min")
+                        }
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            commitCustomDrawingTime("min");
+                          }
+                        }}
+                        className="mt-1.5 min-h-11 w-full rounded-lg border border-amber-500/30 bg-[#211006] px-3.5 py-2.5 text-white transition duration-200 focus:border-amber-400 focus:outline-none"
+                      />
+                    </label>
+
+                    <label className="block text-sm text-white/60">
+                      Max seconds
+                      <input
+                        type="number"
+                        min={1}
+                        max={120}
+                        value={customMaxDraft}
+                        onChange={(event) => {
+                          setCustomTimeLastEdited("max");
+                          setCustomMaxDraft(event.target.value);
+                        }}
+                        onBlur={() =>
+                          commitCustomDrawingTime("max")
+                        }
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            commitCustomDrawingTime("max");
+                          }
+                        }}
+                        className="mt-1.5 min-h-11 w-full rounded-lg border border-amber-500/30 bg-[#211006] px-3.5 py-2.5 text-white transition duration-200 focus:border-amber-400 focus:outline-none"
+                      />
+                    </label>
+                  </div>
+                ) : null}
+              </div>
+
+              <div>
+                <ThemedDropdown
+                  id="drawing-count"
+                  label="Number of drawings"
+                  value={String(drawingCount)}
+                  options={DRAWING_COUNTS.map((count) => ({
+                    value: String(count),
+                    label: String(count),
+                  }))}
+                  onChange={(value) => {
+                    const count = Number(value);
+
+                    saveLobbyPreferences({
+                      drawingCount: count,
+                    });
+                    setDrawingCount(count);
+                  }}
+                />
+              </div>
+
+              <div>
+                <ThemedDropdown
+                  id="word-theme"
+                  label="Word theme"
+                  value={wordTheme}
+                  options={WORD_THEMES}
+                  onChange={(value) => {
+                    saveLobbyPreferences({
+                      wordTheme: value,
+                    });
+                    setWordTheme(value);
+                  }}
+                />
+              </div>
+
+              <div>
+                <div className="flex min-h-11 items-center justify-between gap-4 rounded-lg border border-amber-500/30 bg-[#211006] px-3.5 py-2.5">
+                  <span
+                    id="player-questions-label"
+                    className="text-sm text-white/60"
+                  >
+                    Player-created questions
+                  </span>
+
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-labelledby="player-questions-label"
+                    aria-checked={playerQuestionsEnabled}
+                    onClick={() => {
+                      const enabled = !playerQuestionsEnabled;
+
+                      saveLobbyPreferences({
+                        playerQuestionsEnabled: enabled,
+                      });
+
+                      setPlayerQuestionsEnabled(
+                        enabled,
+                      );
+                    }}
+                    className="flex items-center gap-3 rounded-full focus:outline-none"
+                  >
+                    <span
+                      className={`text-sm font-semibold transition duration-200 ${
+                        playerQuestionsEnabled
+                          ? "text-amber-300"
+                          : "text-white/45"
+                      }`}
+                    >
+                      {playerQuestionsEnabled
+                        ? "Enabled"
+                        : "Disabled"}
+                    </span>
+
+                    <span
+                      aria-hidden="true"
+                      className={`flex h-6 w-11 items-center rounded-full border p-0.5 transition duration-200 ${
+                        playerQuestionsEnabled
+                          ? "border-amber-400 bg-amber-400/25"
+                          : "border-white/25 bg-white/10"
+                      }`}
+                    >
+                      <span
+                        className={`h-4.5 w-4.5 rounded-full transition duration-200 ${
+                          playerQuestionsEnabled
+                            ? "translate-x-5 bg-amber-300"
+                            : "translate-x-0 bg-white/45"
+                        }`}
+                      />
+                    </span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </details>
         ) : (
-          <p className="mt-6 text-sm text-white/60">
-            Mode: {GAME_MODES.find((mode) => mode.value === gameMode)?.label ?? gameMode}
-          </p>
-        )}
-
-        {isHost ? (
-          <div className="mt-4">
-            <label className="mb-2 block text-sm text-white/60">
-              Drawing speed
-            </label>
-
-            <select
-              value={drawingSpeed}
-              onChange={(event) =>
-                setDrawingSpeed(event.target.value)
-              }
-              className="w-full rounded-lg border border-amber-500/30 bg-[#211006] px-4 py-3 text-white focus:border-amber-400 focus:outline-none"
-            >
-              {DRAWING_SPEEDS.map((speed) => (
-                <option
-                  key={speed.value}
-                  value={speed.value}
-                >
-                  {speed.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        ) : (
-          <p className="mt-4 text-sm text-white/60">
-            Drawing speed: {drawingSpeed}
-          </p>
-        )}
-
-        {isHost ? (
-          <div className="mt-4">
-            <label
-              htmlFor="drawing-count"
-              className="mb-2 block text-sm text-white/60"
-            >
-              Number of drawings
-            </label>
-
-            <select
-              id="drawing-count"
-              value={drawingCount}
-              onChange={(event) =>
-                setDrawingCount(Number(event.target.value))
-              }
-              className="w-full rounded-lg border border-amber-500/30 bg-[#211006] px-4 py-3 text-white focus:border-amber-400 focus:outline-none"
-            >
-              {DRAWING_COUNTS.map((count) => (
-                <option
-                  key={count}
-                  value={count}
-                >
-                  {count}
-                </option>
-              ))}
-            </select>
-          </div>
-        ) : (
-          <p className="mt-4 text-sm text-white/60">
-            Number of drawings: {drawingCount}
-          </p>
-        )}
-
-        {isHost ? (
-          <div className="mt-4">
-            <label
-              htmlFor="word-theme"
-              className="mb-2 block text-sm text-white/60"
-            >
-              Word theme
-            </label>
-
-            <select
-              id="word-theme"
-              value={wordTheme}
-              onChange={(event) =>
-                setWordTheme(event.target.value)
-              }
-              className="w-full rounded-lg border border-amber-500/30 bg-[#211006] px-4 py-3 text-white focus:border-amber-400 focus:outline-none"
-            >
-              {WORD_THEMES.map((theme) => (
-                <option
-                  key={theme.value}
-                  value={theme.value}
-                >
-                  {theme.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        ) : (
-          <p className="mt-4 text-sm text-white/60">
-            Word theme: {" "}
-            {WORD_THEMES.find(
-              (theme) => theme.value === wordTheme,
-            )?.label ?? wordTheme}
-          </p>
-        )}
-                {isHost ? (
-          <div className="mt-4">
-            <label
-              htmlFor="player-questions"
-              className="mb-2 block text-sm text-white/60"
-            >
-              Player-created questions
-            </label>
-
+          <div className="mt-6 rounded-lg border border-amber-500/30 bg-[#211006]">
             <button
-              id="player-questions"
               type="button"
+              aria-expanded={settingsExpanded}
               onClick={() =>
-                setPlayerQuestionsEnabled(
-                  !playerQuestionsEnabled,
-                )
+                setSettingsExpanded((expanded) => !expanded)
               }
-              className="w-full rounded-lg border border-amber-500/30 bg-[#211006] px-4 py-3 text-left text-white"
+              className="flex w-full items-start justify-between gap-4 px-4 py-3 text-left"
             >
-              {playerQuestionsEnabled
-                ? "Enabled"
-                : "Disabled"}
+              <span>
+                <span className="block font-bold text-amber-300">
+                  Game Settings
+                </span>
+
+                <span className="mt-1 block text-sm text-white/60">
+                  {settingsSummary}
+                </span>
+              </span>
+
+              <span
+                className={`mt-1 text-lg text-amber-300 transition-transform duration-200 ${
+                  settingsExpanded ? "rotate-180" : ""
+                }`}
+                aria-hidden="true"
+              >
+                ▾
+              </span>
             </button>
+
+            <div
+              className={`grid overflow-hidden transition-[grid-template-rows] duration-300 ease-out ${
+                settingsExpanded
+                  ? "grid-rows-[1fr]"
+                  : "grid-rows-[0fr]"
+              }`}
+            >
+              <div className="min-h-0">
+                <dl className="grid grid-cols-1 gap-x-4 gap-y-3 border-t border-amber-500/20 px-4 py-4 text-sm sm:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
+                  <dt className="text-white/50">
+                    Mode
+                  </dt>
+                  <dd className="font-semibold text-white sm:text-right">
+                    {gameModeLabel}
+                  </dd>
+
+                  <dt className="text-white/50">
+                    Drawing speed
+                  </dt>
+                  <dd className="font-semibold text-amber-200 sm:text-right">
+                    {drawingSpeed === "custom"
+                      ? `Custom (${customDrawingMin}-${customDrawingMax}s)`
+                      : drawingSpeedLabel}
+                  </dd>
+
+                  <dt className="text-white/50">
+                    Number of drawings
+                  </dt>
+                  <dd className="font-semibold text-white sm:text-right">
+                    {drawingCount}
+                  </dd>
+
+                  <dt className="text-white/50">
+                    Word theme
+                  </dt>
+                  <dd className="font-semibold text-white sm:text-right">
+                    {wordThemeLabel}
+                  </dd>
+
+                  <dt className="text-white/50">
+                    Player-created questions
+                  </dt>
+                  <dd className="font-semibold text-white sm:text-right">
+                    {playerQuestionsEnabled
+                      ? "Enabled"
+                      : "Disabled"}
+                  </dd>
+                </dl>
+              </div>
+            </div>
           </div>
-        ) : (
-          <p className="mt-4 text-sm text-white/60">
-            Player-created questions:{" "}
-            {playerQuestionsEnabled
-              ? "Enabled"
-              : "Disabled"}
-          </p>
         )}
 
         {isHost ? (
           <button
             disabled={!allReady}
             onClick={() => {
+              commitCustomDrawingTimeBeforeStart();
               console.log(
                 "Start Game clicked, allReady:",
                 allReady,
@@ -566,7 +1067,7 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
             Start Game
           </button>
         ) : (
-          <p className="mt-4 text-sm text-white/60">
+          <p className="mt-4 text-center text-sm text-white/60">
             Waiting for host to start…
           </p>
         )}
