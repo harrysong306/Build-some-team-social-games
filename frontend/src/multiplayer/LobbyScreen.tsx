@@ -11,6 +11,7 @@ import {
 type LobbyScreenProps = {
   room: Room | null;
   roomId: string | null;
+  applySavedSettings?: boolean;
 };
 
 const GAME_MODES = [
@@ -138,7 +139,11 @@ function ThemedDropdown({
   );
 }
 
-function LobbyScreen({ room, roomId }: LobbyScreenProps) {
+function LobbyScreen({
+  room,
+  roomId,
+  applySavedSettings = false,
+}: LobbyScreenProps) {
   const {
     players,
     gameMode,
@@ -167,14 +172,15 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
   } = useLobbyState(room);
 
   const [roundStarted, setRoundStarted] = useState(false);
-  const [questionPrompt, setQuestionPrompt] = useState("");
-  const [questionOptions, setQuestionOptions] = useState([
-    "",
-    "",
-    "",
-    "",
-  ]);
-  const [correctOption, setCorrectOption] = useState(0);
+  const [questionPrompt, setQuestionPrompt] = useState(
+    () => readLobbyPreferences().questionPrompt,
+  );
+  const [questionOptions, setQuestionOptions] = useState(
+    () => readLobbyPreferences().questionOptions,
+  );
+  const [correctOption, setCorrectOption] = useState(
+    () => readLobbyPreferences().correctOption,
+  );
 
   // whether the player's own row in the list is in edit-name mode
   const [isEditingName, setIsEditingName] = useState(false);
@@ -243,6 +249,42 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
     setQuestionPrompt("");
     setQuestionOptions(["", "", "", ""]);
     setCorrectOption(0);
+    saveLobbyPreferences({
+      questionPrompt: "",
+      questionOptions: ["", "", "", ""],
+      correctOption: 0,
+    });
+  };
+
+  const updateQuestionPrompt = (prompt: string) => {
+    setQuestionPrompt(prompt);
+    saveLobbyPreferences({
+      questionPrompt: prompt,
+    });
+  };
+
+  const updateQuestionOption = (
+    index: number,
+    value: string,
+  ) => {
+    setQuestionOptions((current) => {
+      const updated = current.map((currentOption, optionIndex) =>
+        optionIndex === index ? value : currentOption,
+      );
+
+      saveLobbyPreferences({
+        questionOptions: updated,
+      });
+
+      return updated;
+    });
+  };
+
+  const updateCorrectOption = (index: number) => {
+    setCorrectOption(index);
+    saveLobbyPreferences({
+      correctOption: index,
+    });
   };
 
   const clampDrawingTime = (
@@ -353,6 +395,7 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
   useEffect(() => {
     if (
       appliedSavedSettingsRef.current ||
+      !applySavedSettings ||
       !isHost ||
       phase !== "lobby"
     ) {
@@ -374,6 +417,7 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
     setPlayerQuestionsEnabled(saved.playerQuestionsEnabled);
   }, [
     isHost,
+    applySavedSettings,
     phase,
     setGameMode,
     setDrawingSpeed,
@@ -533,7 +577,7 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
             <input
               value={questionPrompt}
               onChange={(event) =>
-                setQuestionPrompt(event.target.value)
+                updateQuestionPrompt(event.target.value)
               }
               placeholder="Question about you"
               maxLength={120}
@@ -550,7 +594,7 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
                     type="radio"
                     name="correct-option"
                     checked={correctOption === index}
-                    onChange={() => setCorrectOption(index)}
+                    onChange={() => updateCorrectOption(index)}
                     aria-label={`Option ${index + 1} is correct`}
                     className="accent-amber-500"
                   />
@@ -558,12 +602,9 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
                   <input
                     value={option}
                     onChange={(event) => {
-                      setQuestionOptions((current) =>
-                        current.map((currentOption, optionIndex) =>
-                          optionIndex === index
-                            ? event.target.value
-                            : currentOption,
-                        ),
+                      updateQuestionOption(
+                        index,
+                        event.target.value,
                       );
                     }}
                     placeholder={`Option ${index + 1}`}

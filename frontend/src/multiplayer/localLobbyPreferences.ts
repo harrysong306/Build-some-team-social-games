@@ -7,6 +7,9 @@ export type LobbyPreferences = {
   drawingCount: number
   wordTheme: string
   playerQuestionsEnabled: boolean
+  questionPrompt: string
+  questionOptions: string[]
+  correctOption: number
 }
 
 const STORAGE_KEY = 'sketchRecallLobbyPreferences'
@@ -20,6 +23,9 @@ export const DEFAULT_LOBBY_PREFERENCES: LobbyPreferences = {
   drawingCount: 25,
   wordTheme: 'general',
   playerQuestionsEnabled: true,
+  questionPrompt: '',
+  questionOptions: ['', '', '', ''],
+  correctOption: 0,
 }
 
 function hasLocalStorage() {
@@ -44,9 +50,22 @@ export function readLobbyPreferences(): LobbyPreferences {
 
     const saved = JSON.parse(raw) as Partial<LobbyPreferences>
 
+    const questionOptions = Array.isArray(saved.questionOptions)
+      ? saved.questionOptions.slice(0, 4)
+      : DEFAULT_LOBBY_PREFERENCES.questionOptions
+
+    while (questionOptions.length < 4) {
+      questionOptions.push('')
+    }
+
     return {
       ...DEFAULT_LOBBY_PREFERENCES,
       ...saved,
+      questionOptions,
+      correctOption:
+        typeof saved.correctOption === 'number'
+          ? Math.min(3, Math.max(0, Math.round(saved.correctOption)))
+          : DEFAULT_LOBBY_PREFERENCES.correctOption,
     }
   } catch {
     return DEFAULT_LOBBY_PREFERENCES

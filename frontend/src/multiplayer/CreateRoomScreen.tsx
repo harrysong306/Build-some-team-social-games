@@ -17,7 +17,13 @@ function CreateRoomScreen() {
 
   // once the room is created, hand off to the lobby screen (FE-7/FE-8)
   if (connected) {
-    return <LobbyScreen room={room} roomId={roomId} />;
+    return (
+      <LobbyScreen
+        room={room}
+        roomId={roomId}
+        applySavedSettings
+      />
+    );
   }
 
   return (

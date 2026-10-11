@@ -16,6 +16,7 @@ import {
 import type { Room } from '@colyseus/sdk'
 
 import LobbyScreen from './LobbyScreen'
+import { saveLobbyPreferences } from './localLobbyPreferences'
 
 vi.mock(
   '../sketch-recall/InstructionsScreen',
@@ -151,6 +152,132 @@ function createFakeRoom(
     pushState,
   }
 }
+
+describe(
+  'LobbyScreen saved local preferences',
+  () => {
+    beforeEach(() => {
+      vi.clearAllMocks()
+      window.localStorage.clear()
+    })
+
+    it(
+      'does not apply saved host settings unless this client created the room',
+      () => {
+        saveLobbyPreferences({
+          drawingSpeed: 'hard',
+          drawingCount: 10,
+          wordTheme: 'animals',
+          playerQuestionsEnabled: false,
+        })
+
+        const {
+          room,
+          send,
+          pushState,
+        } = createFakeRoom('host')
+
+        render(
+          <LobbyScreen
+            room={room}
+            roomId="ABCD"
+          />,
+        )
+
+        pushState({
+          players: {
+            host: {
+              name: 'Jordan',
+              ready: false,
+              isHost: true,
+              score: 0,
+            },
+          },
+        })
+
+        expect(send).not.toHaveBeenCalledWith(
+          'setDrawingSpeed',
+          expect.anything(),
+        )
+        expect(send).not.toHaveBeenCalledWith(
+          'setDrawingCount',
+          expect.anything(),
+        )
+        expect(send).not.toHaveBeenCalledWith(
+          'setWordTheme',
+          expect.anything(),
+        )
+        expect(send).not.toHaveBeenCalledWith(
+          'setPlayerQuestionsEnabled',
+          expect.anything(),
+        )
+      },
+    )
+
+    it(
+      'prefills saved personal question drafts',
+      () => {
+        saveLobbyPreferences({
+          questionPrompt: 'Favourite snack?',
+          questionOptions: [
+            'Chips',
+            'Fruit',
+            'Toast',
+            'Soup',
+          ],
+          correctOption: 1,
+        })
+
+        const {
+          room,
+          pushState,
+        } = createFakeRoom('guest')
+
+        render(
+          <LobbyScreen
+            room={room}
+            roomId="ABCD"
+          />,
+        )
+
+        pushState({
+          players: {
+            host: {
+              name: 'Jordan',
+              ready: false,
+              isHost: true,
+              score: 0,
+            },
+            guest: {
+              name: 'Sam',
+              ready: false,
+              isHost: false,
+              score: 0,
+            },
+          },
+        })
+
+        expect(
+          screen.getByPlaceholderText(
+            'Question about you',
+          ),
+        ).toHaveValue('Favourite snack?')
+
+        expect(
+          screen.getByPlaceholderText(
+            'Option 2',
+          ),
+        ).toHaveValue('Fruit')
+
+        expect(
+          screen.getByLabelText(
+            'Option 2 is correct',
+          ),
+        ).toBeChecked()
+      },
+    )
+  },
+)
 
 describe(
   'LobbyScreen drawing speed setting',
