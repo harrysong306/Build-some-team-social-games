@@ -38,6 +38,106 @@ const WORD_THEMES = [
   { value: "nature", label: "Nature" },
 ];
 
+type DropdownOption = {
+  value: string;
+  label: string;
+};
+
+type ThemedDropdownProps = {
+  id: string;
+  label: string;
+  value: string;
+  options: readonly DropdownOption[];
+  onChange: (value: string) => void;
+};
+
+function ThemedDropdown({
+  id,
+  label,
+  value,
+  options,
+  onChange,
+}: ThemedDropdownProps) {
+  const [open, setOpen] = useState(false);
+  const selected =
+    options.find((option) => option.value === value) ??
+    options[0];
+  const labelId = `${id}-label`;
+
+  return (
+    <div
+      className="relative"
+      onBlur={(event) => {
+        if (
+          !event.currentTarget.contains(
+            event.relatedTarget as Node | null,
+          )
+        ) {
+          setOpen(false);
+        }
+      }}
+    >
+      <span
+        id={labelId}
+        className="mb-1.5 block text-sm text-white/60"
+      >
+        {label}
+      </span>
+
+      <button
+        type="button"
+        aria-labelledby={labelId}
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        onClick={() => setOpen((current) => !current)}
+        className="flex min-h-11 w-full items-center justify-between gap-3 rounded-lg border border-amber-500/30 bg-[#211006] px-3.5 py-2.5 text-left text-sm font-semibold text-white transition duration-200 hover:border-amber-400 hover:bg-amber-500/10 focus:border-amber-400 focus:outline-none"
+      >
+        <span>{selected?.label ?? value}</span>
+        <span
+          aria-hidden="true"
+          className={`text-amber-300 transition-transform duration-200 ${
+            open ? "rotate-180" : ""
+          }`}
+        >
+          ▾
+        </span>
+      </button>
+
+      {open ? (
+        <div
+          role="listbox"
+          aria-labelledby={labelId}
+          className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-amber-500/40 bg-[#160b06] p-1 shadow-xl shadow-black/40"
+        >
+          {options.map((option) => {
+            const selectedOption = option.value === value;
+
+            return (
+              <button
+                key={option.value}
+                type="button"
+                role="option"
+                aria-selected={selectedOption}
+                onClick={() => {
+                  onChange(option.value);
+                  setOpen(false);
+                }}
+                className={`flex min-h-10 w-full items-center rounded-md px-3 text-left text-sm transition duration-150 ${
+                  selectedOption
+                    ? "border border-amber-400/60 bg-amber-400/15 font-bold text-amber-200"
+                    : "border border-transparent text-white/80 hover:bg-amber-500/10 hover:text-white"
+                }`}
+              >
+                {option.label}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function LobbyScreen({ room, roomId }: LobbyScreenProps) {
   const {
     players,
@@ -499,77 +599,57 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
         </button>
 
         {isHost ? (
-          <details className="mt-6 rounded-lg border border-amber-500/30 bg-[#160b06]">
-            <summary className="cursor-pointer px-4 py-3 font-bold text-amber-300">
-              Lobby settings
+          <details className="group mt-6 rounded-lg border border-amber-500/30 bg-[#160b06]">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 font-bold text-amber-300 transition duration-200 hover:bg-amber-500/10 [&::-webkit-details-marker]:hidden">
+              <span>Lobby settings</span>
+              <span
+                aria-hidden="true"
+                className="text-lg transition-transform duration-200 group-open:rotate-180"
+              >
+                ▾
+              </span>
             </summary>
 
-            <div className="border-t border-amber-500/20 p-4">
+            <div className="space-y-3 border-t border-amber-500/20 p-3">
               <div>
-                <label className="mb-2 block text-sm text-white/60">
-                  Game mode
-                </label>
-
-                <select
+                <ThemedDropdown
+                  id="game-mode"
+                  label="Game mode"
                   value={gameMode}
-                  onChange={(event) => {
+                  options={GAME_MODES}
+                  onChange={(value) => {
                     saveLobbyPreferences({
-                      gameMode: event.target.value,
+                      gameMode: value,
                     });
                     setGameMode(
-                      event.target.value,
+                      value,
                     );
                   }}
-                  className="w-full rounded-lg border border-amber-500/30 bg-[#211006] px-4 py-3 text-white focus:border-amber-400 focus:outline-none"
-                >
-                  {GAME_MODES.map((mode) => (
-                    <option
-                      key={mode.value}
-                      value={mode.value}
-                    >
-                      {mode.label}
-                    </option>
-                  ))}
-                </select>
+                />
               </div>
 
-              <div className="mt-4">
-                <label
-                  htmlFor="drawing-speed"
-                  className="mb-2 block text-sm text-white/60"
-                >
-                  Drawing speed
-                </label>
-
-                <select
+              <div>
+                <ThemedDropdown
                   id="drawing-speed"
+                  label="Drawing speed"
                   value={drawingSpeed}
-                  onChange={(event) => {
+                  options={DRAWING_SPEEDS}
+                  onChange={(value) => {
                     saveLobbyPreferences({
-                      drawingSpeed: event.target.value,
+                      drawingSpeed: value,
                       customDrawingMin,
                       customDrawingMax,
                     });
                     setDrawingSpeed(
-                      event.target.value,
+                      value,
                       customDrawingMin,
                       customDrawingMax,
                     );
                   }}
-                  className="w-full rounded-lg border border-amber-500/30 bg-[#211006] px-4 py-3 text-white focus:border-amber-400 focus:outline-none"
-                >
-                  {DRAWING_SPEEDS.map((speed) => (
-                    <option
-                      key={speed.value}
-                      value={speed.value}
-                    >
-                      {speed.label}
-                    </option>
-                  ))}
-                </select>
+                />
 
                 {drawingSpeed === "custom" ? (
-                  <div className="mt-3 grid grid-cols-2 gap-3">
+                  <div className="mt-2 grid grid-cols-2 gap-3">
                     <label className="block text-sm text-white/60">
                       Min seconds
                       <input
@@ -620,7 +700,7 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
 
                           setCustomMinDraft(String(customDrawingMin));
                         }}
-                        className="mt-2 w-full rounded-lg border border-amber-500/30 bg-[#211006] px-4 py-3 text-white focus:border-amber-400 focus:outline-none"
+                        className="mt-1.5 min-h-11 w-full rounded-lg border border-amber-500/30 bg-[#211006] px-3.5 py-2.5 text-white transition duration-200 focus:border-amber-400 focus:outline-none"
                       />
                     </label>
 
@@ -674,76 +754,49 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
 
                           setCustomMaxDraft(String(customDrawingMax));
                         }}
-                        className="mt-2 w-full rounded-lg border border-amber-500/30 bg-[#211006] px-4 py-3 text-white focus:border-amber-400 focus:outline-none"
+                        className="mt-1.5 min-h-11 w-full rounded-lg border border-amber-500/30 bg-[#211006] px-3.5 py-2.5 text-white transition duration-200 focus:border-amber-400 focus:outline-none"
                       />
                     </label>
                   </div>
                 ) : null}
               </div>
 
-              <div className="mt-4">
-                <label
-                  htmlFor="drawing-count"
-                  className="mb-2 block text-sm text-white/60"
-                >
-                  Number of drawings
-                </label>
-
-                <select
+              <div>
+                <ThemedDropdown
                   id="drawing-count"
-                  value={drawingCount}
-                  onChange={(event) => {
-                    const count = Number(event.target.value);
+                  label="Number of drawings"
+                  value={String(drawingCount)}
+                  options={DRAWING_COUNTS.map((count) => ({
+                    value: String(count),
+                    label: String(count),
+                  }))}
+                  onChange={(value) => {
+                    const count = Number(value);
 
                     saveLobbyPreferences({
                       drawingCount: count,
                     });
                     setDrawingCount(count);
                   }}
-                  className="w-full rounded-lg border border-amber-500/30 bg-[#211006] px-4 py-3 text-white focus:border-amber-400 focus:outline-none"
-                >
-                  {DRAWING_COUNTS.map((count) => (
-                    <option
-                      key={count}
-                      value={count}
-                    >
-                      {count}
-                    </option>
-                  ))}
-                </select>
+                />
               </div>
 
-              <div className="mt-4">
-                <label
-                  htmlFor="word-theme"
-                  className="mb-2 block text-sm text-white/60"
-                >
-                  Word theme
-                </label>
-
-                <select
+              <div>
+                <ThemedDropdown
                   id="word-theme"
+                  label="Word theme"
                   value={wordTheme}
-                  onChange={(event) => {
+                  options={WORD_THEMES}
+                  onChange={(value) => {
                     saveLobbyPreferences({
-                      wordTheme: event.target.value,
+                      wordTheme: value,
                     });
-                    setWordTheme(event.target.value);
+                    setWordTheme(value);
                   }}
-                  className="w-full rounded-lg border border-amber-500/30 bg-[#211006] px-4 py-3 text-white focus:border-amber-400 focus:outline-none"
-                >
-                  {WORD_THEMES.map((theme) => (
-                    <option
-                      key={theme.value}
-                      value={theme.value}
-                    >
-                      {theme.label}
-                    </option>
-                  ))}
-                </select>
+                />
               </div>
 
-              <div className="mt-4">
+              <div>
                 <label
                   htmlFor="player-questions"
                   className="mb-2 block text-sm text-white/60"
@@ -765,7 +818,7 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
                       enabled,
                     );
                   }}
-                  className="w-full rounded-lg border border-amber-500/30 bg-[#211006] px-4 py-3 text-left text-white"
+                  className="min-h-11 w-full rounded-lg border border-amber-500/30 bg-[#211006] px-3.5 py-2.5 text-left text-sm font-semibold text-white transition duration-200 hover:border-amber-400 hover:bg-amber-500/10"
                 >
                   {playerQuestionsEnabled
                     ? "Enabled"

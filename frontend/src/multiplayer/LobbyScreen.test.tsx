@@ -188,19 +188,18 @@ describe(
           customDrawingMin: 6,
           customDrawingMax: 10,
         })
+        send.mockClear()
 
-        const select =
+        fireEvent.click(
           screen.getByLabelText(
             'Drawing speed',
-          ) as HTMLSelectElement
+          ),
+        )
 
-        fireEvent.change(
-          select,
-          {
-            target: {
-              value: 'custom',
-            },
-          },
+        fireEvent.click(
+          screen.getByRole('option', {
+            name: 'Custom',
+          }),
         )
 
         expect(send).toHaveBeenCalledWith(
@@ -225,6 +224,7 @@ describe(
           customDrawingMin: 6,
           customDrawingMax: 10,
         })
+        send.mockClear()
 
         fireEvent.change(
           screen.getByLabelText(
@@ -424,24 +424,23 @@ describe(
           drawingCount:
             25,
         })
+        send.mockClear()
 
-        const select =
+        const trigger =
           screen.getByLabelText(
             'Number of drawings',
-          ) as HTMLSelectElement
+          )
 
         expect(
-          select.value,
-        ).toBe('25')
+          trigger,
+        ).toHaveTextContent('25')
 
-        fireEvent.change(
-          select,
-          {
-            target: {
-              value:
-                '15',
-            },
-          },
+        fireEvent.click(trigger)
+
+        fireEvent.click(
+          screen.getByRole('option', {
+            name: '15',
+          }),
         )
 
         expect(
@@ -567,23 +566,23 @@ describe(
           },
           wordTheme: 'general',
         })
+        send.mockClear()
 
-        const select =
+        const trigger =
           screen.getByLabelText(
             'Word theme',
-          ) as HTMLSelectElement
+          )
 
         expect(
-          select.value,
-        ).toBe('general')
+          trigger,
+        ).toHaveTextContent('General')
 
-        fireEvent.change(
-          select,
-          {
-            target: {
-              value: 'animals',
-            },
-          },
+        fireEvent.click(trigger)
+
+        fireEvent.click(
+          screen.getByRole('option', {
+            name: 'Animals',
+          }),
         )
 
         expect(
