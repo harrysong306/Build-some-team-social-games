@@ -195,6 +195,21 @@ const ABILITIES = ["hint", "reveal"] as const;
 type Ability = typeof ABILITIES[number];
 const REVEAL_SECONDS = 5;
 
+/*
+ * Recall ranking/scoring constants.
+ *
+ * Answer timing is measured by the server so a
+ * client cannot provide a fake response time.
+ *
+ * A 3/4 or 4/4 answer counts as successfully
+ * identifying an Anonymous Recall drawing. This
+ * keeps the artist bonus compatible with the
+ * existing fuzzy-answer system, where a small
+ * typo can still be worth 3 points.
+ */
+const RECALL_DURATION_MS = 10_000;
+const CORRECT_GUESS_MIN_POINTS = 3;
+
 export class LobbyRoom extends Room {
   maxClients = MAX_PLAYERS + 1;
   state = new GameState();
@@ -823,6 +838,8 @@ export class LobbyRoom extends Room {
         this.state.players.values()
       ) {
         currentPlayer.score = 0;
+        currentPlayer.recallResponseTimeMs = 0;
+        currentPlayer.recallResponseCount = 0;
 
         // reset per-round sync flags so a replayed round waits fresh,
         // instead of instantly "everyone ready" from the previous round
@@ -956,7 +973,7 @@ export class LobbyRoom extends Room {
 
       this.recallStarted = true;
       this.recallDeadline =
-        Date.now() + 10_000;
+        Date.now() + RECALL_DURATION_MS;
 
       const roundIndex =
         this.recallRound;
@@ -996,7 +1013,7 @@ export class LobbyRoom extends Room {
         ) {
           this.finishRecallRound();
         }
-      }, 10_000);
+      }, RECALL_DURATION_MS);
     },
 
     /*
@@ -1256,12 +1273,12 @@ export class LobbyRoom extends Room {
       ] ?? "";
 
     /*
-     * Each answer keeps the original
-     * Sketch Recall 0-4 grading.
+     * Each guess keeps the existing
+     * Sketch Recall 0-4 fuzzy grading.
      *
      * Higher scores rank first.
-     * Equal scores are ordered by the
-     * earlier server submission time.
+     * Equal round scores are ordered by
+     * the earlier server submission time.
      */
     const ranked = [
       ...this.recallAnswers.values(),
@@ -1282,6 +1299,34 @@ export class LobbyRoom extends Room {
             right.submittedAt,
       );
 
+    /*
+     * Anonymous Recall artist bonus:
+     * one point for every guesser whose
+     * fuzzy score is at least 3/4.
+     */
+    const correctGuessCount =
+      ranked.filter(
+        (entry) =>
+          entry.pointsEarned >=
+          CORRECT_GUESS_MIN_POINTS,
+      ).length;
+
+    /*
+     * recallDeadline is created server-side
+     * when the shared round starts, so this
+     * gives us the shared start timestamp.
+     *
+     * Some low-level tests call
+     * finishRecallRound() directly without
+     * creating a deadline. In that case an
+     * answered round contributes 0ms.
+     */
+    const roundStartedAt =
+      this.recallDeadline > 0
+        ? this.recallDeadline -
+          RECALL_DURATION_MS
+        : null;
+
     const results = [
       ...this.state.players.entries(),
     ].map(
@@ -1298,11 +1343,73 @@ export class LobbyRoom extends Room {
             ? ranked[resultIndex]
             : undefined;
 
+        const isSelectedArtist =
+          this.state.gameMode ===
+            ANONYMOUS_RECALL_MODE &&
+          sessionId ===
+            this.selectedRecallArtistSessionId;
+
+        /*
+         * The selected artist does not submit
+         * a normal Recall answer. Instead they
+         * earn one point for every successful
+         * guess of their drawing.
+         */
         const pointsEarned =
-          entry?.pointsEarned ?? 0;
+          isSelectedArtist
+            ? correctGuessCount
+            : entry?.pointsEarned ?? 0;
+
+        /*
+         * Every non-artist player remains
+         * eligible to answer regardless of any
+         * legacy lives value.
+         *
+         * Submitted answers use the measured
+         * server time. A timeout contributes
+         * the full Recall duration.
+         */
+        const wasEligibleGuesser =
+          !isSelectedArtist;
+
+        let responseTimeMs:
+          | number
+          | null = null;
+
+        if (wasEligibleGuesser) {
+          if (entry) {
+            responseTimeMs =
+              roundStartedAt === null
+                ? 0
+                : Math.max(
+                    0,
+                    Math.min(
+                      RECALL_DURATION_MS,
+                      entry.submittedAt -
+                        roundStartedAt,
+                    ),
+                  );
+          } else {
+            responseTimeMs =
+              RECALL_DURATION_MS;
+          }
+
+          player.recallResponseTimeMs +=
+            responseTimeMs;
+
+          player.recallResponseCount += 1;
+        }
 
         player.score +=
           pointsEarned;
+
+        const averageResponseTimeMs =
+          player.recallResponseCount > 0
+            ? Math.round(
+                player.recallResponseTimeMs /
+                  player.recallResponseCount,
+              )
+            : null;
 
         return {
           sessionId,
@@ -1311,14 +1418,29 @@ export class LobbyRoom extends Room {
           answer:
             entry?.answer ?? "",
           rank:
-            entry
-              ? resultIndex + 1
-              : null,
+            isSelectedArtist
+              ? null
+              : entry
+                ? resultIndex + 1
+                : null,
           timedOut:
+            !isSelectedArtist &&
             !entry,
           pointsEarned,
           totalScore:
             player.score,
+
+          // Extra data used by the frontend to
+          // explain artist scoring and apply the
+          // final score tie-break consistently.
+          isArtist:
+            isSelectedArtist,
+          correctGuessCount:
+            isSelectedArtist
+              ? correctGuessCount
+              : null,
+          responseTimeMs,
+          averageResponseTimeMs,
         };
       },
     );

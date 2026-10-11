@@ -12,8 +12,17 @@ export class Player extends Schema {
   // The prompt and options are public; the correct option stays server-side.
   @type([PlayerQuestion]) questions = new ArraySchema<PlayerQuestion>();
   @type("number") score: number = 0;
-  // Reset to STARTING_LIVES (LobbyRoom.ts) when a game starts.
+
+  // Used to break equal-score leaderboard ties by average Recall response time.
+  // Anonymous Recall artists do not add a response time for rounds where
+  // their own drawing is selected.
+  @type("number") recallResponseTimeMs: number = 0;
+  @type("number") recallResponseCount: number = 0;
+
+  // Legacy schema field retained for compatibility.
+  // Recall no longer uses lives for player elimination.
   @type("number") lives: number = 3;
+
   // sync points for the distraction phase: set once this player has
   // finished drawing and is ready to start the distraction questions,
   // and once they've finished answering them - the room only lets
@@ -46,5 +55,4 @@ export class GameState extends Schema {
   // Team abilities already spent this game (BE-20).
   @type(["string"])
   usedAbilities = new ArraySchema<string>();
-
 }
