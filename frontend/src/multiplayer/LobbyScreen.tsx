@@ -3,6 +3,10 @@ import type { Room } from "@colyseus/sdk";
 import { useLobbyState } from "./useLobbyState";
 import InstructionsScreen from "../sketch-recall/InstructionsScreen";
 import SketchRecallGame from "../sketch-recall/SketchRecallGame";
+import {
+  readLobbyPreferences,
+  saveLobbyPreferences,
+} from "./localLobbyPreferences";
 
 type LobbyScreenProps = {
   room: Room | null;
@@ -84,6 +88,7 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
     useState(String(customDrawingMin));
   const [customMaxDraft, setCustomMaxDraft] =
     useState(String(customDrawingMax));
+  const appliedSavedSettingsRef = useRef(false);
 
   // mirrors isEditingName but updates synchronously (unlike the state
   // value), so a stray blur fired by the input unmounting - which can
@@ -156,6 +161,12 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
     nextMin: number,
     nextMax: number,
   ) => {
+    saveLobbyPreferences({
+      drawingSpeed: "custom",
+      customDrawingMin: nextMin,
+      customDrawingMax: nextMax,
+    });
+
     setDrawingSpeed(
       "custom",
       nextMin,
@@ -221,6 +232,38 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
   }, [
     customDrawingMin,
     customDrawingMax,
+  ]);
+
+  useEffect(() => {
+    if (
+      appliedSavedSettingsRef.current ||
+      !isHost ||
+      phase !== "lobby"
+    ) {
+      return;
+    }
+
+    const saved = readLobbyPreferences();
+
+    appliedSavedSettingsRef.current = true;
+
+    setGameMode(saved.gameMode);
+    setDrawingSpeed(
+      saved.drawingSpeed,
+      saved.customDrawingMin,
+      saved.customDrawingMax,
+    );
+    setDrawingCount(saved.drawingCount);
+    setWordTheme(saved.wordTheme);
+    setPlayerQuestionsEnabled(saved.playerQuestionsEnabled);
+  }, [
+    isHost,
+    phase,
+    setGameMode,
+    setDrawingSpeed,
+    setDrawingCount,
+    setWordTheme,
+    setPlayerQuestionsEnabled,
   ]);
 
   if (roundStarted && phase === "playing") {
@@ -447,11 +490,14 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
 
             <select
               value={gameMode}
-              onChange={(event) =>
+              onChange={(event) => {
+                saveLobbyPreferences({
+                  gameMode: event.target.value,
+                });
                 setGameMode(
                   event.target.value,
-                )
-              }
+                );
+              }}
               className="w-full rounded-lg border border-amber-500/30 bg-[#211006] px-4 py-3 text-white focus:border-amber-400 focus:outline-none"
             >
               {GAME_MODES.map((mode) => (
@@ -482,13 +528,18 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
             <select
               id="drawing-speed"
               value={drawingSpeed}
-              onChange={(event) =>
+              onChange={(event) => {
+                saveLobbyPreferences({
+                  drawingSpeed: event.target.value,
+                  customDrawingMin,
+                  customDrawingMax,
+                });
                 setDrawingSpeed(
                   event.target.value,
                   customDrawingMin,
                   customDrawingMax,
-                )
-              }
+                );
+              }}
               className="w-full rounded-lg border border-amber-500/30 bg-[#211006] px-4 py-3 text-white focus:border-amber-400 focus:outline-none"
             >
               {DRAWING_SPEEDS.map((speed) => (
@@ -631,9 +682,14 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
             <select
               id="drawing-count"
               value={drawingCount}
-              onChange={(event) =>
-                setDrawingCount(Number(event.target.value))
-              }
+              onChange={(event) => {
+                const count = Number(event.target.value);
+
+                saveLobbyPreferences({
+                  drawingCount: count,
+                });
+                setDrawingCount(count);
+              }}
               className="w-full rounded-lg border border-amber-500/30 bg-[#211006] px-4 py-3 text-white focus:border-amber-400 focus:outline-none"
             >
               {DRAWING_COUNTS.map((count) => (
@@ -664,9 +720,12 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
             <select
               id="word-theme"
               value={wordTheme}
-              onChange={(event) =>
-                setWordTheme(event.target.value)
-              }
+              onChange={(event) => {
+                saveLobbyPreferences({
+                  wordTheme: event.target.value,
+                });
+                setWordTheme(event.target.value);
+              }}
               className="w-full rounded-lg border border-amber-500/30 bg-[#211006] px-4 py-3 text-white focus:border-amber-400 focus:outline-none"
             >
               {WORD_THEMES.map((theme) => (
@@ -687,7 +746,7 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
             )?.label ?? wordTheme}
           </p>
         )}
-                {isHost ? (
+        {isHost ? (
           <div className="mt-4">
             <label
               htmlFor="player-questions"
@@ -699,11 +758,17 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
             <button
               id="player-questions"
               type="button"
-              onClick={() =>
+              onClick={() => {
+                const enabled = !playerQuestionsEnabled;
+
+                saveLobbyPreferences({
+                  playerQuestionsEnabled: enabled,
+                });
+
                 setPlayerQuestionsEnabled(
-                  !playerQuestionsEnabled,
-                )
-              }
+                  enabled,
+                );
+              }}
               className="w-full rounded-lg border border-amber-500/30 bg-[#211006] px-4 py-3 text-left text-white"
             >
               {playerQuestionsEnabled

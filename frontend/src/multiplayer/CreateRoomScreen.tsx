@@ -1,11 +1,17 @@
 import { useState } from "react";
 import { useCreateRoom } from "./useCreateRoom";
 import LobbyScreen from "./LobbyScreen";
+import {
+  readLobbyPreferences,
+  saveLobbyPreferences,
+} from "./localLobbyPreferences";
 
 // FE-4: Implement Create Room UI and connect room creation to backend
 function CreateRoomScreen() {
   // draft name typed by the player before creating a room
-  const [name, setName] = useState("");
+  const [name, setName] = useState(
+    () => readLobbyPreferences().playerName,
+  );
 
   const { connected, roomId, error, createRoom, room } = useCreateRoom();
 
@@ -21,7 +27,12 @@ function CreateRoomScreen() {
 
         <input
           value={name}
-          onChange={(e) => setName(e.target.value)}
+          onChange={(e) => {
+            setName(e.target.value);
+            saveLobbyPreferences({
+              playerName: e.target.value,
+            });
+          }}
           placeholder="Your name"
           maxLength={20}
           className="mt-6 w-full rounded-lg border border-amber-500/30 bg-[#211006] px-4 py-3 text-white placeholder:text-white/40 focus:border-amber-400 focus:outline-none"
