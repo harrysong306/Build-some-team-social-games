@@ -255,15 +255,15 @@ function LobbyScreen({
       options,
       correctOption,
     );
+    saveLobbyPreferences({
+      questionPrompt: prompt,
+      questionOptions: options,
+      correctOption,
+    });
     setQuestionPrompt("");
     setQuestionOptions(["", "", "", ""]);
     setCorrectOption(0);
     setReplacingQuestion(false);
-    saveLobbyPreferences({
-      questionPrompt: "",
-      questionOptions: ["", "", "", ""],
-      correctOption: 0,
-    });
   };
 
   const updateQuestionPrompt = (prompt: string) => {
@@ -302,15 +302,26 @@ function LobbyScreen({
 
     if (!question) return;
 
+    const saved = readLobbyPreferences();
+    const savedMatchesQuestion =
+      saved.questionPrompt === question.prompt &&
+      saved.questionOptions.every(
+        (option, optionIndex) =>
+          option === question.options[optionIndex],
+      );
+    const nextCorrectOption = savedMatchesQuestion
+      ? saved.correctOption
+      : 0;
+
     setQuestionPrompt(question.prompt);
     setQuestionOptions([...question.options]);
-    setCorrectOption(0);
+    setCorrectOption(nextCorrectOption);
     setReplacingQuestion(true);
     setChoosingQuestionToReplace(false);
     saveLobbyPreferences({
       questionPrompt: question.prompt,
       questionOptions: [...question.options],
-      correctOption: 0,
+      correctOption: nextCorrectOption,
     });
     replacePlayerQuestion(index);
   };

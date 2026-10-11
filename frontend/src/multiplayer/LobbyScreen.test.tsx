@@ -366,6 +366,134 @@ describe(
         ).toBeChecked()
       },
     )
+
+    it(
+      'keeps the selected correct option when saving a submitted question draft',
+      () => {
+        const {
+          room,
+          send,
+          pushState,
+        } = createFakeRoom('guest')
+
+        const { unmount } = render(
+          <LobbyScreen
+            room={room}
+            roomId="ABCD"
+          />,
+        )
+
+        pushState({
+          players: {
+            host: {
+              name: 'Jordan',
+              ready: false,
+              isHost: true,
+              score: 0,
+            },
+            guest: {
+              name: 'Sam',
+              ready: false,
+              isHost: false,
+              score: 0,
+            },
+          },
+        })
+
+        fireEvent.change(
+          screen.getByPlaceholderText(
+            'Question about you',
+          ),
+          {
+            target: {
+              value: 'Favourite snack?',
+            },
+          },
+        )
+
+        ;[
+          'Chips',
+          'Fruit',
+          'Toast',
+          'Soup',
+        ].forEach((option, index) => {
+          fireEvent.change(
+            screen.getByPlaceholderText(
+              `Option ${index + 1}`,
+            ),
+            {
+              target: {
+                value: option,
+              },
+            },
+          )
+        })
+
+        fireEvent.click(
+          screen.getByLabelText(
+            'Option 2 is correct',
+          ),
+        )
+
+        fireEvent.click(
+          screen.getByRole('button', {
+            name: /save question/i,
+          }),
+        )
+
+        expect(send).toHaveBeenCalledWith(
+          'submitPlayerQuestion',
+          {
+            prompt: 'Favourite snack?',
+            options: [
+              'Chips',
+              'Fruit',
+              'Toast',
+              'Soup',
+            ],
+            correctOption: 1,
+          },
+        )
+
+        unmount()
+
+        render(
+          <LobbyScreen
+            room={room}
+            roomId="ABCD"
+          />,
+        )
+
+        pushState({
+          players: {
+            host: {
+              name: 'Jordan',
+              ready: false,
+              isHost: true,
+              score: 0,
+            },
+            guest: {
+              name: 'Sam',
+              ready: false,
+              isHost: false,
+              score: 0,
+            },
+          },
+        })
+
+        expect(
+          screen.getByPlaceholderText(
+            'Question about you',
+          ),
+        ).toHaveValue('Favourite snack?')
+
+        expect(
+          screen.getByLabelText(
+            'Option 2 is correct',
+          ),
+        ).toBeChecked()
+      },
+    )
   },
 )
 
