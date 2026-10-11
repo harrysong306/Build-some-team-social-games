@@ -184,21 +184,12 @@ function scoreRecallAnswer(
 const ANONYMOUS_RECALL_MODE = "anonymousRecall";
 
 /*
- * Lives, on top of the 0-4 Recall scoring: an
- * answer worth 0 points (wrong or no answer)
- * costs a life. A player with no lives left is
- * out: they keep watching but can't answer or
- * vote.
- */
-const STARTING_LIVES = 3;
-
-/*
  * BE-20: team abilities. Players vote during
  * a Recall round; once more than half of the
- * players still in the game pick the same
- * ability, it activates for everyone. Each
- * ability can be used once per game, and at
- * most one ability per round.
+ * current players pick the same ability, it
+ * activates for everyone. Each ability can be
+ * used once per game, and at most one ability
+ * per round.
  */
 const ABILITIES = ["hint", "reveal"] as const;
 type Ability = typeof ABILITIES[number];
@@ -274,7 +265,7 @@ export class LobbyRoom extends Room {
           this.state.playerQuestionsEnabled &&
           (this.playerQuestions.get(client.sessionId)?.length ?? 0) !==
             REQUIRED_PLAYER_QUESTIONS
-) {
+        ) {
           client.send("questions_required", {
             reason: `Submit ${REQUIRED_PLAYER_QUESTIONS} questions before readying up.`,
           });
@@ -290,12 +281,13 @@ export class LobbyRoom extends Room {
         player.ready = message.ready;
       }
     },
+
     replacePlayerQuestions: (
       client: Client,
       _message: any,
     ) => {
       const player = this.state.players.get(
-       client.sessionId,
+        client.sessionId,
       );
 
       if (!player || player.ready) return;
@@ -352,150 +344,150 @@ export class LobbyRoom extends Room {
       player.questions.push(publicQuestion);
     },
 
-      // Validate distraction answers on the server without revealing the
-      // correct option in the synchronized lobby state.
-      submitPlayerQuestionAnswer: (
-        client: Client,
-        message: {
-          ownerSessionId: string;
-          questionIndex: number;
-          answerIndex: number;
-        },
-      ) => {
-        const questionId =
-          `${message?.ownerSessionId}:${message?.questionIndex}`;
-
-        // BE-32: player questions never block the distraction phase, so
-        // every answer gets a result, even a rejected one (counted as
-        // wrong). Otherwise the client would wait for a reply forever.
-        const reply = (correct: boolean) => {
-          client.send("player_question_result", {
-            questionId,
-            correct,
-            progress: this.distractionStatus(client.sessionId),
-          });
-        };
-
-        const questionIndex = Number(
-          message?.questionIndex,
-        );
-        const answerIndex = Number(
-          message?.answerIndex,
-        );
-
-        if (
-          !Number.isInteger(questionIndex) ||
-          !Number.isInteger(answerIndex)
-        ) {
-          reply(false);
-          return;
-        }
-
-        const question = this.playerQuestions.get(
-          message.ownerSessionId,
-        )?.[questionIndex];
-
-        // Only the player a question was assigned to can answer it, so
-        // nobody (including its author) can probe for the right option.
-        const assigned = this.assignedPlayerQuestionIds
-          .get(client.sessionId)
-          ?.has(questionId);
-
-        if (
-          this.state.phase !== "playing" ||
-          !assigned ||
-          !question ||
-          answerIndex < 0 ||
-          answerIndex >= QUESTION_OPTION_COUNT
-        ) {
-          reply(false);
-          return;
-        }
-
-        // The first answer counts; answering again can't change it.
-        const resultKey = `${client.sessionId}|${questionId}`;
-        const previous = this.playerQuestionResults.get(resultKey);
-
-        if (previous !== undefined) {
-          reply(previous);
-          return;
-        }
-
-        const correct =
-          answerIndex === Number(question.correctOption);
-
-        this.playerQuestionResults.set(resultKey, correct);
-        this.recordDistractionAnswer(client.sessionId, correct);
-        reply(correct);
+    // Validate distraction answers on the server without revealing the
+    // correct option in the synchronized lobby state.
+    submitPlayerQuestionAnswer: (
+      client: Client,
+      message: {
+        ownerSessionId: string;
+        questionIndex: number;
+        answerIndex: number;
       },
+    ) => {
+      const questionId =
+        `${message?.ownerSessionId}:${message?.questionIndex}`;
 
-      // BE-15: send the player their next bank question, without the
-      // answer. Asking again before answering resends the same one.
-      requestDistractionQuestion: (
-        client: Client,
-        _message: any,
-      ) => {
-        if (this.state.phase !== "playing") return;
-
-        const progress = this.getDistractionProgress(client.sessionId);
-
-        if (progress.current === null) {
-          if (progress.position >= progress.order.length) {
-            progress.order = shuffled(progress.order);
-            progress.position = 0;
-          }
-
-          progress.current = progress.order[progress.position];
-          progress.position += 1;
-        }
-
-        const question = distractionQuestions[progress.current];
-
-        client.send("distractionQuestion", {
-          questionId: progress.current,
-          question: question.question,
-          options: shuffled(question.options),
-        });
-      },
-
-      // BE-15: check an answer to the current bank question. An empty
-      // answer means the player ran out of time, which counts as wrong.
-      submitDistractionAnswer: (
-        client: Client,
-        message: {
-          questionId: number;
-          answer: string;
-        },
-      ) => {
-        const progress = this.getDistractionProgress(client.sessionId);
-        const questionId = message?.questionId;
-
-        if (
-          this.state.phase !== "playing" ||
-          progress.current === null ||
-          questionId !== progress.current
-        ) {
-          client.send("distractionResult", {
-            questionId,
-            correct: false,
-            progress: this.distractionStatus(client.sessionId),
-          });
-          return;
-        }
-
-        const correct =
-          message.answer ===
-          distractionQuestions[progress.current].answer;
-
-        progress.current = null;
-        this.recordDistractionAnswer(client.sessionId, correct);
-
-        client.send("distractionResult", {
+      // BE-32: player questions never block the distraction phase, so
+      // every answer gets a result, even a rejected one (counted as
+      // wrong). Otherwise the client would wait for a reply forever.
+      const reply = (correct: boolean) => {
+        client.send("player_question_result", {
           questionId,
           correct,
           progress: this.distractionStatus(client.sessionId),
         });
+      };
+
+      const questionIndex = Number(
+        message?.questionIndex,
+      );
+      const answerIndex = Number(
+        message?.answerIndex,
+      );
+
+      if (
+        !Number.isInteger(questionIndex) ||
+        !Number.isInteger(answerIndex)
+      ) {
+        reply(false);
+        return;
+      }
+
+      const question = this.playerQuestions.get(
+        message.ownerSessionId,
+      )?.[questionIndex];
+
+      // Only the player a question was assigned to can answer it, so
+      // nobody (including its author) can probe for the right option.
+      const assigned = this.assignedPlayerQuestionIds
+        .get(client.sessionId)
+        ?.has(questionId);
+
+      if (
+        this.state.phase !== "playing" ||
+        !assigned ||
+        !question ||
+        answerIndex < 0 ||
+        answerIndex >= QUESTION_OPTION_COUNT
+      ) {
+        reply(false);
+        return;
+      }
+
+      // The first answer counts; answering again can't change it.
+      const resultKey = `${client.sessionId}|${questionId}`;
+      const previous = this.playerQuestionResults.get(resultKey);
+
+      if (previous !== undefined) {
+        reply(previous);
+        return;
+      }
+
+      const correct =
+        answerIndex === Number(question.correctOption);
+
+      this.playerQuestionResults.set(resultKey, correct);
+      this.recordDistractionAnswer(client.sessionId, correct);
+      reply(correct);
+    },
+
+    // BE-15: send the player their next bank question, without the
+    // answer. Asking again before answering resends the same one.
+    requestDistractionQuestion: (
+      client: Client,
+      _message: any,
+    ) => {
+      if (this.state.phase !== "playing") return;
+
+      const progress = this.getDistractionProgress(client.sessionId);
+
+      if (progress.current === null) {
+        if (progress.position >= progress.order.length) {
+          progress.order = shuffled(progress.order);
+          progress.position = 0;
+        }
+
+        progress.current = progress.order[progress.position];
+        progress.position += 1;
+      }
+
+      const question = distractionQuestions[progress.current];
+
+      client.send("distractionQuestion", {
+        questionId: progress.current,
+        question: question.question,
+        options: shuffled(question.options),
+      });
+    },
+
+    // BE-15: check an answer to the current bank question. An empty
+    // answer means the player ran out of time, which counts as wrong.
+    submitDistractionAnswer: (
+      client: Client,
+      message: {
+        questionId: number;
+        answer: string;
       },
+    ) => {
+      const progress = this.getDistractionProgress(client.sessionId);
+      const questionId = message?.questionId;
+
+      if (
+        this.state.phase !== "playing" ||
+        progress.current === null ||
+        questionId !== progress.current
+      ) {
+        client.send("distractionResult", {
+          questionId,
+          correct: false,
+          progress: this.distractionStatus(client.sessionId),
+        });
+        return;
+      }
+
+      const correct =
+        message.answer ===
+        distractionQuestions[progress.current].answer;
+
+      progress.current = null;
+      this.recordDistractionAnswer(client.sessionId, correct);
+
+      client.send("distractionResult", {
+        questionId,
+        correct,
+        progress: this.distractionStatus(client.sessionId),
+      });
+    },
 
     // sync point entering the distraction phase: this player has
     // finished drawing and is waiting for everyone else to catch up
@@ -669,29 +661,31 @@ export class LobbyRoom extends Room {
       this.state.drawingCount =
         count;
     },
+
     setPlayerQuestionsEnabled: (
-     client: Client,
-     message: { enabled: boolean },
+      client: Client,
+      message: { enabled: boolean },
     ) => {
       if (this.state.phase !== "lobby") return;
+
       const player =
         this.state.players.get(
           client.sessionId,
         );
 
-     // Only the host can change this setting.
-     if (!player?.isHost) return;
+      // Only the host can change this setting.
+      if (!player?.isHost) return;
 
-     if (typeof message.enabled !== "boolean") {
-     return;
-     }
+      if (typeof message.enabled !== "boolean") {
+        return;
+      }
 
-     this.state.playerQuestionsEnabled =
-     message.enabled;
-    
-     for (const player of this.state.players.values()) {
-    player.ready = false;
-  }
+      this.state.playerQuestionsEnabled =
+        message.enabled;
+
+      for (const player of this.state.players.values()) {
+        player.ready = false;
+      }
     },
 
     setWordTheme: (
@@ -724,7 +718,7 @@ export class LobbyRoom extends Room {
     startGame: (
       client: Client,
       _message: any,
-    ) => {  
+    ) => {
       const player =
         this.state.players.get(
           client.sessionId,
@@ -749,7 +743,10 @@ export class LobbyRoom extends Room {
 
       this.state.gameWords.clear();
       this.state.gameWords.push(
-        ...generateGameWords(wordCount, this.state.wordTheme as WordPackTheme),
+        ...generateGameWords(
+          wordCount,
+          this.state.wordTheme as WordPackTheme,
+        ),
       );
 
       // Reset distraction state for every new game.
@@ -819,18 +816,18 @@ export class LobbyRoom extends Room {
           );
         }
       }
+
       // Start each new game with a clean scoreboard.
       for (
         const currentPlayer of
         this.state.players.values()
       ) {
         currentPlayer.score = 0;
-        currentPlayer.lives = STARTING_LIVES;
+
         // reset per-round sync flags so a replayed round waits fresh,
         // instead of instantly "everyone ready" from the previous round
         currentPlayer.distractionReady = false;
         currentPlayer.distractionDone = false;
-
       }
 
       this.state.usedAbilities.clear();
@@ -980,13 +977,12 @@ export class LobbyRoom extends Room {
         this.sendAnonymousDrawings();
       }
 
-      // Everyone is out of lives: nobody can
-      // answer, so don't make them wait 10s.
-      const guessingPlayers = this.alivePlayerIds().filter(
-        (sessionId) =>
-          this.state.gameMode !== ANONYMOUS_RECALL_MODE ||
-          sessionId !== this.selectedRecallArtistSessionId,
-      );
+      // In Anonymous Recall the selected artist
+      // does not answer their own drawing. If
+      // there are no guessers, finish immediately.
+      const guessingPlayers =
+        this.eligibleRecallGuesserIds();
+
       if (guessingPlayers.length === 0) {
         this.finishRecallRound();
         return;
@@ -1024,7 +1020,9 @@ export class LobbyRoom extends Room {
         this.recallAnswers.has(
           client.sessionId,
         ) ||
-        !this.isAlive(client.sessionId) ||
+        !this.state.players.has(
+          client.sessionId,
+        ) ||
         (
           this.state.gameMode === ANONYMOUS_RECALL_MODE &&
           client.sessionId === this.selectedRecallArtistSessionId
@@ -1051,14 +1049,12 @@ export class LobbyRoom extends Room {
 
       // Finish early when all eligible guessing
       // players have submitted their answers.
-      const guessingPlayers = this.alivePlayerIds().filter(
-        (sessionId) =>
-          this.state.gameMode !== ANONYMOUS_RECALL_MODE ||
-          sessionId !== this.selectedRecallArtistSessionId,
-      );
+      const guessingPlayers =
+        this.eligibleRecallGuesserIds();
 
       if (
-        this.recallAnswers.size >= guessingPlayers.length
+        this.recallAnswers.size >=
+        guessingPlayers.length
       ) {
         this.finishRecallRound();
       }
@@ -1087,7 +1083,9 @@ export class LobbyRoom extends Room {
           ability,
         ) ||
         this.abilityUsedThisRound ||
-        !this.isAlive(client.sessionId)
+        !this.state.players.has(
+          client.sessionId,
+        )
       ) {
         return;
       }
@@ -1097,16 +1095,19 @@ export class LobbyRoom extends Room {
         ability,
       );
 
-      // Only count votes from players still in
-      // the game (someone may have left since).
-      const alive = this.alivePlayerIds();
+      // Count votes only from players who are
+      // still currently in the room.
+      const players = [
+        ...this.state.players.keys(),
+      ];
+
       const needed =
-        Math.floor(alive.length / 2) + 1;
+        Math.floor(players.length / 2) + 1;
 
       const counts = Object.fromEntries(
         ABILITIES.map((name) => [
           name,
-          alive.filter(
+          players.filter(
             (sessionId) =>
               this.abilityVotes.get(sessionId) ===
               name,
@@ -1303,21 +1304,6 @@ export class LobbyRoom extends Room {
         player.score +=
           pointsEarned;
 
-        // A 0-point answer costs a life, but
-        // only for players who were still in.
-        const isSelectedArtist =
-          this.state.gameMode === ANONYMOUS_RECALL_MODE &&
-          sessionId === this.selectedRecallArtistSessionId;
-
-        const lostLife =
-          !isSelectedArtist &&
-          pointsEarned === 0 &&
-          player.lives > 0;
-
-        if (lostLife) {
-          player.lives -= 1;
-        }
-
         return {
           sessionId,
           playerName:
@@ -1333,8 +1319,6 @@ export class LobbyRoom extends Room {
           pointsEarned,
           totalScore:
             player.score,
-          lostLife,
-          lives: player.lives,
         };
       },
     );
@@ -1383,18 +1367,23 @@ export class LobbyRoom extends Room {
     }
   }
 
-  private isAlive(sessionId: string) {
-    return (
-      (this.state.players.get(sessionId)
-        ?.lives ?? 0) > 0
-    );
-  }
-
-  private alivePlayerIds() {
+  /*
+   * Players expected to submit a Recall answer.
+   *
+   * Everyone remains eligible regardless of any
+   * old lives value. Anonymous Recall's selected
+   * artist is the only player excluded because
+   * everybody else is guessing their drawing.
+   */
+  private eligibleRecallGuesserIds() {
     return [
       ...this.state.players.keys(),
-    ].filter((sessionId) =>
-      this.isAlive(sessionId),
+    ].filter(
+      (sessionId) =>
+        this.state.gameMode !==
+          ANONYMOUS_RECALL_MODE ||
+        sessionId !==
+          this.selectedRecallArtistSessionId,
     );
   }
 
@@ -1459,11 +1448,11 @@ export class LobbyRoom extends Room {
   }
 
   /*
-  * Anonymous Recall image distribution.
-  * Randomly select one player's drawing for
-  * the current round and send it to everyone
-  * except the artist.
-  */
+   * Anonymous Recall image distribution.
+   * Randomly select one player's drawing for
+   * the current round and send it to everyone
+   * except the artist.
+   */
   private sendAnonymousDrawings() {
     const roundIndex = this.recallRound;
 
@@ -1756,10 +1745,12 @@ export class LobbyRoom extends Room {
 
   /*
    * BE-27: a Recall round waits for every player
-   * to be ready, then for every alive player to
-   * answer. If the player we were waiting for
-   * leaves, the others would wait forever, so
-   * check again with the players who are left.
+   * to be ready, then for every eligible guessing
+   * player to answer.
+   *
+   * If a player we were waiting for leaves,
+   * check the remaining eligible guessers so
+   * the round does not wait unnecessarily.
    */
   private continueRecallAfterLeave() {
     if (
@@ -1772,7 +1763,7 @@ export class LobbyRoom extends Room {
     if (this.recallStarted) {
       if (
         this.recallAnswers.size >=
-        this.alivePlayerIds().length
+        this.eligibleRecallGuesserIds().length
       ) {
         this.finishRecallRound();
       }
