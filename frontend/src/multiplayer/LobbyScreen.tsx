@@ -42,6 +42,9 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
     wordTheme,
     playerQuestionsEnabled,
     phase,
+    drawingRound,
+    drawingDeadline,
+    drawingReadyCount,
     gameWords,
     assignedPlayerQuestions,
     mySessionId,
@@ -178,6 +181,9 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
         gameWords={gameWords}
         playerQuestions={assignedPlayerQuestions}
         drawingSpeed={drawingSpeed}
+        drawingRound={drawingRound}
+        drawingDeadline={drawingDeadline}
+        drawingReadyCount={drawingReadyCount}
         // the InstructionsScreen below already ran its countdown
         // before roundStarted flipped to true, so don't show it again
         skipInstructions

@@ -21,6 +21,9 @@ type SketchRecallGameProps = {
   gameWords: readonly string[]
   playerQuestions: readonly PlayerQuestionForGame[]
   drawingSpeed: string
+  drawingRound?: number
+  drawingDeadline?: number
+  drawingReadyCount?: number
   onPlayAgain: () => void
   onSubmitDrawing?: (
     bytes: Uint8Array,
@@ -45,6 +48,9 @@ function SketchRecallGame({
   gameWords,
   playerQuestions,
   drawingSpeed,
+  drawingRound = 0,
+  drawingDeadline = 0,
+  drawingReadyCount = 0,
   onPlayAgain,
   onSubmitDrawing,
   skipInstructions = false,
@@ -123,6 +129,27 @@ function SketchRecallGame({
         }
         onSubmitDrawing={
           onSubmitDrawing
+        }
+        multiplayerSync={
+          room
+            ? {
+                drawingRound,
+                drawingDeadline,
+                drawingReadyCount,
+                totalPlayers: Object.keys(players).length,
+                onEnter: () => {
+                  room.send('drawingPhaseReady')
+                },
+                onReady: (index) => {
+                  room.send('drawingRoundReady', { index })
+                },
+                onForceSave: (handler) =>
+                  room.onMessage?.(
+                    'forceSaveDrawing',
+                    handler,
+                  ),
+              }
+            : undefined
         }
         onComplete={(drawings) => {
           setSavedDrawings(drawings)
