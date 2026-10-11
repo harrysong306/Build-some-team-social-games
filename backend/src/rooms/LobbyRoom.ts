@@ -80,6 +80,7 @@ const MIN_DRAWING_COUNT = 10;
 const MAX_DRAWING_COUNT = 30;
 const VALID_WORD_THEMES = Object.keys(wordPacks) as WordPackTheme[];
 const DRAWING_FORCE_SAVE_GRACE_MS = 1_000;
+const DRAWING_PHASE_READY_TIMEOUT_MS = 15_000;
 
 function drawingDurationMs(
   speed: string,
@@ -262,6 +263,7 @@ export class LobbyRoom extends Room {
   private drawingPhaseReady = new Set<string>();
   private drawingRoundActive = false;
   private drawingForceSaveActive = false;
+  private drawingPhaseReadyTimeoutActive = false;
 
   // Competitive Recall state.
   private recallRound = 0;
@@ -966,6 +968,7 @@ export class LobbyRoom extends Room {
       this.drawingPhaseReady.clear();
       this.drawingRoundActive = false;
       this.drawingForceSaveActive = false;
+      this.drawingPhaseReadyTimeoutActive = false;
 
       this.abilityVotes.clear();
       this.abilityUsedThisRound = false;
@@ -1295,6 +1298,7 @@ export class LobbyRoom extends Room {
       }
 
       this.drawingPhaseReady.add(client.sessionId);
+      this.scheduleDrawingPhaseReadyTimeout();
 
       const players = this.activeDrawingPlayerIds();
       if (
@@ -1383,6 +1387,25 @@ export class LobbyRoom extends Room {
     );
   }
 
+  private scheduleDrawingPhaseReadyTimeout() {
+    if (this.drawingPhaseReadyTimeoutActive) return;
+
+    this.drawingPhaseReadyTimeoutActive = true;
+
+    this.clock.setTimeout(() => {
+      if (
+        this.drawingPhaseReadyTimeoutActive &&
+        this.state.phase === "playing" &&
+        !this.drawingRoundActive &&
+        !this.drawingForceSaveActive &&
+        this.state.drawingRound === 0 &&
+        this.drawingPhaseReady.size > 0
+      ) {
+        this.startDrawingRound();
+      }
+    }, DRAWING_PHASE_READY_TIMEOUT_MS);
+  }
+
   private startDrawingRound() {
     if (
       this.state.phase !== "playing" ||
@@ -1391,6 +1414,7 @@ export class LobbyRoom extends Room {
     ) {
       this.drawingRoundActive = false;
       this.drawingForceSaveActive = false;
+      this.drawingPhaseReadyTimeoutActive = false;
       this.state.drawingDeadline = 0;
       this.state.drawingReadyCount = 0;
       return;
@@ -1406,6 +1430,7 @@ export class LobbyRoom extends Room {
     this.drawingReady.clear();
     this.drawingRoundActive = true;
     this.drawingForceSaveActive = false;
+    this.drawingPhaseReadyTimeoutActive = false;
     this.state.drawingReadyCount = 0;
     this.state.drawingDeadline = Date.now() + duration;
 
