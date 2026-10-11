@@ -19,11 +19,19 @@ const createPlayer = (
   name: string,
   score: number,
   isHost = false,
+  timing?: {
+    totalMs: number
+    count: number
+  },
 ): PlayerView => ({
   name,
   score,
   isHost,
   ready: true,
+  recallResponseTimeMs:
+    timing?.totalMs,
+  recallResponseCount:
+    timing?.count,
 })
 
 describe(
@@ -125,7 +133,201 @@ describe(
     )
 
     it(
-      'gives equal total scores the same final rank',
+      'uses faster average Recall time to break an equal-score tie',
+      () => {
+        const players = {
+          jordan: createPlayer(
+            'Jordan',
+            7,
+            true,
+            {
+              totalMs: 6000,
+              count: 2,
+            },
+          ),
+          sam: createPlayer(
+            'Sam',
+            7,
+            false,
+            {
+              totalMs: 2000,
+              count: 2,
+            },
+          ),
+          alex: createPlayer(
+            'Alex',
+            5,
+            false,
+            {
+              totalMs: 3000,
+              count: 1,
+            },
+          ),
+        }
+
+        render(
+          <MultiplayerResultsScreen
+            players={players}
+            sessionId="jordan"
+            onPlayAgain={vi.fn()}
+            onExit={vi.fn()}
+          />,
+        )
+
+        expect(
+          screen.getByRole(
+            'heading',
+            {
+              name: 'Sam wins!',
+            },
+          ),
+        ).toBeInTheDocument()
+
+        const rows =
+          screen.getAllByTestId(
+            'leaderboard-row',
+          )
+
+        expect(
+          within(
+            rows[0],
+          ).getByText(
+            'Sam',
+          ),
+        ).toBeInTheDocument()
+
+        expect(
+          within(
+            rows[0],
+          ).getByText('#1'),
+        ).toBeInTheDocument()
+
+        expect(
+          within(
+            rows[0],
+          ).getByText(
+            /Avg Recall time:\s*1\.00s/i,
+          ),
+        ).toBeInTheDocument()
+
+        expect(
+          within(
+            rows[1],
+          ).getByText(
+            'Jordan (You)',
+          ),
+        ).toBeInTheDocument()
+
+        expect(
+          within(
+            rows[1],
+          ).getByText('#2'),
+        ).toBeInTheDocument()
+
+        expect(
+          within(
+            rows[1],
+          ).getByText(
+            /Avg Recall time:\s*3\.00s/i,
+          ),
+        ).toBeInTheDocument()
+
+        expect(
+          screen.queryByRole(
+            'heading',
+            {
+              name: "It's a tie!",
+            },
+          ),
+        ).not.toBeInTheDocument()
+      },
+    )
+
+    it(
+      'keeps a shared rank when score and average Recall time are both equal',
+      () => {
+        const players = {
+          jordan: createPlayer(
+            'Jordan',
+            7,
+            false,
+            {
+              totalMs: 4000,
+              count: 2,
+            },
+          ),
+          sam: createPlayer(
+            'Sam',
+            7,
+            false,
+            {
+              totalMs: 2000,
+              count: 1,
+            },
+          ),
+          alex: createPlayer(
+            'Alex',
+            2,
+            false,
+            {
+              totalMs: 5000,
+              count: 1,
+            },
+          ),
+        }
+
+        render(
+          <MultiplayerResultsScreen
+            players={players}
+            sessionId="jordan"
+            onPlayAgain={vi.fn()}
+            onExit={vi.fn()}
+          />,
+        )
+
+        expect(
+          screen.getByRole(
+            'heading',
+            {
+              name:
+                "It's a tie!",
+            },
+          ),
+        ).toBeInTheDocument()
+
+        const rows =
+          screen.getAllByTestId(
+            'leaderboard-row',
+          )
+
+        expect(
+          within(
+            rows[0],
+          ).getByText('#1'),
+        ).toBeInTheDocument()
+
+        expect(
+          within(
+            rows[1],
+          ).getByText('#1'),
+        ).toBeInTheDocument()
+
+        expect(
+          within(
+            rows[2],
+          ).getByText('#3'),
+        ).toBeInTheDocument()
+
+        expect(
+          screen.getAllByText(
+            'Joint winner',
+          ),
+        ).toHaveLength(2)
+      },
+    )
+
+    it(
+      'gives equal total scores the same final rank when timing data is unavailable',
       () => {
         const players = {
           jordan: createPlayer(
@@ -199,7 +401,7 @@ describe(
     )
 
     it(
-      'shares a non-winning rank when players have equal totals',
+      'shares a non-winning rank when score and timing are equal',
       () => {
         const players = {
           jordan: createPlayer(

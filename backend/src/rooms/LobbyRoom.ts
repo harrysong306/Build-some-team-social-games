@@ -204,6 +204,21 @@ const ABILITIES = ["hint", "reveal"] as const;
 type Ability = typeof ABILITIES[number];
 const REVEAL_SECONDS = 5;
 
+/*
+ * Recall ranking/scoring constants.
+ *
+ * Answer timing is measured by the server so a
+ * client cannot provide a fake response time.
+ *
+ * A 3/4 or 4/4 answer counts as successfully
+ * identifying an Anonymous Recall drawing. This
+ * keeps the artist bonus compatible with the
+ * existing fuzzy-answer system, where a small
+ * typo can still be worth 3 points.
+ */
+const RECALL_DURATION_MS = 10_000;
+const CORRECT_GUESS_MIN_POINTS = 3;
+
 export class LobbyRoom extends Room {
   maxClients = MAX_PLAYERS + 1;
   state = new GameState();
@@ -825,6 +840,8 @@ export class LobbyRoom extends Room {
         this.state.players.values()
       ) {
         currentPlayer.score = 0;
+        currentPlayer.recallResponseTimeMs = 0;
+        currentPlayer.recallResponseCount = 0;
         currentPlayer.lives = STARTING_LIVES;
         // reset per-round sync flags so a replayed round waits fresh,
         // instead of instantly "everyone ready" from the previous round
@@ -959,7 +976,7 @@ export class LobbyRoom extends Room {
 
       this.recallStarted = true;
       this.recallDeadline =
-        Date.now() + 10_000;
+        Date.now() + RECALL_DURATION_MS;
 
       const roundIndex =
         this.recallRound;
@@ -980,13 +997,12 @@ export class LobbyRoom extends Room {
         this.sendAnonymousDrawings();
       }
 
-      // Everyone is out of lives: nobody can
-      // answer, so don't make them wait 10s.
-      const guessingPlayers = this.alivePlayerIds().filter(
-        (sessionId) =>
-          this.state.gameMode !== ANONYMOUS_RECALL_MODE ||
-          sessionId !== this.selectedRecallArtistSessionId,
-      );
+      // Everyone is out of lives, or the only
+      // remaining player is the selected artist:
+      // nobody can answer, so don't wait 10s.
+      const guessingPlayers =
+        this.eligibleRecallGuesserIds();
+
       if (guessingPlayers.length === 0) {
         this.finishRecallRound();
         return;
@@ -1000,7 +1016,7 @@ export class LobbyRoom extends Room {
         ) {
           this.finishRecallRound();
         }
-      }, 10_000);
+      }, RECALL_DURATION_MS);
     },
 
     /*
@@ -1051,11 +1067,8 @@ export class LobbyRoom extends Room {
 
       // Finish early when all eligible guessing
       // players have submitted their answers.
-      const guessingPlayers = this.alivePlayerIds().filter(
-        (sessionId) =>
-          this.state.gameMode !== ANONYMOUS_RECALL_MODE ||
-          sessionId !== this.selectedRecallArtistSessionId,
-      );
+      const guessingPlayers =
+        this.eligibleRecallGuesserIds();
 
       if (
         this.recallAnswers.size >= guessingPlayers.length
@@ -1255,12 +1268,12 @@ export class LobbyRoom extends Room {
       ] ?? "";
 
     /*
-     * Each answer keeps the original
-     * Sketch Recall 0-4 grading.
+     * Each guess keeps the existing
+     * Sketch Recall 0-4 fuzzy grading.
      *
      * Higher scores rank first.
-     * Equal scores are ordered by the
-     * earlier server submission time.
+     * Equal round scores are ordered by
+     * the earlier server submission time.
      */
     const ranked = [
       ...this.recallAnswers.values(),
@@ -1281,6 +1294,40 @@ export class LobbyRoom extends Room {
             right.submittedAt,
       );
 
+    /*
+     * Anonymous Recall artist bonus:
+     * one point for every guesser whose
+     * fuzzy score is at least 3/4.
+     *
+     * This treats a very small spelling
+     * error as a successful identification,
+     * matching the existing fuzzy scoring.
+     */
+    const correctGuessCount =
+      ranked.filter(
+        (entry) =>
+          entry.pointsEarned >=
+          CORRECT_GUESS_MIN_POINTS,
+      ).length;
+
+    /*
+     * recallDeadline is created server-side
+     * when the shared round starts, so this
+     * gives us the shared start timestamp.
+     *
+     * Some low-level tests call
+     * finishRecallRound() directly without
+     * creating a deadline. In that case we
+     * still score normally, but an answered
+     * round contributes 0ms rather than
+     * inventing a response time.
+     */
+    const roundStartedAt =
+      this.recallDeadline > 0
+        ? this.recallDeadline -
+          RECALL_DURATION_MS
+        : null;
+
     const results = [
       ...this.state.players.entries(),
     ].map(
@@ -1297,18 +1344,71 @@ export class LobbyRoom extends Room {
             ? ranked[resultIndex]
             : undefined;
 
+        const isSelectedArtist =
+          this.state.gameMode === ANONYMOUS_RECALL_MODE &&
+          sessionId === this.selectedRecallArtistSessionId;
+
+        /*
+         * The selected artist does not submit
+         * a normal Recall answer. Instead they
+         * earn one point for each successful
+         * guess of their drawing.
+         */
         const pointsEarned =
-          entry?.pointsEarned ?? 0;
+          isSelectedArtist
+            ? correctGuessCount
+            : entry?.pointsEarned ?? 0;
+
+        /*
+         * Track answer speed only for players
+         * who were actually eligible to answer
+         * this round.
+         *
+         * - Anonymous artist: excluded.
+         * - Player already out of lives: excluded.
+         * - Submitted answer: actual server time.
+         * - Eligible timeout: full 10 seconds.
+         */
+        const wasEligibleGuesser =
+          !isSelectedArtist &&
+          player.lives > 0;
+
+        let responseTimeMs:
+          | number
+          | null = null;
+
+        if (wasEligibleGuesser) {
+          if (entry) {
+            responseTimeMs =
+              roundStartedAt === null
+                ? 0
+                : Math.max(
+                    0,
+                    Math.min(
+                      RECALL_DURATION_MS,
+                      entry.submittedAt -
+                        roundStartedAt,
+                    ),
+                  );
+          } else {
+            responseTimeMs =
+              RECALL_DURATION_MS;
+          }
+
+          player.recallResponseTimeMs +=
+            responseTimeMs;
+
+          player.recallResponseCount += 1;
+        }
 
         player.score +=
           pointsEarned;
 
         // A 0-point answer costs a life, but
         // only for players who were still in.
-        const isSelectedArtist =
-          this.state.gameMode === ANONYMOUS_RECALL_MODE &&
-          sessionId === this.selectedRecallArtistSessionId;
-
+        // The selected Anonymous Recall artist
+        // is intentionally unable to answer and
+        // therefore never loses a life here.
         const lostLife =
           !isSelectedArtist &&
           pointsEarned === 0 &&
@@ -1318,6 +1418,14 @@ export class LobbyRoom extends Room {
           player.lives -= 1;
         }
 
+        const averageResponseTimeMs =
+          player.recallResponseCount > 0
+            ? Math.round(
+                player.recallResponseTimeMs /
+                  player.recallResponseCount,
+              )
+            : null;
+
         return {
           sessionId,
           playerName:
@@ -1325,16 +1433,31 @@ export class LobbyRoom extends Room {
           answer:
             entry?.answer ?? "",
           rank:
-            entry
-              ? resultIndex + 1
-              : null,
+            isSelectedArtist
+              ? null
+              : entry
+                ? resultIndex + 1
+                : null,
           timedOut:
+            !isSelectedArtist &&
             !entry,
           pointsEarned,
           totalScore:
             player.score,
           lostLife,
           lives: player.lives,
+
+          // Extra data used by the frontend to
+          // explain artist scoring and apply the
+          // final score tie-break consistently.
+          isArtist:
+            isSelectedArtist,
+          correctGuessCount:
+            isSelectedArtist
+              ? correctGuessCount
+              : null,
+          responseTimeMs,
+          averageResponseTimeMs,
         };
       },
     );
@@ -1395,6 +1518,24 @@ export class LobbyRoom extends Room {
       ...this.state.players.keys(),
     ].filter((sessionId) =>
       this.isAlive(sessionId),
+    );
+  }
+
+  /*
+   * Players who are currently allowed and
+   * expected to submit a Recall answer.
+   *
+   * Anonymous Recall's selected artist is
+   * deliberately excluded because everyone
+   * else is guessing that player's drawing.
+   */
+  private eligibleRecallGuesserIds() {
+    return this.alivePlayerIds().filter(
+      (sessionId) =>
+        this.state.gameMode !==
+          ANONYMOUS_RECALL_MODE ||
+        sessionId !==
+          this.selectedRecallArtistSessionId,
     );
   }
 
@@ -1756,10 +1897,12 @@ export class LobbyRoom extends Room {
 
   /*
    * BE-27: a Recall round waits for every player
-   * to be ready, then for every alive player to
-   * answer. If the player we were waiting for
-   * leaves, the others would wait forever, so
-   * check again with the players who are left.
+   * to be ready, then for every eligible guessing
+   * player to answer.
+   *
+   * If a player we were waiting for leaves,
+   * re-check the remaining eligible guessers so
+   * the round does not wait unnecessarily.
    */
   private continueRecallAfterLeave() {
     if (
@@ -1772,7 +1915,7 @@ export class LobbyRoom extends Room {
     if (this.recallStarted) {
       if (
         this.recallAnswers.size >=
-        this.alivePlayerIds().length
+        this.eligibleRecallGuesserIds().length
       ) {
         this.finishRecallRound();
       }
