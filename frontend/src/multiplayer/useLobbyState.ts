@@ -7,6 +7,8 @@ export type PlayerView = {
   isHost: boolean;
   questions?: PlayerQuestionView[];
   score: number;
+  distractionReady?: boolean;
+  distractionDone?: boolean;
 };
 
 export type PlayerQuestionView = {
@@ -31,24 +33,47 @@ export function useLobbyState(room: Room | null) {
   const [gameWords, setGameWords] = useState<string[]>([]);
   const [assignedPlayerQuestions, setAssignedPlayerQuestions] =
     useState<PlayerQuestionForGame[]>([]);
+  // set when the backend rejects a changeName request (empty or taken name)
+  const [nameError, setNameError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!room) return;
 
     const handleStateChange = (state: any) => {
-      setPlayers(Object.fromEntries(state.players.entries()));
-      setGameModeState(state.gameMode);
+      // the decoded state instance can exist for a brief moment before
+      // its players map has actually been populated by the first data
+      // patch (a real race - much more visible in a fast production
+      // build than in dev), so guard every field rather than assume
+      // a truthy state means fully-populated state
+      if (!state) return;
+
+      setPlayers(
+        state.players ? Object.fromEntries(state.players.entries()) : {},
+      );
+      setGameModeState(state.gameMode ?? "sketchRecall");
 
       // Synced from the backend GameState schema
       setDrawingSpeedState(state.drawingSpeed ?? "normal");
       setDrawingCountState(state.drawingCount ?? 25);
       setWordThemeState(state.wordTheme ?? "general");
 
-      setPhase(state.phase);
+      setPhase(state.phase ?? "lobby");
       setGameWords(Array.from(state.gameWords ?? []));
     };
 
-    room.onStateChange(handleStateChange);
+    // onStateChange only fires on the NEXT patch broadcast - a late
+    // subscriber (e.g. a component that mounts well after the room
+    // joined, like DistractionPhase) would otherwise sit on the empty
+    // initial state until some unrelated mutation happens to trigger
+    // the next broadcast. room.state is always the current synced
+    // state regardless of subscriptions, so seed from it immediately.
+    handleStateChange(room.state);
+
+    // some callers pass a minimal room-like object (e.g. test stubs
+    // covering only send/onMessage) that doesn't implement state sync
+    // at all - skip tracking rather than throw in that case
+    const tracksState = typeof room.onStateChange === "function";
+    if (tracksState) room.onStateChange(handleStateChange);
 
     const removeAssignedQuestionsListener = room.onMessage?.(
       "assigned_player_questions",
@@ -57,9 +82,17 @@ export function useLobbyState(room: Room | null) {
       },
     );
 
+    const unsubscribeNameError = room.onMessage?.(
+      "name_error",
+      (message: { reason: string }) => {
+        setNameError(message.reason);
+      },
+    );
+
     return () => {
-      room.onStateChange.remove(handleStateChange);
+      if (tracksState) room.onStateChange.remove(handleStateChange);
       removeAssignedQuestionsListener?.();
+      unsubscribeNameError?.();
     };
   }, [room]);
 
@@ -112,6 +145,12 @@ export function useLobbyState(room: Room | null) {
     room?.send("returnToLobby");
   };
 
+  const changeName = (name: string) => {
+    if (!room) return;
+    setNameError(null);
+    room.send("changeName", { name });
+  };
+
   return {
     players,
     gameMode,
@@ -122,6 +161,7 @@ export function useLobbyState(room: Room | null) {
     gameWords,
     assignedPlayerQuestions,
     mySessionId: room?.sessionId ?? "",
+    nameError,
     toggleReady,
     setGameMode,
     setDrawingSpeed,
@@ -130,5 +170,6 @@ export function useLobbyState(room: Room | null) {
     setWordTheme,
     startGame,
     returnToLobby,
+    changeName,
   };
 }

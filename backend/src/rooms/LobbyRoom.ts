@@ -460,6 +460,20 @@ export class LobbyRoom extends Room {
         });
       },
 
+    // sync point entering the distraction phase: this player has
+    // finished drawing and is waiting for everyone else to catch up
+    distractionReady: (client: Client, _message: any) => {
+      const player = this.state.players.get(client.sessionId);
+      if (player) player.distractionReady = true;
+    },
+
+    // sync point leaving the distraction phase: this player has
+    // finished answering and is waiting for everyone else to finish
+    distractionDone: (client: Client, _message: any) => {
+      const player = this.state.players.get(client.sessionId);
+      if (player) player.distractionDone = true;
+    },
+
     changeName: (
       client: Client,
       message: { name: string },
@@ -740,6 +754,10 @@ export class LobbyRoom extends Room {
       ) {
         currentPlayer.score = 0;
         currentPlayer.lives = STARTING_LIVES;
+        // reset per-round sync flags so a replayed round waits fresh,
+        // instead of instantly "everyone ready" from the previous round
+        currentPlayer.distractionReady = false;
+        currentPlayer.distractionDone = false;
 
       }
 

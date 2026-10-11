@@ -10,6 +10,7 @@ import {
   type DistractionQuestion,
 } from './DistractionQuestions'
 import type { Room } from '@colyseus/sdk'
+import { useLobbyState } from '../multiplayer/useLobbyState'
 import type { PlayerQuestionForGame } from '../multiplayer/useLobbyState'
 
 type GameQuestion = DistractionQuestion & {
@@ -38,6 +39,49 @@ type DistractionPhaseProps = {
   room?: Room | null
   playerQuestions?: readonly PlayerQuestionForGame[]
   onComplete: () => void
+}
+
+type WaitingScreenProps = {
+  title: string
+  subtitle: string
+  readyCount: number
+  totalCount: number
+}
+
+// shared "waiting for other players" screen - used identically before
+// the questions start (waiting on everyone to finish drawing) and
+// after they end (waiting on everyone to finish answering)
+function WaitingScreen({
+  title,
+  subtitle,
+  readyCount,
+  totalCount,
+}: WaitingScreenProps) {
+  return (
+    <main className="flex min-h-[calc(100vh-80px)] items-center justify-center bg-[#0d0704] px-6 text-white">
+
+      <section className="w-full max-w-xl rounded-2xl border border-amber-500/30 bg-[#160b06] p-10 text-center">
+
+        <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-amber-400/10 text-4xl text-amber-400">
+          ⏳
+        </div>
+
+        <h1 className="mt-6 text-3xl font-bold">
+          {title}
+        </h1>
+
+        <p className="mt-3 text-white/55">
+          {subtitle}
+        </p>
+
+        <p className="mt-6 text-lg font-bold text-amber-300">
+          {readyCount} / {totalCount} players ready
+        </p>
+
+      </section>
+
+    </main>
+  )
 }
 
 const INITIAL_QUESTIONS = 5
@@ -99,6 +143,34 @@ function DistractionPhase({
   playerQuestions = [],
   onComplete,
 }: DistractionPhaseProps) {
+  const { players } = useLobbyState(room)
+
+  const playerList = Object.values(players)
+  const totalPlayers = playerList.length
+  const readyCount = playerList.filter((p) => p.distractionReady).length
+  const doneCount = playerList.filter((p) => p.distractionDone).length
+
+  // a real room always syncs player state; a room-like object that
+  // can't (e.g. a test double covering only send/onMessage) will never
+  // report any players, so there's nothing to wait on either - bypass
+  // the gate the same as having no room at all rather than hang forever
+  const canSyncPlayers = typeof room?.onStateChange === 'function'
+  const allReadyToStart =
+    !canSyncPlayers || (totalPlayers > 0 && readyCount >= totalPlayers)
+  const allDone =
+    !canSyncPlayers || (totalPlayers > 0 && doneCount >= totalPlayers)
+
+  // guard each message so it's only ever sent once per phase, even
+  // across StrictMode's double-invoked effects
+  const sentReadyRef = useRef(false)
+  const sentDoneRef = useRef(false)
+
+  useEffect(() => {
+    if (!room || sentReadyRef.current) return
+    sentReadyRef.current = true
+    room.send('distractionReady')
+  }, [room])
+
   // BE-15: in a multiplayer room the server serves the bank questions,
   // checks every answer and decides when the phase is complete.
   // Without a room (single player) the local bank is used as before.
@@ -139,7 +211,7 @@ function DistractionPhase({
 
   const [questionIndex, setQuestionIndex] =
     useState(0)
-  
+
   // Track how many distraction questions have been answered
   const [answeredCount, setAnsweredCount] =
     useState(0)
@@ -342,8 +414,10 @@ function DistractionPhase({
   }
 
   useEffect(() => {
-    // Waiting for the server's next question.
-    if (finished || !currentQuestion) return
+    // Waiting for the server's next question. Also don't burn down the
+    // timer while still waiting on other players to finish drawing and
+    // reach the distraction phase.
+    if (finished || !currentQuestion || !allReadyToStart) return
 
     if (timeLeft === 0) {
       // Treat timeout as an incorrect answer
@@ -368,53 +442,95 @@ function DistractionPhase({
     timeLeft,
     finished,
     currentQuestion,
+    allReadyToStart,
     answeredCount,
     score,
     moveToNextQuestion,
     nextQuestion,
   ])
 
-  if (!finished && !currentQuestion) {
+  // sync point leaving the phase: once this player finishes answering,
+  // tell the room and wait for everyone else before actually completing
+  useEffect(() => {
+    if (!finished || !room || sentDoneRef.current) return
+    sentDoneRef.current = true
+    room.send('distractionDone')
+  }, [finished, room])
+
+  useEffect(() => {
+    // only auto-advance when the room can actually report who's done -
+    // without that, there's nobody to wait for and the manual
+    // "START RECALL" button below is the only way to move on
+    if (canSyncPlayers && finished && allDone) onComplete()
+  }, [canSyncPlayers, finished, allDone, onComplete])
+
+  if (finished) {
+    if (!canSyncPlayers) {
+      // no syncable room: nobody to wait for, same completion screen as before
+      return (
+        <main className="flex min-h-[calc(100vh-80px)] items-center justify-center bg-[#0d0704] px-6 text-white">
+
+          <section className="w-full max-w-xl rounded-2xl border border-amber-500/30 bg-[#160b06] p-10 text-center">
+
+            <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-amber-400/10 text-4xl text-amber-400">
+              ✓
+            </div>
+
+            <p className="mt-6 text-sm font-semibold uppercase tracking-widest text-amber-400">
+              Distraction Complete
+            </p>
+
+            <h1 className="mt-3 text-3xl font-bold">
+              Time to remember
+            </h1>
+
+            <p className="mt-4 text-white/55">
+              You answered {score} out of{' '}
+              {answeredCount} questions correctly.
+            </p>
+
+            <button
+              type="button"
+              onClick={onComplete}
+              className="mt-8 w-full rounded-xl bg-gradient-to-r from-amber-500 to-yellow-400 py-4 font-bold text-black transition hover:brightness-110"
+            >
+              START RECALL →
+            </button>
+
+          </section>
+
+        </main>
+      )
+    }
+
+    // multiplayer: same wait screen used before the phase starts, now
+    // waiting for everyone else to finish answering before moving on
     return (
-      <main className="flex min-h-[calc(100vh-80px)] items-center justify-center bg-[#0d0704] px-6 text-white">
-        <p className="text-white/60">Loading question…</p>
-      </main>
+      <WaitingScreen
+        title="Waiting for other players"
+        subtitle={`You answered ${score} out of ${answeredCount} correctly. Hang tight while everyone else finishes up.`}
+        readyCount={doneCount}
+        totalCount={totalPlayers}
+      />
     )
   }
 
-  if (finished) {
+  if (!allReadyToStart) {
+    // waiting for everyone to finish drawing before the questions start
+    return (
+      <WaitingScreen
+        title="Waiting for other players"
+        subtitle="Everyone needs to finish drawing before the distraction questions start."
+        readyCount={readyCount}
+        totalCount={totalPlayers}
+      />
+    )
+  }
+
+  if (!currentQuestion) {
     return (
       <main className="flex min-h-[calc(100vh-80px)] items-center justify-center bg-[#0d0704] px-6 text-white">
-
-        <section className="w-full max-w-xl rounded-2xl border border-amber-500/30 bg-[#160b06] p-10 text-center">
-
-          <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-amber-400/10 text-4xl text-amber-400">
-            ✓
-          </div>
-
-          <p className="mt-6 text-sm font-semibold uppercase tracking-widest text-amber-400">
-            Distraction Complete
-          </p>
-
-          <h1 className="mt-3 text-3xl font-bold">
-            Time to remember
-          </h1>
-
-          <p className="mt-4 text-white/55">
-            You answered {score} out of{' '}
-            {answeredCount} questions correctly.
-          </p>
-
-          <button
-            type="button"
-            onClick={onComplete}
-            className="mt-8 w-full rounded-xl bg-gradient-to-r from-amber-500 to-yellow-400 py-4 font-bold text-black transition hover:brightness-110"
-          >
-            START RECALL →
-          </button>
-
-        </section>
-
+        <p className="text-white/60">Loading question…</p>
       </main>
     )
   }
