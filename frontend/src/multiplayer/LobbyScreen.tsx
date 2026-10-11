@@ -292,7 +292,6 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
           </p>
         )}
 
-        {!questionsComplete && !me?.ready && (
         {playerQuestionsEnabled &&
          questionCount === 2 &&
          !me?.ready && (
