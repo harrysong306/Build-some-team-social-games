@@ -9,6 +9,7 @@ import {
   distractionQuestions,
   type DistractionQuestion,
 } from './DistractionQuestions'
+import DistractionMinigame from './DistractionMinigame'
 import type { Room } from '@colyseus/sdk'
 import { useLobbyState } from '../multiplayer/useLobbyState'
 import type { PlayerQuestionForGame } from '../multiplayer/useLobbyState'
@@ -224,6 +225,10 @@ function DistractionPhase({
   const [finished, setFinished] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
+  // a short minigame plays between questions, after one is answered
+  // and before the next one appears
+  const [showingMinigame, setShowingMinigame] = useState(false)
+
   const currentQuestion =
     questions[questionIndex]
 
@@ -381,9 +386,16 @@ function DistractionPhase({
       return
     }
 
-    moveToNextQuestion()
+    // a minigame plays before the next question; moveToNextQuestion()
+    // runs once it finishes, via handleMinigameComplete below
+    setShowingMinigame(true)
     setSubmitting(false)
   }
+
+  const handleMinigameComplete = useCallback(() => {
+    setShowingMinigame(false)
+    moveToNextQuestion()
+  }, [moveToNextQuestion])
 
   const nextQuestion = async () => {
     if (submitting || !selectedAnswer) return
@@ -416,8 +428,9 @@ function DistractionPhase({
   useEffect(() => {
     // Waiting for the server's next question. Also don't burn down the
     // timer while still waiting on other players to finish drawing and
-    // reach the distraction phase.
-    if (finished || !currentQuestion || !allReadyToStart) return
+    // reach the distraction phase, or while the between-questions
+    // minigame is showing.
+    if (finished || !currentQuestion || !allReadyToStart || showingMinigame) return
 
     if (timeLeft === 0) {
       // Treat timeout as an incorrect answer
@@ -443,6 +456,7 @@ function DistractionPhase({
     finished,
     currentQuestion,
     allReadyToStart,
+    showingMinigame,
     answeredCount,
     score,
     moveToNextQuestion,
@@ -525,6 +539,10 @@ function DistractionPhase({
         totalCount={totalPlayers}
       />
     )
+  }
+
+  if (showingMinigame) {
+    return <DistractionMinigame onComplete={handleMinigameComplete} />
   }
 
   if (!currentQuestion) {
