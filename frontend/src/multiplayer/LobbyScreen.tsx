@@ -88,6 +88,7 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
     useState(String(customDrawingMin));
   const [customMaxDraft, setCustomMaxDraft] =
     useState(String(customDrawingMax));
+  const [settingsExpanded, setSettingsExpanded] = useState(false);
   const appliedSavedSettingsRef = useRef(false);
 
   // mirrors isEditingName but updates synchronously (unlike the state
@@ -108,6 +109,21 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
   const allReady =
     playerList.length > 0 &&
     playerList.every(([, player]) => player.ready);
+  const gameModeLabel =
+    GAME_MODES.find((mode) => mode.value === gameMode)?.label ??
+    gameMode;
+  const drawingSpeedLabel =
+    DRAWING_SPEEDS.find((speed) => speed.value === drawingSpeed)?.label ??
+    drawingSpeed;
+  const wordThemeLabel =
+    WORD_THEMES.find((theme) => theme.value === wordTheme)?.label ??
+    wordTheme;
+  const drawingSpeedSummary =
+    drawingSpeed === "custom"
+      ? `${customDrawingMin}-${customDrawingMax}s`
+      : `${drawingSpeedLabel} speed`;
+  const settingsSummary =
+    `${gameModeLabel} · ${drawingSpeedSummary} · ${drawingCount} drawings`;
 
   const submitQuestion = () => {
     const prompt = questionPrompt.trim();
@@ -759,32 +775,85 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
             </div>
           </details>
         ) : (
-          <div className="mt-6 space-y-4">
-            <p className="text-sm text-white/60">
-              Mode: {GAME_MODES.find((mode) => mode.value === gameMode)?.label ?? gameMode}
-            </p>
+          <div className="mt-6 rounded-lg border border-amber-500/30 bg-[#211006]">
+            <button
+              type="button"
+              aria-expanded={settingsExpanded}
+              onClick={() =>
+                setSettingsExpanded((expanded) => !expanded)
+              }
+              className="flex w-full items-start justify-between gap-4 px-4 py-3 text-left"
+            >
+              <span>
+                <span className="block font-bold text-amber-300">
+                  Game Settings
+                </span>
 
-            <p className="text-sm text-white/60">
-              Drawing speed: {drawingSpeed}
-            </p>
+                <span className="mt-1 block text-sm text-white/60">
+                  {settingsSummary}
+                </span>
+              </span>
 
-            <p className="text-sm text-white/60">
-              Number of drawings: {drawingCount}
-            </p>
+              <span
+                className={`mt-1 text-lg text-amber-300 transition-transform duration-200 ${
+                  settingsExpanded ? "rotate-180" : ""
+                }`}
+                aria-hidden="true"
+              >
+                ▾
+              </span>
+            </button>
 
-            <p className="text-sm text-white/60">
-              Word theme:{" "}
-              {WORD_THEMES.find(
-                (theme) => theme.value === wordTheme,
-              )?.label ?? wordTheme}
-            </p>
+            <div
+              className={`grid overflow-hidden transition-[grid-template-rows] duration-300 ease-out ${
+                settingsExpanded
+                  ? "grid-rows-[1fr]"
+                  : "grid-rows-[0fr]"
+              }`}
+            >
+              <div className="min-h-0">
+                <dl className="grid grid-cols-1 gap-x-4 gap-y-3 border-t border-amber-500/20 px-4 py-4 text-sm sm:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
+                  <dt className="text-white/50">
+                    Mode
+                  </dt>
+                  <dd className="font-semibold text-white sm:text-right">
+                    {gameModeLabel}
+                  </dd>
 
-            <p className="text-sm text-white/60">
-              Player-created questions:{" "}
-              {playerQuestionsEnabled
-                ? "Enabled"
-                : "Disabled"}
-            </p>
+                  <dt className="text-white/50">
+                    Drawing speed
+                  </dt>
+                  <dd className="font-semibold text-amber-200 sm:text-right">
+                    {drawingSpeed === "custom"
+                      ? `Custom (${customDrawingMin}-${customDrawingMax}s)`
+                      : drawingSpeedLabel}
+                  </dd>
+
+                  <dt className="text-white/50">
+                    Number of drawings
+                  </dt>
+                  <dd className="font-semibold text-white sm:text-right">
+                    {drawingCount}
+                  </dd>
+
+                  <dt className="text-white/50">
+                    Word theme
+                  </dt>
+                  <dd className="font-semibold text-white sm:text-right">
+                    {wordThemeLabel}
+                  </dd>
+
+                  <dt className="text-white/50">
+                    Player-created questions
+                  </dt>
+                  <dd className="font-semibold text-white sm:text-right">
+                    {playerQuestionsEnabled
+                      ? "Enabled"
+                      : "Disabled"}
+                  </dd>
+                </dl>
+              </div>
+            </div>
           </div>
         )}
 
@@ -804,7 +873,7 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
             Start Game
           </button>
         ) : (
-          <p className="mt-4 text-sm text-white/60">
+          <p className="mt-4 text-center text-sm text-white/60">
             Waiting for host to start…
           </p>
         )}

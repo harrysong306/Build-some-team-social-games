@@ -509,8 +509,24 @@ describe(
 
         expect(
           screen.getByText(
-            'Number of drawings: 10',
+            'Sketch Recall · Normal speed · 10 drawings',
           ),
+        ).toBeTruthy()
+
+        fireEvent.click(
+          screen.getByRole('button', {
+            name: /game settings/i,
+          }),
+        )
+
+        expect(
+          screen.getByText(
+            'Number of drawings',
+          ),
+        ).toBeTruthy()
+
+        expect(
+          screen.getByText('10'),
         ).toBeTruthy()
       },
     )
@@ -620,10 +636,20 @@ describe(
           ),
         ).toBeNull()
 
+        fireEvent.click(
+          screen.getByRole('button', {
+            name: /game settings/i,
+          }),
+        )
+
         expect(
           screen.getByText(
-            'Word theme: Animals',
+            'Word theme',
           ),
+        ).toBeTruthy()
+
+        expect(
+          screen.getByText('Animals'),
         ).toBeTruthy()
       },
     )
