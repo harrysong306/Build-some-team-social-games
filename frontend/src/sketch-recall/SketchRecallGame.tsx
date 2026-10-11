@@ -59,8 +59,8 @@ function SketchRecallGame({
   const [recallScore, setRecallScore] =
     useState(0)
 
-  // Multiplayer: lives, game mode and used
-  // team abilities from the server.
+  // Multiplayer game mode and team
+  // abilities from the server.
   const session = useGameSession(room)
 
   const goToGames = useContext(LeaveRoomContext)
@@ -150,8 +150,10 @@ function SketchRecallGame({
         room={room}
         drawings={savedDrawings}
         words={gameWords}
-        anonymous={session.gameMode === 'anonymousRecall'}
-        lives={room ? session.lives[room.sessionId] : undefined}
+        anonymous={
+          session.gameMode ===
+          'anonymousRecall'
+        }
         usedAbilities={session.usedAbilities}
         onComplete={(score) => {
           setRecallScore(score)
@@ -165,29 +167,28 @@ function SketchRecallGame({
     if (room) {
       return (
         <>
-        <MultiplayerResultsScreen
-          players={players}
-          sessionId={room.sessionId}
-          lives={session.lives}
-          onLeave={() => {
-            clearSavedDrawings()
-            room.leave()
-            goToGames?.()
-          }}
-          onPlayAgain={
-            requestMultiplayerReplay
-          }
-          onExit={() => {
-            clearSavedDrawings()
-            onExit()
-          }}
-        />
+          <MultiplayerResultsScreen
+            players={players}
+            sessionId={room.sessionId}
+            onLeave={() => {
+              clearSavedDrawings()
+              room.leave()
+              goToGames?.()
+            }}
+            onPlayAgain={
+              requestMultiplayerReplay
+            }
+            onExit={() => {
+              clearSavedDrawings()
+              onExit()
+            }}
+          />
 
-        {/* FE-102: everyone's drawings, below the final leaderboard */}
-        <FinalGallery
-          room={room}
-          words={gameWords}
-        />
+          {/* FE-102: everyone's drawings, below the final leaderboard */}
+          <FinalGallery
+            room={room}
+            words={gameWords}
+          />
         </>
       )
     }
