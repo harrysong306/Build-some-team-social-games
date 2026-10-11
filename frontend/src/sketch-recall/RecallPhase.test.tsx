@@ -917,4 +917,113 @@ describe('RecallPhase component tests', () => {
       ),
     ).toBeInTheDocument()
   })
+
+  it('hides the selected drawing and disables answering for the artist', () => {
+    const { room, sendMessage } = createMockRoom('player-one')
+
+    render(
+      <RecallPhase
+        room={room}
+        drawings={[null]}
+        words={['Apple']}
+        anonymous={true}
+        onComplete={vi.fn()}
+      />,
+    )
+
+    sendMessage('recallRoundStarted', {
+      roundIndex: 0,
+      deadline: Date.now() + 10000,
+    })
+
+    sendMessage('recallDrawing', {
+      roundIndex: 0,
+      image: null,
+      isArtist: true,
+    })
+
+    expect(
+      screen.getByText('Your drawing was selected!'),
+    ).toBeInTheDocument()
+
+    expect(
+      screen.getByPlaceholderText(
+        'Waiting for other players to guess...',
+      ),
+    ).toBeDisabled()
+
+    expect(
+      screen.getByRole('button', {
+        name: /submit answer/i,
+      }),
+    ).toBeDisabled()
+
+    expect(
+      screen.queryByRole('img', {
+        name: 'Drawing 1',
+      }),
+    ).not.toBeInTheDocument()
+
+    expect(room.send).not.toHaveBeenCalledWith(
+      'submitRecallAnswer',
+      expect.anything(),
+    )
+  })
+
+  it('shows the selected drawing and allows other players to answer', () => {
+    const { room, sendMessage } = createMockRoom('player-two')
+
+    render(
+      <RecallPhase
+        room={room}
+        drawings={[null]}
+        words={['Apple']}
+        anonymous={true}
+        onComplete={vi.fn()}
+      />,
+    )
+
+    sendMessage('recallRoundStarted', {
+      roundIndex: 0,
+      deadline: Date.now() + 10000,
+    })
+
+    sendMessage('recallDrawing', {
+      roundIndex: 0,
+      image: 'test-image',
+      isArtist: false,
+    })
+
+    expect(
+      screen.getByRole('img', {
+        name: 'Drawing 1',
+      }),
+    ).toHaveAttribute(
+      'src',
+      'data:image/png;base64,test-image',
+    )
+
+    const answerInput =
+      screen.getByPlaceholderText('Enter your answer...')
+
+    expect(answerInput).toBeEnabled()
+
+    fireEvent.change(answerInput, {
+      target: { value: 'Apple' },
+    })
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: /submit answer/i,
+      }),
+    )
+
+    expect(room.send).toHaveBeenCalledWith(
+      'submitRecallAnswer',
+      {
+        roundIndex: 0,
+        answer: 'Apple',
+      },
+    )
+  })
 })
