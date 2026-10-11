@@ -19,8 +19,10 @@ export class Player extends Schema {
   @type("number") recallResponseTimeMs: number = 0;
   @type("number") recallResponseCount: number = 0;
 
-  // Reset to STARTING_LIVES (LobbyRoom.ts) when a game starts.
+  // Legacy schema field retained for compatibility.
+  // Recall no longer uses lives for player elimination.
   @type("number") lives: number = 3;
+
   // sync points for the distraction phase: set once this player has
   // finished drawing and is ready to start the distraction questions,
   // and once they've finished answering them - the room only lets

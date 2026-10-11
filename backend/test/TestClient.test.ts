@@ -2273,14 +2273,14 @@ client2.send("markReady", { ready: true });
   });
 
   /*
-   * Lives, BE-16 (anonymous recall) and BE-20
-   * (team abilities).
+   * Recall participation, BE-16 (anonymous recall)
+   * and BE-20 (team abilities).
    *
    * These wait for the server to actually handle
    * each message instead of waiting for a patch
    * tick, so they don't depend on timing.
    */
-  describe("lives, anonymous recall and team abilities", () => {
+  describe("Recall participation, anonymous recall and team abilities", () => {
     const sendAndWait = async (room: any, client: any, type: string, message: any = {}) => {
       const handled = room.waitForMessage(type);
       client.send(type, message);
@@ -2290,7 +2290,7 @@ client2.send("markReady", { ready: true });
     const player = (room: any, client: any) =>
       room.state.players.get(client.sessionId);
 
-    // Players in a started game with full lives.
+    // Players in a started game.
     const setupGame = async (names: string[], words: string[]) => {
       const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
       const clients = [];
@@ -2300,7 +2300,6 @@ client2.send("markReady", { ready: true });
 
       room.state.phase = "playing";
       room.state.gameWords.push(...words);
-      room.state.players.forEach((current: any) => { current.lives = 3; });
 
       return { room, clients };
     };
@@ -2311,8 +2310,8 @@ client2.send("markReady", { ready: true });
       }
     };
 
-    describe("lives", () => {
-      it("gives every player 3 lives when a game starts", async () => {
+    describe("Recall participation without elimination", () => {
+      it("does not reset a legacy lives value when a game starts", async () => {
         const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
         const client1 = await colyseus.connectTo(room, { name: "Jordan" });
         player(room, client1).lives = 0;
@@ -2322,11 +2321,13 @@ client2.send("markReady", { ready: true });
         room.state.players.forEach((current: any) => { current.ready = true; });
         await sendAndWait(room, client1, "startGame");
 
-        assert.strictEqual(player(room, client1).lives, 3);
+        assert.strictEqual(player(room, client1).lives, 0);
       });
 
-      it("takes a life for a 0-point answer or no answer, not for a scoring one", async () => {
+      it("does not change lives for a 0-point answer or no answer", async () => {
         const { room, clients: [client1, client2] } = await setupGame(["Jordan", "Sam"], ["cat", "dog"]);
+        player(room, client1).lives = 2;
+        player(room, client2).lives = 1;
         await startRound(room, [client1, client2]);
 
         const result = client1.waitForMessage("recallRoundResult");
@@ -2334,36 +2335,40 @@ client2.send("markReady", { ready: true });
         (room as any).finishRecallRound(); // Sam never answers
         const message: any = await result;
 
-        assert.strictEqual(player(room, client1).lives, 3);
-        assert.strictEqual(player(room, client2).lives, 2);
+        assert.strictEqual(player(room, client1).lives, 2);
+        assert.strictEqual(player(room, client2).lives, 1);
 
         const samResult = message.results.find((r: any) => r.sessionId === client2.sessionId);
-        assert.strictEqual(samResult.lostLife, true);
-        assert.strictEqual(samResult.lives, 2);
+        assert.strictEqual(samResult.pointsEarned, 0);
+        assert.strictEqual(samResult.timedOut, true);
+        assert.strictEqual("lostLife" in samResult, false);
+        assert.strictEqual("lives" in samResult, false);
       });
 
-      it("stops a player with no lives left from answering", async () => {
+      it("allows a player with a zero legacy lives value to answer", async () => {
         const { room, clients: [client1, client2] } = await setupGame(["Jordan", "Sam"], ["cat", "dog"]);
         player(room, client2).lives = 0;
         await startRound(room, [client1, client2]);
 
         await sendAndWait(room, client2, "submitRecallAnswer", { roundIndex: 0, answer: "cat" });
-        assert.strictEqual((room as any).recallAnswers.has(client2.sessionId), false);
+        assert.strictEqual((room as any).recallAnswers.has(client2.sessionId), true);
 
-        // Only Jordan is still in, so his answer ends the round.
         await sendAndWait(room, client1, "submitRecallAnswer", { roundIndex: 0, answer: "cat" });
 
         assert.strictEqual((room as any).recallRound, 1);
-        assert.strictEqual(player(room, client2).lives, 0); // can't go below 0
+        assert.strictEqual(player(room, client2).lives, 0);
       });
 
-      it("ends the round straight away when everyone is out", async () => {
+      it("does not end the round just because the legacy lives value is zero", async () => {
         const { room, clients: [client1] } = await setupGame(["Jordan"], ["cat", "dog"]);
         player(room, client1).lives = 0;
 
-        const result = client1.waitForMessage("recallRoundResult");
         await startRound(room, [client1]);
-        await result;
+
+        assert.strictEqual((room as any).recallStarted, true);
+        assert.strictEqual((room as any).recallRound, 0);
+
+        await sendAndWait(room, client1, "submitRecallAnswer", { roundIndex: 0, answer: "cat" });
 
         assert.strictEqual((room as any).recallRound, 1);
       });
@@ -2666,15 +2671,15 @@ client2.send("markReady", { ready: true });
         assert.notStrictEqual(revealMessage.image, mainImage);
       });
 
-      it("ignores votes from players who are out of lives", async () => {
+      it("allows votes regardless of a player's legacy lives value", async () => {
         const { room, clients: [client1, client2] } = await setupGame(["Jordan", "Sam"], ["cat"]);
         player(room, client2).lives = 0;
         await startRound(room, [client1, client2]);
 
         await sendAndWait(room, client2, "voteAbility", { roundIndex: 0, ability: "hint" });
-        assert.strictEqual((room as any).abilityVotes.size, 0);
+        assert.strictEqual((room as any).abilityVotes.size, 1);
+        assert.strictEqual(room.state.usedAbilities.length, 0);
 
-        // Jordan is the only one left, so his vote alone is a majority.
         await sendAndWait(room, client1, "voteAbility", { roundIndex: 0, ability: "hint" });
         assert.deepStrictEqual([...room.state.usedAbilities], ["hint"]);
       });

@@ -5,8 +5,6 @@ type MultiplayerResultsScreenProps = {
   sessionId: string
   onPlayAgain: () => void
   onExit: () => void
-  // Lives left per sessionId, when the game has them.
-  lives?: Record<string, number>
   // Leave the room entirely.
   onLeave?: () => void
 }
@@ -24,7 +22,6 @@ function MultiplayerResultsScreen({
   sessionId,
   onPlayAgain,
   onExit,
-  lives,
   onLeave,
 }: MultiplayerResultsScreenProps) {
   /*
@@ -356,14 +353,6 @@ function MultiplayerResultsScreen({
                                 1000
                               ).toFixed(2)}
                               s
-                            </p>
-                          )}
-
-                          {lives?.[player.sessionId] !== undefined && (
-                            <p className="mt-1 text-xs text-white/50">
-                              {lives[player.sessionId] > 0
-                                ? '❤️'.repeat(lives[player.sessionId])
-                                : 'Out of lives'}
                             </p>
                           )}
 
