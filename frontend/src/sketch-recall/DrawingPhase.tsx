@@ -13,6 +13,8 @@ import DrawingCanvas, {
 type DrawingPhaseProps = {
   words: readonly string[]
   drawingSpeed: string
+  customDrawingMin?: number
+  customDrawingMax?: number
   onBack: () => void
   onSubmitDrawing?: (
     bytes: Uint8Array,
@@ -51,7 +53,11 @@ const DRAWING_COLORS = [
 type DrawingColor =
   (typeof DRAWING_COLORS)[number]['value']
 
-function getDrawingTime(drawingSpeed: string) {
+function getDrawingTime(
+  drawingSpeed: string,
+  customDrawingMin = 6,
+  customDrawingMax = 10,
+) {
   if (drawingSpeed === 'hard') {
     // 3–6 seconds
     return Math.floor(Math.random() * 4) + 3
@@ -62,6 +68,13 @@ function getDrawingTime(drawingSpeed: string) {
     return Math.floor(Math.random() * 5) + 8
   }
 
+  if (drawingSpeed === 'custom') {
+    const min = Math.max(1, Math.round(customDrawingMin))
+    const max = Math.max(min, Math.round(customDrawingMax))
+
+    return Math.floor(Math.random() * (max - min + 1)) + min
+  }
+
   // Normal: 6–10 seconds
   return Math.floor(Math.random() * 5) + 6
 }
@@ -69,6 +82,8 @@ function getDrawingTime(drawingSpeed: string) {
 function DrawingPhase({
   words,
   drawingSpeed,
+  customDrawingMin,
+  customDrawingMax,
   onBack,
   onSubmitDrawing,
   onComplete,
@@ -91,7 +106,13 @@ function DrawingPhase({
   const [canUndo, setCanUndo] = useState(false)
 
   const [timeLeft, setTimeLeft] =
-    useState(() => getDrawingTime(drawingSpeed))
+    useState(() =>
+      getDrawingTime(
+        drawingSpeed,
+        customDrawingMin,
+        customDrawingMax,
+      ),
+    )
 
   const [drawings, setDrawings] =
     useState<(string | null)[]>(
@@ -125,7 +146,13 @@ function DrawingPhase({
     }
 
     setCurrentIndex((current) => current + 1)
-    setTimeLeft(getDrawingTime(drawingSpeed))
+    setTimeLeft(
+      getDrawingTime(
+        drawingSpeed,
+        customDrawingMin,
+        customDrawingMax,
+      ),
+    )
 
     canvasRef.current?.clear()
 
@@ -137,6 +164,8 @@ function DrawingPhase({
     words.length,
     onSubmitDrawing,
     drawingSpeed,
+    customDrawingMin,
+    customDrawingMax,
   ])
 
   useEffect(() => {

@@ -18,6 +18,7 @@ const DRAWING_SPEEDS = [
   { value: "easy", label: "Easy" },
   { value: "normal", label: "Normal" },
   { value: "hard", label: "Hard" },
+  { value: "custom", label: "Custom" },
 ];
 
 // Must stay within MIN_DRAWING_COUNT and
@@ -38,6 +39,8 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
     players,
     gameMode,
     drawingSpeed,
+    customDrawingMin,
+    customDrawingMax,
     drawingCount,
     wordTheme,
     playerQuestionsEnabled,
@@ -77,6 +80,10 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
 
   // briefly true right after the room code is copied, to show feedback
   const [codeCopied, setCodeCopied] = useState(false);
+  const [customMinDraft, setCustomMinDraft] =
+    useState(String(customDrawingMin));
+  const [customMaxDraft, setCustomMaxDraft] =
+    useState(String(customDrawingMax));
 
   // mirrors isEditingName but updates synchronously (unlike the state
   // value), so a stray blur fired by the input unmounting - which can
@@ -115,6 +122,45 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
     setQuestionPrompt("");
     setQuestionOptions(["", "", "", ""]);
     setCorrectOption(0);
+  };
+
+  const clampDrawingTime = (
+    value: number,
+    minimum: number,
+    maximum: number,
+  ) => Math.min(
+    maximum,
+    Math.max(
+      minimum,
+      Math.round(value),
+    ),
+  );
+
+  const parseDrawingTimeDraft = (
+    value: string,
+  ) => {
+    if (value === "") return null;
+
+    const parsed = Number(value);
+
+    if (!Number.isFinite(parsed)) return null;
+
+    return clampDrawingTime(
+      parsed,
+      1,
+      120,
+    );
+  };
+
+  const submitCustomDrawingTime = (
+    nextMin: number,
+    nextMax: number,
+  ) => {
+    setDrawingSpeed(
+      "custom",
+      nextMin,
+      nextMax,
+    );
   };
 
   const startEditingName = () => {
@@ -169,6 +215,14 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
     }
   }, [phase]);
 
+  useEffect(() => {
+    setCustomMinDraft(String(customDrawingMin));
+    setCustomMaxDraft(String(customDrawingMax));
+  }, [
+    customDrawingMin,
+    customDrawingMax,
+  ]);
+
   if (roundStarted && phase === "playing") {
     return (
       <SketchRecallGame
@@ -178,6 +232,8 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
         gameWords={gameWords}
         playerQuestions={assignedPlayerQuestions}
         drawingSpeed={drawingSpeed}
+        customDrawingMin={customDrawingMin}
+        customDrawingMax={customDrawingMax}
         // the InstructionsScreen below already ran its countdown
         // before roundStarted flipped to true, so don't show it again
         skipInstructions
@@ -416,14 +472,22 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
 
         {isHost ? (
           <div className="mt-4">
-            <label className="mb-2 block text-sm text-white/60">
+            <label
+              htmlFor="drawing-speed"
+              className="mb-2 block text-sm text-white/60"
+            >
               Drawing speed
             </label>
 
             <select
+              id="drawing-speed"
               value={drawingSpeed}
               onChange={(event) =>
-                setDrawingSpeed(event.target.value)
+                setDrawingSpeed(
+                  event.target.value,
+                  customDrawingMin,
+                  customDrawingMax,
+                )
               }
               className="w-full rounded-lg border border-amber-500/30 bg-[#211006] px-4 py-3 text-white focus:border-amber-400 focus:outline-none"
             >
@@ -436,6 +500,118 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
                 </option>
               ))}
             </select>
+
+            {drawingSpeed === "custom" ? (
+              <div className="mt-3 grid grid-cols-2 gap-3">
+                <label className="block text-sm text-white/60">
+                  Min seconds
+                  <input
+                    type="number"
+                    min={1}
+                    max={120}
+                    value={customMinDraft}
+                    onChange={(event) => {
+                      const rawValue = event.target.value;
+
+                      if (rawValue === "") {
+                        setCustomMinDraft("");
+                        return;
+                      }
+
+                      const nextMin =
+                        parseDrawingTimeDraft(rawValue);
+
+                      if (nextMin === null) return;
+                      setCustomMinDraft(String(nextMin));
+
+                      const currentMax =
+                        parseDrawingTimeDraft(customMaxDraft);
+
+                      if (
+                        currentMax !== null &&
+                        nextMin <= currentMax
+                      ) {
+                        submitCustomDrawingTime(
+                          nextMin,
+                          currentMax,
+                        );
+                      }
+                    }}
+                    onBlur={() => {
+                      const currentMin =
+                        parseDrawingTimeDraft(customMinDraft);
+                      const currentMax =
+                        parseDrawingTimeDraft(customMaxDraft);
+
+                      if (
+                        currentMin !== null &&
+                        currentMax !== null &&
+                        currentMin <= currentMax
+                      ) {
+                        return;
+                      }
+
+                      setCustomMinDraft(String(customDrawingMin));
+                    }}
+                    className="mt-2 w-full rounded-lg border border-amber-500/30 bg-[#211006] px-4 py-3 text-white focus:border-amber-400 focus:outline-none"
+                  />
+                </label>
+
+                <label className="block text-sm text-white/60">
+                  Max seconds
+                  <input
+                    type="number"
+                    min={1}
+                    max={120}
+                    value={customMaxDraft}
+                    onChange={(event) => {
+                      const rawValue = event.target.value;
+
+                      if (rawValue === "") {
+                        setCustomMaxDraft("");
+                        return;
+                      }
+
+                      const nextMax =
+                        parseDrawingTimeDraft(rawValue);
+
+                      if (nextMax === null) return;
+                      setCustomMaxDraft(String(nextMax));
+
+                      const currentMin =
+                        parseDrawingTimeDraft(customMinDraft);
+
+                      if (
+                        currentMin !== null &&
+                        nextMax >= currentMin
+                      ) {
+                        submitCustomDrawingTime(
+                          currentMin,
+                          nextMax,
+                        );
+                      }
+                    }}
+                    onBlur={() => {
+                      const currentMin =
+                        parseDrawingTimeDraft(customMinDraft);
+                      const currentMax =
+                        parseDrawingTimeDraft(customMaxDraft);
+
+                      if (
+                        currentMin !== null &&
+                        currentMax !== null &&
+                        currentMax >= currentMin
+                      ) {
+                        return;
+                      }
+
+                      setCustomMaxDraft(String(customDrawingMax));
+                    }}
+                    className="mt-2 w-full rounded-lg border border-amber-500/30 bg-[#211006] px-4 py-3 text-white focus:border-amber-400 focus:outline-none"
+                  />
+                </label>
+              </div>
+            ) : null}
           </div>
         ) : (
           <p className="mt-4 text-sm text-white/60">

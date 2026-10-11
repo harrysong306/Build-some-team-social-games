@@ -21,6 +21,8 @@ type SketchRecallGameProps = {
   gameWords: readonly string[]
   playerQuestions: readonly PlayerQuestionForGame[]
   drawingSpeed: string
+  customDrawingMin?: number
+  customDrawingMax?: number
   onPlayAgain: () => void
   onSubmitDrawing?: (
     bytes: Uint8Array,
@@ -45,6 +47,8 @@ function SketchRecallGame({
   gameWords,
   playerQuestions,
   drawingSpeed,
+  customDrawingMin,
+  customDrawingMax,
   onPlayAgain,
   onSubmitDrawing,
   skipInstructions = false,
@@ -118,6 +122,8 @@ function SketchRecallGame({
       <DrawingPhase
         words={gameWords}
         drawingSpeed={drawingSpeed}
+        customDrawingMin={customDrawingMin}
+        customDrawingMax={customDrawingMax}
         onBack={() =>
           setPhase('instructions')
         }

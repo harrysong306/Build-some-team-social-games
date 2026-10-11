@@ -68,6 +68,8 @@ type FakeState = {
   players: Record<string, FakePlayer>
   drawingCount?: number
   drawingSpeed?: string
+  customDrawingMin?: number
+  customDrawingMax?: number
   wordTheme?: string
   phase?: string
   gameWords?: string[]
@@ -119,6 +121,12 @@ function createFakeRoom(
         drawingSpeed:
           state.drawingSpeed ??
           'normal',
+        customDrawingMin:
+          state.customDrawingMin ??
+          6,
+        customDrawingMax:
+          state.customDrawingMax ??
+          10,
         drawingCount:
           state.drawingCount ??
           25,
@@ -143,6 +151,236 @@ function createFakeRoom(
     pushState,
   }
 }
+
+describe(
+  'LobbyScreen drawing speed setting',
+  () => {
+    beforeEach(() => {
+      vi.clearAllMocks()
+    })
+
+    it(
+      'lets the host enter custom drawing time bounds',
+      () => {
+        const {
+          room,
+          send,
+          pushState,
+        } = createFakeRoom('host')
+
+        render(
+          <LobbyScreen
+            room={room}
+            roomId="ABCD"
+          />,
+        )
+
+        pushState({
+          players: {
+            host: {
+              name: 'Jordan',
+              ready: false,
+              isHost: true,
+              score: 0,
+            },
+          },
+          drawingSpeed: 'normal',
+          customDrawingMin: 6,
+          customDrawingMax: 10,
+        })
+
+        const select =
+          screen.getByLabelText(
+            'Drawing speed',
+          ) as HTMLSelectElement
+
+        fireEvent.change(
+          select,
+          {
+            target: {
+              value: 'custom',
+            },
+          },
+        )
+
+        expect(send).toHaveBeenCalledWith(
+          'setDrawingSpeed',
+          {
+            speed: 'custom',
+            customMin: 6,
+            customMax: 10,
+          },
+        )
+
+        pushState({
+          players: {
+            host: {
+              name: 'Jordan',
+              ready: false,
+              isHost: true,
+              score: 0,
+            },
+          },
+          drawingSpeed: 'custom',
+          customDrawingMin: 6,
+          customDrawingMax: 10,
+        })
+
+        fireEvent.change(
+          screen.getByLabelText(
+            'Min seconds',
+          ),
+          {
+            target: {
+              value: '4',
+            },
+          },
+        )
+
+        expect(send).toHaveBeenCalledWith(
+          'setDrawingSpeed',
+          {
+            speed: 'custom',
+            customMin: 4,
+            customMax: 10,
+          },
+        )
+
+        fireEvent.change(
+          screen.getByLabelText(
+            'Max seconds',
+          ),
+          {
+            target: {
+              value: '14',
+            },
+          },
+        )
+
+        expect(send).toHaveBeenCalledWith(
+          'setDrawingSpeed',
+          {
+            speed: 'custom',
+            customMin: 4,
+            customMax: 14,
+          },
+        )
+
+        const minInput =
+          screen.getByLabelText(
+            'Min seconds',
+          ) as HTMLInputElement
+
+        fireEvent.change(
+          minInput,
+          {
+            target: {
+              value: '',
+            },
+          },
+        )
+
+        expect(minInput.value).toBe('')
+
+        expect(send).not.toHaveBeenCalledWith(
+          'setDrawingSpeed',
+          {
+            speed: 'custom',
+            customMin: 0,
+            customMax: 14,
+          },
+        )
+
+        fireEvent.blur(minInput)
+
+        expect(minInput.value).toBe('6')
+
+        fireEvent.change(
+          minInput,
+          {
+            target: {
+              value: '999',
+            },
+          },
+        )
+
+        expect(minInput.value).toBe('120')
+
+        expect(send).not.toHaveBeenCalledWith(
+          'setDrawingSpeed',
+          {
+            speed: 'custom',
+            customMin: 120,
+            customMax: 14,
+          },
+        )
+
+        fireEvent.blur(minInput)
+
+        expect(minInput.value).toBe('6')
+
+        pushState({
+          players: {
+            host: {
+              name: 'Jordan',
+              ready: false,
+              isHost: true,
+              score: 0,
+            },
+          },
+          drawingSpeed: 'custom',
+          customDrawingMin: 2,
+          customDrawingMax: 10,
+        })
+
+        const maxInput =
+          screen.getByLabelText(
+            'Max seconds',
+          ) as HTMLInputElement
+
+        fireEvent.change(
+          maxInput,
+          {
+            target: {
+              value: '1',
+            },
+          },
+        )
+
+        expect(maxInput.value).toBe('1')
+
+        expect(send).not.toHaveBeenCalledWith(
+          'setDrawingSpeed',
+          {
+            speed: 'custom',
+            customMin: 2,
+            customMax: 1,
+          },
+        )
+
+        fireEvent.change(
+          maxInput,
+          {
+            target: {
+              value: '13',
+            },
+          },
+        )
+
+        expect(maxInput.value).toBe('13')
+
+        expect(send).toHaveBeenCalledWith(
+          'setDrawingSpeed',
+          {
+            speed: 'custom',
+            customMin: 2,
+            customMax: 13,
+          },
+        )
+      },
+    )
+  },
+)
 
 describe(
   'LobbyScreen number of drawings setting',
