@@ -194,6 +194,8 @@ function LobbyScreen({
     useState(String(customDrawingMin));
   const [customMaxDraft, setCustomMaxDraft] =
     useState(String(customDrawingMax));
+  const [customTimeLastEdited, setCustomTimeLastEdited] =
+    useState<"min" | "max">("min");
   const [settingsExpanded, setSettingsExpanded] = useState(false);
   const [choosingQuestionToReplace, setChoosingQuestionToReplace] =
     useState(false);
@@ -356,6 +358,41 @@ function LobbyScreen({
       nextMin,
       nextMax,
     );
+  };
+
+  const commitCustomDrawingTime = (
+    editedField: "min" | "max",
+  ) => {
+    const parsedMin =
+      parseDrawingTimeDraft(customMinDraft) ??
+      customDrawingMin;
+    const parsedMax =
+      parseDrawingTimeDraft(customMaxDraft) ??
+      customDrawingMax;
+
+    let nextMin = parsedMin;
+    let nextMax = parsedMax;
+
+    if (nextMin > nextMax) {
+      if (editedField === "min") {
+        nextMax = nextMin;
+      } else {
+        nextMin = nextMax;
+      }
+    }
+
+    setCustomMinDraft(String(nextMin));
+    setCustomMaxDraft(String(nextMax));
+    submitCustomDrawingTime(
+      nextMin,
+      nextMax,
+    );
+  };
+
+  const commitCustomDrawingTimeBeforeStart = () => {
+    if (drawingSpeed !== "custom") return;
+
+    commitCustomDrawingTime(customTimeLastEdited);
   };
 
   const startEditingName = () => {
@@ -756,53 +793,16 @@ function LobbyScreen({
                         max={120}
                         value={customMinDraft}
                         onChange={(event) => {
-                          const rawValue = event.target.value;
-
-                          if (rawValue === "") {
-                            setCustomMinDraft("");
-                            return;
-                          }
-
-                          const nextMin =
-                            parseDrawingTimeDraft(rawValue);
-
-                          if (nextMin === null) return;
-                          setCustomMinDraft(String(nextMin));
-
-                          const currentMax =
-                            parseDrawingTimeDraft(customMaxDraft);
-
-                          if (
-                            currentMax !== null &&
-                            nextMin <= currentMax
-                          ) {
-                            submitCustomDrawingTime(
-                              nextMin,
-                              currentMax,
-                            );
-                          } else if (currentMax !== null) {
-                            setCustomMaxDraft(String(nextMin));
-                            submitCustomDrawingTime(
-                              nextMin,
-                              nextMin,
-                            );
-                          }
+                          setCustomTimeLastEdited("min");
+                          setCustomMinDraft(event.target.value);
                         }}
-                        onBlur={() => {
-                          const currentMin =
-                            parseDrawingTimeDraft(customMinDraft);
-                          const currentMax =
-                            parseDrawingTimeDraft(customMaxDraft);
-
-                          if (
-                            currentMin !== null &&
-                            currentMax !== null &&
-                            currentMin <= currentMax
-                          ) {
-                            return;
+                        onBlur={() =>
+                          commitCustomDrawingTime("min")
+                        }
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            commitCustomDrawingTime("min");
                           }
-
-                          setCustomMinDraft(String(customDrawingMin));
                         }}
                         className="mt-1.5 min-h-11 w-full rounded-lg border border-amber-500/30 bg-[#211006] px-3.5 py-2.5 text-white transition duration-200 focus:border-amber-400 focus:outline-none"
                       />
@@ -816,47 +816,16 @@ function LobbyScreen({
                         max={120}
                         value={customMaxDraft}
                         onChange={(event) => {
-                          const rawValue = event.target.value;
-
-                          if (rawValue === "") {
-                            setCustomMaxDraft("");
-                            return;
-                          }
-
-                          const nextMax =
-                            parseDrawingTimeDraft(rawValue);
-
-                          if (nextMax === null) return;
-                          setCustomMaxDraft(String(nextMax));
-
-                          const currentMin =
-                            parseDrawingTimeDraft(customMinDraft);
-
-                          if (
-                            currentMin !== null &&
-                            nextMax >= currentMin
-                          ) {
-                            submitCustomDrawingTime(
-                              currentMin,
-                              nextMax,
-                            );
-                          }
+                          setCustomTimeLastEdited("max");
+                          setCustomMaxDraft(event.target.value);
                         }}
-                        onBlur={() => {
-                          const currentMin =
-                            parseDrawingTimeDraft(customMinDraft);
-                          const currentMax =
-                            parseDrawingTimeDraft(customMaxDraft);
-
-                          if (
-                            currentMin !== null &&
-                            currentMax !== null &&
-                            currentMax >= currentMin
-                          ) {
-                            return;
+                        onBlur={() =>
+                          commitCustomDrawingTime("max")
+                        }
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            commitCustomDrawingTime("max");
                           }
-
-                          setCustomMaxDraft(String(customDrawingMax));
                         }}
                         className="mt-1.5 min-h-11 w-full rounded-lg border border-amber-500/30 bg-[#211006] px-3.5 py-2.5 text-white transition duration-200 focus:border-amber-400 focus:outline-none"
                       />
@@ -1047,6 +1016,7 @@ function LobbyScreen({
           <button
             disabled={!allReady}
             onClick={() => {
+              commitCustomDrawingTimeBeforeStart();
               console.log(
                 "Start Game clicked, allReady:",
                 allReady,

@@ -454,6 +454,21 @@ describe(
           },
         )
 
+        expect(send).not.toHaveBeenCalledWith(
+          'setDrawingSpeed',
+          {
+            speed: 'custom',
+            customMin: 4,
+            customMax: 10,
+          },
+        )
+
+        fireEvent.blur(
+          screen.getByLabelText(
+            'Min seconds',
+          ),
+        )
+
         expect(send).toHaveBeenCalledWith(
           'setDrawingSpeed',
           {
@@ -462,6 +477,8 @@ describe(
             customMax: 10,
           },
         )
+
+        send.mockClear()
 
         fireEvent.change(
           screen.getByLabelText(
@@ -474,6 +491,21 @@ describe(
           },
         )
 
+        expect(send).not.toHaveBeenCalledWith(
+          'setDrawingSpeed',
+          {
+            speed: 'custom',
+            customMin: 4,
+            customMax: 14,
+          },
+        )
+
+        fireEvent.blur(
+          screen.getByLabelText(
+            'Max seconds',
+          ),
+        )
+
         expect(send).toHaveBeenCalledWith(
           'setDrawingSpeed',
           {
@@ -482,6 +514,8 @@ describe(
             customMax: 14,
           },
         )
+
+        send.mockClear()
 
         const minInput =
           screen.getByLabelText(
@@ -512,6 +546,17 @@ describe(
 
         expect(minInput.value).toBe('6')
 
+        expect(send).toHaveBeenCalledWith(
+          'setDrawingSpeed',
+          {
+            speed: 'custom',
+            customMin: 6,
+            customMax: 14,
+          },
+        )
+
+        send.mockClear()
+
         fireEvent.change(
           minInput,
           {
@@ -520,6 +565,15 @@ describe(
             },
           },
         )
+
+        expect(minInput.value).toBe('999')
+
+        expect(send).not.toHaveBeenCalledWith(
+          'setDrawingSpeed',
+          expect.anything(),
+        )
+
+        fireEvent.blur(minInput)
 
         expect(minInput.value).toBe('120')
 
@@ -552,6 +606,7 @@ describe(
           customDrawingMin: 2,
           customDrawingMax: 10,
         })
+        send.mockClear()
 
         const maxInput =
           screen.getByLabelText(
@@ -578,6 +633,39 @@ describe(
           },
         )
 
+        fireEvent.blur(maxInput)
+
+        const minInputAfterMaxBlur =
+          screen.getByLabelText(
+            'Min seconds',
+          ) as HTMLInputElement
+
+        expect(minInputAfterMaxBlur.value).toBe('1')
+
+        expect(send).toHaveBeenCalledWith(
+          'setDrawingSpeed',
+          {
+            speed: 'custom',
+            customMin: 1,
+            customMax: 1,
+          },
+        )
+
+        pushState({
+          players: {
+            host: {
+              name: 'Jordan',
+              ready: false,
+              isHost: true,
+              score: 0,
+            },
+          },
+          drawingSpeed: 'custom',
+          customDrawingMin: 2,
+          customDrawingMax: 10,
+        })
+        send.mockClear()
+
         fireEvent.change(
           maxInput,
           {
@@ -589,13 +677,89 @@ describe(
 
         expect(maxInput.value).toBe('13')
 
-        expect(send).toHaveBeenCalledWith(
+        expect(send).not.toHaveBeenCalledWith(
           'setDrawingSpeed',
           {
             speed: 'custom',
             customMin: 2,
             customMax: 13,
           },
+        )
+
+        fireEvent.keyDown(maxInput, {
+          key: 'Enter',
+        })
+
+        expect(send).toHaveBeenCalledWith(
+          'setDrawingSpeed',
+          {
+            speed: 'custom',
+            customMin: 1,
+            customMax: 13,
+          },
+        )
+      },
+    )
+
+    it(
+      'commits custom drawing time drafts before starting the game',
+      () => {
+        const {
+          room,
+          send,
+          pushState,
+        } = createFakeRoom('host')
+
+        render(
+          <LobbyScreen
+            room={room}
+            roomId="ABCD"
+          />,
+        )
+
+        pushState({
+          players: {
+            host: {
+              name: 'Jordan',
+              ready: true,
+              isHost: true,
+              score: 0,
+            },
+          },
+          drawingSpeed: 'custom',
+          customDrawingMin: 6,
+          customDrawingMax: 10,
+        })
+        send.mockClear()
+
+        fireEvent.change(
+          screen.getByLabelText(
+            'Min seconds',
+          ),
+          {
+            target: {
+              value: '15',
+            },
+          },
+        )
+
+        fireEvent.click(
+          screen.getByRole('button', {
+            name: /start game/i,
+          }),
+        )
+
+        expect(send).toHaveBeenCalledWith(
+          'setDrawingSpeed',
+          {
+            speed: 'custom',
+            customMin: 15,
+            customMax: 15,
+          },
+        )
+
+        expect(send).toHaveBeenCalledWith(
+          'startGame',
         )
       },
     )
