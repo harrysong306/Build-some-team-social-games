@@ -1305,7 +1305,12 @@ export class LobbyRoom extends Room {
 
         // A 0-point answer costs a life, but
         // only for players who were still in.
+        const isSelectedArtist =
+          this.state.gameMode === ANONYMOUS_RECALL_MODE &&
+          sessionId === this.selectedRecallArtistSessionId;
+
         const lostLife =
+          !isSelectedArtist &&
           pointsEarned === 0 &&
           player.lives > 0;
 
@@ -1402,15 +1407,16 @@ export class LobbyRoom extends Room {
     buildMessage: (image: string | null) => object,
     type: string,
     allowOwnDrawing: boolean,
+    excludedArtistSessionId: string | null = null,
   ) {
     const roundIndex = this.recallRound;
 
     const artists = [
       ...this.state.players.keys(),
-    ].filter((sessionId) =>
-      this.drawings.has(
-        `${sessionId}:${roundIndex}`,
-      ),
+    ].filter(
+      (sessionId) =>
+        sessionId !== excludedArtistSessionId &&
+        this.drawings.has(`${sessionId}:${roundIndex}`),
     );
 
     this.clients.forEach((client, position) => {
@@ -1548,6 +1554,9 @@ export class LobbyRoom extends Room {
       }),
       "abilityActivated",
       false,
+      this.state.gameMode === ANONYMOUS_RECALL_MODE
+        ? this.selectedRecallArtistSessionId
+        : null,
     );
   }
 
