@@ -166,7 +166,7 @@ function LobbyScreen({
     setPlayerQuestionsEnabled,
     startGame,
     submitPlayerQuestion,
-    replacePlayerQuestions,
+    replacePlayerQuestion,
     returnToLobby,
     changeName,
   } = useLobbyState(room);
@@ -195,6 +195,9 @@ function LobbyScreen({
   const [customMaxDraft, setCustomMaxDraft] =
     useState(String(customDrawingMax));
   const [settingsExpanded, setSettingsExpanded] = useState(false);
+  const [choosingQuestionToReplace, setChoosingQuestionToReplace] =
+    useState(false);
+  const [replacingQuestion, setReplacingQuestion] = useState(false);
   const appliedSavedSettingsRef = useRef(false);
 
   // mirrors isEditingName but updates synchronously (unlike the state
@@ -230,6 +233,10 @@ function LobbyScreen({
       : `${drawingSpeedLabel} speed`;
   const settingsSummary =
     `${gameModeLabel} · ${drawingSpeedSummary} · ${drawingCount} drawings`;
+  const showQuestionForm =
+    playerQuestionsEnabled &&
+    !me?.ready &&
+    (!questionsComplete || replacingQuestion);
 
   const submitQuestion = () => {
     const prompt = questionPrompt.trim();
@@ -249,6 +256,7 @@ function LobbyScreen({
     setQuestionPrompt("");
     setQuestionOptions(["", "", "", ""]);
     setCorrectOption(0);
+    setReplacingQuestion(false);
     saveLobbyPreferences({
       questionPrompt: "",
       questionOptions: ["", "", "", ""],
@@ -285,6 +293,24 @@ function LobbyScreen({
     saveLobbyPreferences({
       correctOption: index,
     });
+  };
+
+  const startReplacingQuestion = (index: number) => {
+    const question = me?.questions?.[index];
+
+    if (!question) return;
+
+    setQuestionPrompt(question.prompt);
+    setQuestionOptions([...question.options]);
+    setCorrectOption(0);
+    setReplacingQuestion(true);
+    setChoosingQuestionToReplace(false);
+    saveLobbyPreferences({
+      questionPrompt: question.prompt,
+      questionOptions: [...question.options],
+      correctOption: 0,
+    });
+    replacePlayerQuestion(index);
   };
 
   const clampDrawingTime = (
@@ -554,17 +580,48 @@ function LobbyScreen({
         {playerQuestionsEnabled &&
          questionCount === 2 &&
          !me?.ready && (
-          <button
-           type="button"
-            onClick={replacePlayerQuestions}
-            className="mt-4 w-full rounded-lg border border-amber-500/40 px-4 py-3 text-sm font-semibold text-amber-300 hover:bg-amber-500/10"
-          >
-            CHANGE QUESTIONS
-          </button>
+          <section className="mt-4 rounded-lg border border-amber-500/30 bg-[#160b06] p-3">
+            <button
+              type="button"
+              onClick={() =>
+                setChoosingQuestionToReplace((current) => !current)
+              }
+              className="flex w-full items-center justify-between gap-3 text-left text-sm font-semibold text-amber-300"
+            >
+              <span>Change a question</span>
+              <span
+                aria-hidden="true"
+                className={`transition-transform duration-200 ${
+                  choosingQuestionToReplace ? "rotate-180" : ""
+                }`}
+              >
+                ▾
+              </span>
+            </button>
+
+            {choosingQuestionToReplace ? (
+              <div className="mt-3 space-y-2">
+                {me?.questions?.map((question, index) => (
+                  <button
+                    key={`${question.prompt}-${index}`}
+                    type="button"
+                    onClick={() => startReplacingQuestion(index)}
+                    className="w-full rounded-lg border border-amber-500/25 bg-[#211006] px-3 py-2 text-left text-sm text-white transition duration-200 hover:border-amber-400 hover:bg-amber-500/10"
+                  >
+                    <span className="block text-xs font-semibold uppercase text-white/45">
+                      Question {index + 1}
+                    </span>
+                    <span className="mt-1 block font-semibold text-white">
+                      {question.prompt}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </section>
         )}
         {playerQuestionsEnabled &&
-          !questionsComplete &&
-          !me?.ready && (
+          showQuestionForm && (
           <section className="mt-6 rounded-lg border border-amber-500/30 bg-[#160b06] p-4">
             <p className="text-sm font-semibold text-amber-300">
               Personal questions ({questionCount}/2)

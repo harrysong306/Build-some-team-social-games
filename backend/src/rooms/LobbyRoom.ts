@@ -309,6 +309,35 @@ export class LobbyRoom extends Room {
       this.playerQuestions.set(client.sessionId, []);
       player.questions.clear();
     },
+    replacePlayerQuestion: (
+      client: Client,
+      message: { index: number },
+    ) => {
+      const player = this.state.players.get(
+        client.sessionId,
+      );
+
+      if (!player || player.ready) return;
+      if (!this.state.playerQuestionsEnabled) return;
+      if (this.state.phase !== "lobby") return;
+
+      const index = Math.round(message.index);
+      const questions =
+        this.playerQuestions.get(client.sessionId) ?? [];
+
+      if (
+        !Number.isFinite(index) ||
+        index < 0 ||
+        index >= questions.length ||
+        index >= player.questions.length
+      ) {
+        return;
+      }
+
+      questions.splice(index, 1);
+      this.playerQuestions.set(client.sessionId, questions);
+      player.questions.splice(index, 1);
+    },
 
     submitPlayerQuestion: (
       client: Client,

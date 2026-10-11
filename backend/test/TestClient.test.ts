@@ -153,6 +153,46 @@ describe("LobbyRoom", () => {
     );
   });
 
+  it("replaces one selected player question without clearing the other", async () => {
+    const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
+    const client = await colyseus.connectTo(room, { name: "Jordan" });
+
+    client.send("submitPlayerQuestion", {
+      prompt: "Question one?",
+      options: ["A", "B", "C", "D"],
+      correctOption: 0,
+    });
+    await room.waitForNextPatch();
+
+    client.send("submitPlayerQuestion", {
+      prompt: "Question two?",
+      options: ["E", "F", "G", "H"],
+      correctOption: 1,
+    });
+    await room.waitForNextPatch();
+
+    client.send("replacePlayerQuestion", {
+      index: 0,
+    });
+    await room.waitForNextPatch();
+
+    const publicQuestions =
+      client.state.players.get(client.sessionId)?.questions;
+
+    assert.strictEqual(publicQuestions?.length, 1);
+    assert.strictEqual(publicQuestions?.[0].prompt, "Question two?");
+
+    client.send("submitPlayerQuestion", {
+      prompt: "Question three?",
+      options: ["I", "J", "K", "L"],
+      correctOption: 2,
+    });
+    await room.waitForNextPatch();
+
+    assert.strictEqual(publicQuestions?.length, 2);
+    assert.strictEqual(publicQuestions?.[1].prompt, "Question three?");
+  });
+
   it("checks player-question answers on the server", async () => {
     const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
     const client1 = await colyseus.connectTo(room, { name: "Jordan" });

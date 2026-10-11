@@ -63,6 +63,10 @@ type FakePlayer = {
   ready: boolean
   isHost: boolean
   score: number
+  questions?: {
+    prompt: string
+    options: string[]
+  }[]
 }
 
 type FakeState = {
@@ -152,6 +156,92 @@ function createFakeRoom(
     pushState,
   }
 }
+
+describe(
+  'LobbyScreen personal question editing',
+  () => {
+    beforeEach(() => {
+      vi.clearAllMocks()
+      window.localStorage.clear()
+    })
+
+    it(
+      'lets a player choose which submitted question to replace',
+      () => {
+        const {
+          room,
+          send,
+          pushState,
+        } = createFakeRoom('guest')
+
+        render(
+          <LobbyScreen
+            room={room}
+            roomId="ABCD"
+          />,
+        )
+
+        pushState({
+          players: {
+            host: {
+              name: 'Jordan',
+              ready: false,
+              isHost: true,
+              score: 0,
+            },
+            guest: {
+              name: 'Sam',
+              ready: false,
+              isHost: false,
+              score: 0,
+              questions: [
+                {
+                  prompt: 'Favourite colour?',
+                  options: ['Red', 'Blue', 'Green', 'Gold'],
+                },
+                {
+                  prompt: 'Favourite snack?',
+                  options: ['Chips', 'Fruit', 'Toast', 'Soup'],
+                },
+              ],
+            },
+          },
+        })
+
+        fireEvent.click(
+          screen.getByRole('button', {
+            name: /change a question/i,
+          }),
+        )
+
+        fireEvent.click(
+          screen.getByRole('button', {
+            name: /question 2favourite snack/i,
+          }),
+        )
+
+        expect(send).toHaveBeenCalledWith(
+          'replacePlayerQuestion',
+          {
+            index: 1,
+          },
+        )
+
+        expect(
+          screen.getByPlaceholderText(
+            'Question about you',
+          ),
+        ).toHaveValue('Favourite snack?')
+
+        expect(
+          screen.getByPlaceholderText(
+            'Option 1',
+          ),
+        ).toHaveValue('Chips')
+      },
+    )
+  },
+)
 
 describe(
   'LobbyScreen saved local preferences',

@@ -153,6 +153,10 @@ export function useLobbyState(room: Room | null) {
   room?.send("replacePlayerQuestions", {});
   };
 
+  const replacePlayerQuestion = (index: number) => {
+    room?.send("replacePlayerQuestion", { index });
+  };
+
 
   // Sends { count } to LobbyRoom.ts using "setDrawingCount"
   const setDrawingCount = (count: number) => {
@@ -196,6 +200,7 @@ export function useLobbyState(room: Room | null) {
     setDrawingSpeed,
     submitPlayerQuestion,
     replacePlayerQuestions,
+    replacePlayerQuestion,
     setDrawingCount,
     setWordTheme,
     setPlayerQuestionsEnabled,
