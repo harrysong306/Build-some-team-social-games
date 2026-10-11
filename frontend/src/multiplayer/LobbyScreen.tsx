@@ -797,33 +797,62 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
               </div>
 
               <div>
-                <label
-                  htmlFor="player-questions"
-                  className="mb-2 block text-sm text-white/60"
-                >
-                  Player-created questions
-                </label>
+                <div className="flex min-h-11 items-center justify-between gap-4 rounded-lg border border-amber-500/30 bg-[#211006] px-3.5 py-2.5">
+                  <span
+                    id="player-questions-label"
+                    className="text-sm text-white/60"
+                  >
+                    Player-created questions
+                  </span>
 
-                <button
-                  id="player-questions"
-                  type="button"
-                  onClick={() => {
-                    const enabled = !playerQuestionsEnabled;
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-labelledby="player-questions-label"
+                    aria-checked={playerQuestionsEnabled}
+                    onClick={() => {
+                      const enabled = !playerQuestionsEnabled;
 
-                    saveLobbyPreferences({
-                      playerQuestionsEnabled: enabled,
-                    });
+                      saveLobbyPreferences({
+                        playerQuestionsEnabled: enabled,
+                      });
 
-                    setPlayerQuestionsEnabled(
-                      enabled,
-                    );
-                  }}
-                  className="min-h-11 w-full rounded-lg border border-amber-500/30 bg-[#211006] px-3.5 py-2.5 text-left text-sm font-semibold text-white transition duration-200 hover:border-amber-400 hover:bg-amber-500/10"
-                >
-                  {playerQuestionsEnabled
-                    ? "Enabled"
-                    : "Disabled"}
-                </button>
+                      setPlayerQuestionsEnabled(
+                        enabled,
+                      );
+                    }}
+                    className="flex items-center gap-3 rounded-full focus:outline-none"
+                  >
+                    <span
+                      className={`text-sm font-semibold transition duration-200 ${
+                        playerQuestionsEnabled
+                          ? "text-amber-300"
+                          : "text-white/45"
+                      }`}
+                    >
+                      {playerQuestionsEnabled
+                        ? "Enabled"
+                        : "Disabled"}
+                    </span>
+
+                    <span
+                      aria-hidden="true"
+                      className={`flex h-6 w-11 items-center rounded-full border p-0.5 transition duration-200 ${
+                        playerQuestionsEnabled
+                          ? "border-amber-400 bg-amber-400/25"
+                          : "border-white/25 bg-white/10"
+                      }`}
+                    >
+                      <span
+                        className={`h-4.5 w-4.5 rounded-full transition duration-200 ${
+                          playerQuestionsEnabled
+                            ? "translate-x-5 bg-amber-300"
+                            : "translate-x-0 bg-white/45"
+                        }`}
+                      />
+                    </span>
+                  </button>
+                </div>
               </div>
             </div>
           </details>
