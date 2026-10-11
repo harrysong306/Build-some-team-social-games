@@ -7,6 +7,15 @@ export type PlayerView = {
   isHost: boolean;
   questions?: PlayerQuestionView[];
   score: number;
+
+  // Server-tracked Recall timing used to break
+  // equal-score leaderboard ties.
+  //
+  // Optional so older test fixtures and brief
+  // pre-sync client state remain compatible.
+  recallResponseTimeMs?: number;
+  recallResponseCount?: number;
+
   distractionReady?: boolean;
   distractionDone?: boolean;
 };
@@ -99,8 +108,9 @@ export function useLobbyState(room: Room | null) {
       removeAssignedQuestionsListener?.();
       unsubscribeNameError?.();
     };
-  }, 
+  },
   [room]);
+
   const setPlayerQuestionsEnabled = (enabled: boolean) => {
      room?.send("setPlayerQuestionsEnabled", { enabled });
      };
