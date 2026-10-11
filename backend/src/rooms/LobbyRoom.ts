@@ -1,4 +1,4 @@
-import { Room, Client, CloseCode } from "colyseus";
+import { Room, Client, CloseCode, ServerError } from "colyseus";
 import {
   GameState,
   Player,
@@ -75,6 +75,22 @@ type AssignedPlayerQuestion = {
 const MIN_DRAWING_COUNT = 10;
 const MAX_DRAWING_COUNT = 30;
 const VALID_WORD_THEMES = Object.keys(wordPacks) as WordPackTheme[];
+
+// BE-3: a room holds at most MAX_PLAYERS.
+// maxClients is one higher so the extra
+// player still reaches onAuth and gets
+// ROOM_FULL, instead of Colyseus' generic
+// "room is locked" error.
+const MAX_PLAYERS = 8;
+
+// BE-3: error codes sent to a client whose
+// join is rejected. A room code that doesn't
+// exist is already rejected by Colyseus with
+// ErrorCode.MATCHMAKE_INVALID_ROOM_ID (522).
+export const JoinError = {
+  ROOM_FULL: 4001,
+  GAME_IN_PROGRESS: 4002,
+} as const;
 
 type RecallAnswer = {
   sessionId: string;
@@ -189,7 +205,7 @@ type Ability = typeof ABILITIES[number];
 const REVEAL_SECONDS = 5;
 
 export class LobbyRoom extends Room {
-  maxClients = 8;
+  maxClients = MAX_PLAYERS + 1;
   state = new GameState();
 
   // BE-20: this round's ability votes.
@@ -1519,6 +1535,29 @@ export class LobbyRoom extends Room {
         );
       },
     );
+  }
+
+  // BE-3: runs before onJoin. Throwing here
+  // rejects the join with a clear error.
+  onAuth(
+    _client: Client,
+    _options: any,
+  ) {
+    if (this.state.phase !== "lobby") {
+      throw new ServerError(
+        JoinError.GAME_IN_PROGRESS,
+        "This game has already started.",
+      );
+    }
+
+    if (this.state.players.size >= MAX_PLAYERS) {
+      throw new ServerError(
+        JoinError.ROOM_FULL,
+        "This room is full.",
+      );
+    }
+
+    return true;
   }
 
   onJoin(
