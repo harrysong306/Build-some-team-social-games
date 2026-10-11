@@ -5,6 +5,7 @@ import { ColyseusTestServer, boot } from "@colyseus/testing";
 // import "app.config.ts"
 import appConfig from "../src/app.config.js";
 import { GameState } from "../src/rooms/schema/GameState.js";
+import { JoinError } from "../src/rooms/LobbyRoom.js";
 
 import { generateGameWords } from "../src/utils/WordGen.js";
 import {
@@ -638,6 +639,57 @@ client2.send("markReady", { ready: true });
       room.state.players.get(client2.sessionId)?.score,
       0,
     );
+  });
+
+  describe("joining a room (BE-3)", () => {
+    it("rejects a room code that doesn't exist", async () => {
+      await assert.rejects(
+        colyseus.sdk.joinById("NOPE", { name: "Sam" }),
+        (error: any) => error.code === 522,
+      );
+    });
+
+    it("rejects joining a game that has already started", async () => {
+      const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
+      const client1 = await colyseus.connectTo(room, { name: "Jordan" });
+
+      await submitQuestions(client1, room);
+      client1.send("markReady", { ready: true });
+      await room.waitForNextPatch();
+
+      client1.send("startGame", {});
+      await room.waitForNextPatch();
+
+      assert.strictEqual(room.state.phase, "playing");
+
+      await assert.rejects(
+        colyseus.connectTo(room, { name: "Late" }),
+        (error: any) =>
+          error.code === JoinError.GAME_IN_PROGRESS &&
+          error.message === "This game has already started.",
+      );
+
+      assert.strictEqual(room.state.players.size, 1);
+    });
+
+    it("rejects a 9th player once the room is full", async () => {
+      const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
+
+      for (let index = 0; index < 8; index += 1) {
+        await colyseus.connectTo(room, { name: `Player ${index + 1}` });
+      }
+
+      assert.strictEqual(room.state.players.size, 8);
+
+      await assert.rejects(
+        colyseus.connectTo(room, { name: "Extra" }),
+        (error: any) =>
+          error.code === JoinError.ROOM_FULL &&
+          error.message === "This room is full.",
+      );
+
+      assert.strictEqual(room.state.players.size, 8);
+    });
   });
 
   describe("setDrawingCount (FE-99)", () => {
@@ -1639,6 +1691,145 @@ client2.send("markReady", { ready: true });
         [...drawings.get(`${client2.sessionId}:0`)!],
         [2],
       );
+    });
+  });
+
+  describe("play again, change mode and leave (BE-27)", () => {
+    const sendAndWait = async (room: any, client: any, type: string, message: any = {}) => {
+      const handled = room.waitForMessage(type);
+      client.send(type, message);
+      await handled;
+    };
+
+    const leave = async (room: any, client: any) => {
+      const left = new Promise<void>((resolve) => {
+        const check = () =>
+          room.state.players.has(client.sessionId)
+            ? setTimeout(check, 5)
+            : resolve();
+        check();
+      });
+      await client.leave();
+      await left;
+    };
+
+    // Players in a game that is past the drawing phase.
+    const setupGame = async (names: string[]) => {
+      const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
+      const clients = [];
+      for (const name of names) {
+        clients.push(await colyseus.connectTo(room, { name }));
+      }
+
+      room.state.phase = "playing";
+      room.state.gameWords.push("cat", "dog");
+
+      return { room, clients };
+    };
+
+    it("only lets the host change the mode in the lobby, not mid-game", async () => {
+      const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
+      const host = await colyseus.connectTo(room, { name: "Jordan" });
+
+      await sendAndWait(room, host, "setGameMode", { mode: "anonymousRecall" });
+      assert.strictEqual(room.state.gameMode, "anonymousRecall");
+
+      room.state.phase = "playing";
+      await sendAndWait(room, host, "setGameMode", { mode: "sketchRecall" });
+      assert.strictEqual(room.state.gameMode, "anonymousRecall");
+    });
+
+    it("leaveRoom disconnects the player and removes them", async () => {
+      const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
+      const host = await colyseus.connectTo(room, { name: "Jordan" });
+      const guest = await colyseus.connectTo(room, { name: "Sam" });
+
+      await submitQuestions(guest, room);
+      guest.send("leaveRoom", {});
+
+      await new Promise<void>((resolve) => {
+        const check = () =>
+          room.state.players.has(guest.sessionId)
+            ? setTimeout(check, 5)
+            : resolve();
+        check();
+      });
+
+      assert.strictEqual(room.state.players.size, 1);
+      assert.strictEqual(room.clients.length, 1);
+      assert.strictEqual((room as any).playerQuestions.has(guest.sessionId), false);
+      assert.strictEqual(room.state.players.get(host.sessionId)?.isHost, true);
+    });
+
+    it("starts the Recall round if the only player not ready yet leaves", async () => {
+      const { room, clients: [client1, client2, client3] } = await setupGame(["Jordan", "Sam", "Alex"]);
+
+      await sendAndWait(room, client1, "readyRecallRound", { roundIndex: 0 });
+      await sendAndWait(room, client2, "readyRecallRound", { roundIndex: 0 });
+      assert.strictEqual((room as any).recallStarted, false);
+
+      const started = client1.waitForMessage("recallRoundStarted");
+      await leave(room, client3);
+
+      assert.strictEqual((await started).roundIndex, 0);
+      assert.strictEqual((room as any).recallStarted, true);
+    });
+
+    it("finishes the Recall round if the only player who hasn't answered leaves", async () => {
+      const { room, clients: [client1, client2, client3] } = await setupGame(["Jordan", "Sam", "Alex"]);
+
+      for (const client of [client1, client2, client3]) {
+        await sendAndWait(room, client, "readyRecallRound", { roundIndex: 0 });
+      }
+
+      await sendAndWait(room, client1, "submitRecallAnswer", { roundIndex: 0, answer: "cat" });
+      await sendAndWait(room, client2, "submitRecallAnswer", { roundIndex: 0, answer: "cow" });
+
+      const result = client1.waitForMessage("recallRoundResult");
+      await leave(room, client3);
+
+      const message: any = await result;
+      assert.strictEqual(message.results.length, 2);
+      assert.strictEqual((room as any).recallRound, 1);
+    });
+
+    it("keeps waiting when other players still haven't answered", async () => {
+      const { room, clients: [client1, client2, client3] } = await setupGame(["Jordan", "Sam", "Alex"]);
+
+      for (const client of [client1, client2, client3]) {
+        await sendAndWait(room, client, "readyRecallRound", { roundIndex: 0 });
+      }
+
+      await sendAndWait(room, client1, "submitRecallAnswer", { roundIndex: 0, answer: "cat" });
+      await leave(room, client3);
+
+      assert.strictEqual((room as any).recallStarted, true);
+      assert.strictEqual((room as any).recallRound, 0);
+    });
+
+    it("keeps a leaving player's questions while a game is running", async () => {
+      const { room, clients: [, client2] } = await setupGame(["Jordan", "Sam"]);
+      (room as any).playerQuestions.set(client2.sessionId, [
+        { prompt: "Q", options: ["A", "B", "C", "D"], correctOption: 0 },
+      ]);
+
+      await leave(room, client2);
+
+      assert.strictEqual((room as any).playerQuestions.has(client2.sessionId), true);
+    });
+
+    it("lets the host play again after the game, then change the mode", async () => {
+      const { room, clients: [host, guest] } = await setupGame(["Jordan", "Sam"]);
+
+      // Both Recall rounds done.
+      (room as any).recallRound = 2;
+      await sendAndWait(room, host, "returnToLobby");
+
+      assert.strictEqual(room.state.phase, "lobby");
+      assert.strictEqual(room.state.players.get(guest.sessionId)?.ready, false);
+
+      await sendAndWait(room, host, "setGameMode", { mode: "anonymousRecall" });
+      assert.strictEqual(room.state.gameMode, "anonymousRecall");
     });
   });
 

@@ -18,7 +18,11 @@ function Logo() {
   )
 }
 
-function Header() {
+type HeaderProps = {
+  onJoinGame?: () => void
+}
+
+function Header({ onJoinGame }: HeaderProps) {
   return (
     <header className="border-b border-amber-500/30 bg-[#0d0704]">
       <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-6">
@@ -41,6 +45,7 @@ function Header() {
 
         <button
           type="button"
+          onClick={onJoinGame}
           className="flex items-center gap-3 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-400 px-6 py-3 font-bold text-black transition hover:brightness-110"
         >
           <svg

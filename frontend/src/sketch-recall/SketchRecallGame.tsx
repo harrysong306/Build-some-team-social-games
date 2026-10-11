@@ -26,6 +26,9 @@ type SketchRecallGameProps = {
     bytes: Uint8Array,
     index: number,
   ) => void
+  // set when the caller already showed the instructions/countdown
+  // screen itself, so this game shouldn't show it a second time
+  skipInstructions?: boolean
 }
 
 type GamePhase =
@@ -44,9 +47,11 @@ function SketchRecallGame({
   drawingSpeed,
   onPlayAgain,
   onSubmitDrawing,
+  skipInstructions = false,
 }: SketchRecallGameProps) {
-  const [phase, setPhase] =
-    useState<GamePhase>('instructions')
+  const [phase, setPhase] = useState<GamePhase>(
+    skipInstructions ? 'drawing' : 'instructions',
+  )
 
   const [savedDrawings, setSavedDrawings] =
     useState<(string | null)[]>([])

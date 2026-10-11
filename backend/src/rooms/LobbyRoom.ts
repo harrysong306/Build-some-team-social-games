@@ -1,4 +1,4 @@
-import { Room, Client, CloseCode } from "colyseus";
+import { Room, Client, CloseCode, ServerError } from "colyseus";
 import {
   GameState,
   Player,
@@ -75,6 +75,22 @@ type AssignedPlayerQuestion = {
 const MIN_DRAWING_COUNT = 10;
 const MAX_DRAWING_COUNT = 30;
 const VALID_WORD_THEMES = Object.keys(wordPacks) as WordPackTheme[];
+
+// BE-3: a room holds at most MAX_PLAYERS.
+// maxClients is one higher so the extra
+// player still reaches onAuth and gets
+// ROOM_FULL, instead of Colyseus' generic
+// "room is locked" error.
+const MAX_PLAYERS = 8;
+
+// BE-3: error codes sent to a client whose
+// join is rejected. A room code that doesn't
+// exist is already rejected by Colyseus with
+// ErrorCode.MATCHMAKE_INVALID_ROOM_ID (522).
+export const JoinError = {
+  ROOM_FULL: 4001,
+  GAME_IN_PROGRESS: 4002,
+} as const;
 
 type RecallAnswer = {
   sessionId: string;
@@ -189,7 +205,7 @@ type Ability = typeof ABILITIES[number];
 const REVEAL_SECONDS = 5;
 
 export class LobbyRoom extends Room {
-  maxClients = 8;
+  maxClients = MAX_PLAYERS + 1;
   state = new GameState();
 
   // BE-20: this round's ability votes.
@@ -481,6 +497,20 @@ export class LobbyRoom extends Room {
         });
       },
 
+    // sync point entering the distraction phase: this player has
+    // finished drawing and is waiting for everyone else to catch up
+    distractionReady: (client: Client, _message: any) => {
+      const player = this.state.players.get(client.sessionId);
+      if (player) player.distractionReady = true;
+    },
+
+    // sync point leaving the distraction phase: this player has
+    // finished answering and is waiting for everyone else to finish
+    distractionDone: (client: Client, _message: any) => {
+      const player = this.state.players.get(client.sessionId);
+      if (player) player.distractionDone = true;
+    },
+
     changeName: (
       client: Client,
       message: { name: string },
@@ -541,6 +571,11 @@ export class LobbyRoom extends Room {
         );
 
       if (!player?.isHost) return;
+
+      // BE-27: the mode can only change between
+      // games (in the lobby, e.g. after Play Again),
+      // never in the middle of one.
+      if (this.state.phase !== "lobby") return;
 
       if (
         !VALID_GAME_MODES.includes(
@@ -791,6 +826,10 @@ export class LobbyRoom extends Room {
       ) {
         currentPlayer.score = 0;
         currentPlayer.lives = STARTING_LIVES;
+        // reset per-round sync flags so a replayed round waits fresh,
+        // instead of instantly "everyone ready" from the previous round
+        currentPlayer.distractionReady = false;
+        currentPlayer.distractionDone = false;
 
       }
 
@@ -871,6 +910,18 @@ export class LobbyRoom extends Room {
 
       this.abilityVotes.clear();
       this.abilityUsedThisRound = false;
+    },
+
+    /*
+     * BE-27: leave the room. The client is
+     * disconnected, and onLeave removes them
+     * from the room state.
+     */
+    leaveRoom: (
+      client: Client,
+      _message: any,
+    ) => {
+      client.leave();
     },
 
     /*
@@ -1573,6 +1624,29 @@ export class LobbyRoom extends Room {
     );
   }
 
+  // BE-3: runs before onJoin. Throwing here
+  // rejects the join with a clear error.
+  onAuth(
+    _client: Client,
+    _options: any,
+  ) {
+    if (this.state.phase !== "lobby") {
+      throw new ServerError(
+        JoinError.GAME_IN_PROGRESS,
+        "This game has already started.",
+      );
+    }
+
+    if (this.state.players.size >= MAX_PLAYERS) {
+      throw new ServerError(
+        JoinError.ROOM_FULL,
+        "This room is full.",
+      );
+    }
+
+    return true;
+  }
+
   onJoin(
     client: Client,
     options: any,
@@ -1639,6 +1713,20 @@ export class LobbyRoom extends Room {
       client.sessionId,
     );
 
+    // BE-27: forget everything else that belongs
+    // to the player who left.
+    this.abilityVotes.delete(client.sessionId);
+    this.pendingDrawingIndexes.delete(client.sessionId);
+
+    // Their questions may already be assigned to
+    // someone in a running game, so only drop
+    // them while still in the lobby.
+    if (this.state.phase === "lobby") {
+      this.playerQuestions.delete(client.sessionId);
+    }
+
+    this.continueRecallAfterLeave();
+
     if (
       wasHost &&
       this.state.players.size > 0
@@ -1655,6 +1743,54 @@ export class LobbyRoom extends Room {
       "left!",
       code,
     );
+  }
+
+  /*
+   * BE-27: a Recall round waits for every player
+   * to be ready, then for every alive player to
+   * answer. If the player we were waiting for
+   * leaves, the others would wait forever, so
+   * check again with the players who are left.
+   */
+  private continueRecallAfterLeave() {
+    if (
+      this.state.phase !== "playing" ||
+      this.state.players.size === 0
+    ) {
+      return;
+    }
+
+    if (this.recallStarted) {
+      if (
+        this.recallAnswers.size >=
+        this.alivePlayerIds().length
+      ) {
+        this.finishRecallRound();
+      }
+
+      return;
+    }
+
+    // Everyone left is ready: replay a ready
+    // message from one of them so the round
+    // starts exactly as it normally would.
+    const readyClient = this.clients.find(
+      (connectedClient) =>
+        this.recallReady.has(
+          connectedClient.sessionId,
+        ),
+    );
+
+    if (
+      readyClient &&
+      this.recallReady.size ===
+        this.state.players.size
+    ) {
+      this.messages.readyRecallRound(
+        readyClient,
+        { roundIndex: this.recallRound },
+      );
+    }
   }
 
   onDispose() {
