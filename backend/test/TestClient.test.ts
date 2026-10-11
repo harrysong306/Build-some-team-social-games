@@ -2021,33 +2021,144 @@ client2.send("markReady", { ready: true });
     });
 
     describe("anonymous recall (BE-16)", () => {
-      it("sends each player someone else's drawing without the artist's identity", async () => {
-        const { room, clients: [client1, client2] } = await setupGame(["Jordan", "Sam"], ["cat"]);
+      it("sends one randomly selected drawing to all other players", async () => {
+        const { room, clients } = await setupGame(
+          ["Jordan", "Sam", "Alex"],
+          ["cat"],
+        );
+
         room.state.gameMode = "anonymousRecall";
-        (room as any).drawings.set(`${client1.sessionId}:0`, new Uint8Array([1]));
-        (room as any).drawings.set(`${client2.sessionId}:0`, new Uint8Array([2]));
 
-        const received1 = client1.waitForMessage("recallDrawing");
-        const received2 = client2.waitForMessage("recallDrawing");
-        await startRound(room, [client1, client2]);
-        const [message1, message2]: any[] = await Promise.all([received1, received2]);
+        const drawings = [
+          new Uint8Array([1]),
+          new Uint8Array([2]),
+          new Uint8Array([3]),
+        ];
 
-        assert.deepStrictEqual([...Buffer.from(message1.image, "base64")], [2]);
-        assert.deepStrictEqual([...Buffer.from(message2.image, "base64")], [1]);
-        assert.deepStrictEqual(Object.keys(message1).sort(), ["image", "roundIndex"]);
-        assert.deepStrictEqual(Object.keys(message2).sort(), ["image", "roundIndex"]);
+        clients.forEach((client, index) => {
+          (room as any).drawings.set(
+            `${client.sessionId}:0`,
+            drawings[index],
+          );
+        });
+
+        const received = clients.map((client) =>
+          client.waitForMessage("recallDrawing"),
+        );
+
+        await startRound(room, clients);
+
+        const messages: any[] = await Promise.all(received);
+
+        // Exactly one player is the selected artist.
+        const artistIndexes = messages
+          .map((message, index) =>
+            message.isArtist ? index : -1,
+          )
+          .filter((index) => index !== -1);
+
+        assert.strictEqual(artistIndexes.length, 1);
+
+        const artistIndex = artistIndexes[0];
+        const artist = clients[artistIndex];
+
+        // The selected artist receives no image.
+        assert.strictEqual(messages[artistIndex].image, null);
+        assert.strictEqual(messages[artistIndex].isArtist, true);
+
+        // The server remembers the selected artist.
+        assert.strictEqual(
+          (room as any).selectedRecallArtistSessionId,
+          artist.sessionId,
+        );
+
+        const expectedImage = Buffer.from(
+          drawings[artistIndex],
+        ).toString("base64");
+
+        // All other players receive the same drawing.
+        messages.forEach((message, index) => {
+          assert.strictEqual(message.roundIndex, 0);
+
+          if (index !== artistIndex) {
+            assert.strictEqual(message.isArtist, false);
+            assert.strictEqual(message.image, expectedImage);
+          }
+
+          // The artist's identity is not sent to other players.
+          assert.deepStrictEqual(
+            Object.keys(message).sort(),
+            ["image", "isArtist", "roundIndex"],
+          );
+        });
       });
 
-      it("falls back to the player's own drawing when nobody else drew", async () => {
-        const { room, clients: [client1] } = await setupGame(["Jordan"], ["cat"]);
+      it("does not send the artist their own drawing in a single-player room", async () => {
+        const { room, clients: [client1] } = await setupGame(
+          ["Jordan"],
+          ["cat"],
+        );
+
         room.state.gameMode = "anonymousRecall";
-        (room as any).drawings.set(`${client1.sessionId}:0`, new Uint8Array([7]));
+
+        (room as any).drawings.set(
+          `${client1.sessionId}:0`,
+          new Uint8Array([7]),
+        );
 
         const received = client1.waitForMessage("recallDrawing");
-        await startRound(room, [client1]);
-        const message: any = await received;
+        const roundResult = client1.waitForMessage("recallRoundResult");
 
-        assert.deepStrictEqual([...Buffer.from(message.image, "base64")], [7]);
+        await startRound(room, [client1]);
+
+        const message: any = await received;
+        await roundResult;
+
+        // The only player is the artist.
+        assert.strictEqual(message.roundIndex, 0);
+        assert.strictEqual(message.isArtist, true);
+        assert.strictEqual(message.image, null);
+
+        // No guessing players, so the round ends immediately.
+        assert.strictEqual((room as any).recallRound, 1);
+      });
+
+      it("prevents the selected artist from submitting an answer", async () => {
+        const { room, clients } = await setupGame(
+          ["Jordan", "Sam", "Alex"],
+          ["cat"],
+        );
+
+        room.state.gameMode = "anonymousRecall";
+
+        clients.forEach((client, index) => {
+          (room as any).drawings.set(
+            `${client.sessionId}:0`,
+            new Uint8Array([index + 1]),
+          );
+        });
+
+        await startRound(room, clients);
+
+        const artistSessionId =
+          (room as any).selectedRecallArtistSessionId;
+
+        const artist = clients.find(
+          (client) => client.sessionId === artistSessionId,
+        );
+
+        assert.ok(artist);
+
+        await sendAndWait(room, artist, "submitRecallAnswer", {
+          roundIndex: 0,
+          answer: "cat",
+        });
+
+        // The artist's answer must be rejected.
+        assert.strictEqual(
+          (room as any).recallAnswers.has(artistSessionId),
+          false,
+        );
       });
 
       it("does not send drawings in the normal sketchRecall mode", async () => {
