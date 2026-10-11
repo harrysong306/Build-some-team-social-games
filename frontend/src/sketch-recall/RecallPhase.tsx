@@ -107,9 +107,15 @@ function RecallPhase({
     useState<{
       roundIndex: number
       image: string | null
+      isArtist: boolean
     } | null>(null)
 
   const showAnonymous = anonymous && room !== null
+
+  const isCurrentArtist =
+    showAnonymous &&
+    anonymousDrawing?.roundIndex === currentIndex &&
+    anonymousDrawing.isArtist
 
   // Out of lives: can watch but not answer.
   // undefined means no lives (single player).
@@ -180,12 +186,19 @@ function RecallPhase({
         (message: {
           roundIndex: number
           image: string | null
+          isArtist?: boolean
         }) => {
+          if (message.roundIndex !== currentIndex) {
+            return
+          }
           setAnonymousDrawing({
             roundIndex: message.roundIndex,
-            image: message.image
-              ? `data:image/png;base64,${message.image}`
-              : null,
+            image: message.isArtist
+              ? null
+              : message.image
+                ? `data:image/png;base64,${message.image}`
+                : null,
+            isArtist: message.isArtist ?? false,
           })
         },
       )
@@ -316,6 +329,7 @@ function RecallPhase({
       if (
         !room ||
         isOut ||
+        isCurrentArtist ||
         !roundStarted ||
         submitted ||
         !answer.trim()
@@ -359,6 +373,7 @@ function RecallPhase({
     setTimeLeft(10)
     setSubmitted(false)
     setRoundResult(null)
+    setAnonymousDrawing(null)
   }
 
   /*
@@ -687,7 +702,16 @@ function RecallPhase({
             </div>
 
             <div className="flex min-h-[380px] items-center justify-center overflow-hidden rounded-xl bg-[#fffdf7]">
-              {currentDrawing ? (
+              {isCurrentArtist ? (
+                <div className="text-center text-black/60">
+                  <p className="text-lg font-semibold">
+                    Your drawing was selected!
+                  </p>
+                  <p className="mt-2 text-sm">
+                    Waiting for other players to guess...
+                  </p>
+                </div>
+              ) : currentDrawing ? (
                 <img
                   src={currentDrawing}
                   alt={`Drawing ${currentIndex + 1}`}
@@ -695,7 +719,7 @@ function RecallPhase({
                 />
               ) : (
                 <p className="text-black/40">
-                  {showAnonymous && !roundStarted
+                  {showAnonymous
                     ? 'Waiting for the drawing…'
                     : 'No drawing saved'}
                 </p>
@@ -706,7 +730,7 @@ function RecallPhase({
           <div className="flex flex-col rounded-2xl border border-amber-500/30 bg-[#160b06] p-7">
 
             <p className="text-sm font-semibold uppercase text-amber-400">
-              Your Answer
+              {isCurrentArtist ? 'Your Drawing' : 'Your Answer'}
             </p>
 
             <h2 className="mt-3 text-2xl font-bold">
@@ -731,7 +755,8 @@ function RecallPhase({
                 room
                   ? !roundStarted ||
                     submitted ||
-                    isOut
+                    isOut ||
+                    isCurrentArtist
                   : checked
               }
               onChange={(event) =>
@@ -755,7 +780,11 @@ function RecallPhase({
                   checkLocalAnswer()
                 }
               }}
-              placeholder="Enter your answer..."
+              placeholder={
+                isCurrentArtist
+                  ? 'Waiting for other players to guess...'
+                  : 'Enter your answer...'
+              }
               className="mt-7 rounded-xl border border-amber-500/30 bg-[#211006] px-5 py-4 text-lg text-white outline-none focus:border-amber-400 disabled:opacity-50"
             />
 
@@ -807,7 +836,7 @@ function RecallPhase({
                 room={room}
                 roundIndex={currentIndex}
                 roundStarted={roundStarted}
-                disabled={isOut}
+                disabled={isOut || isCurrentArtist}
                 usedAbilities={usedAbilities}
               />
             )}
@@ -834,6 +863,7 @@ function RecallPhase({
                     !roundStarted ||
                     submitted ||
                     isOut ||
+                    isCurrentArtist ||
                     !answer.trim()
                   }
                   onClick={

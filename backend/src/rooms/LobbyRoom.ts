@@ -230,6 +230,10 @@ export class LobbyRoom extends Room {
   private recallDeadline = 0;
   private recallStarted = false;
 
+  // Artist selected for the current Anonymous Recall round.
+  // Keep this private so other players cannot see the artist.
+  private selectedRecallArtistSessionId: string | null = null;
+
   // Correct options stay private on the server; only prompts and options are
   // synchronized to the lobby through the Player schema.
   private playerQuestions = new Map<string, ServerPlayerQuestion[]>();
@@ -839,6 +843,7 @@ export class LobbyRoom extends Room {
       this.recallAnswers.clear();
       this.recallDeadline = 0;
       this.recallStarted = false;
+      this.selectedRecallArtistSessionId = null;
 
       // Never reuse drawings or pending
       // drawing metadata from a previous game.
@@ -898,6 +903,7 @@ export class LobbyRoom extends Room {
       this.recallAnswers.clear();
       this.recallDeadline = 0;
       this.recallStarted = false;
+      this.selectedRecallArtistSessionId = null;
 
       this.drawings.clear();
       this.pendingDrawingIndexes.clear();
@@ -976,7 +982,12 @@ export class LobbyRoom extends Room {
 
       // Everyone is out of lives: nobody can
       // answer, so don't make them wait 10s.
-      if (this.alivePlayerIds().length === 0) {
+      const guessingPlayers = this.alivePlayerIds().filter(
+        (sessionId) =>
+          this.state.gameMode !== ANONYMOUS_RECALL_MODE ||
+          sessionId !== this.selectedRecallArtistSessionId,
+      );
+      if (guessingPlayers.length === 0) {
         this.finishRecallRound();
         return;
       }
@@ -1013,7 +1024,11 @@ export class LobbyRoom extends Room {
         this.recallAnswers.has(
           client.sessionId,
         ) ||
-        !this.isAlive(client.sessionId)
+        !this.isAlive(client.sessionId) ||
+        (
+          this.state.gameMode === ANONYMOUS_RECALL_MODE &&
+          client.sessionId === this.selectedRecallArtistSessionId
+        )
       ) {
         return;
       }
@@ -1034,11 +1049,16 @@ export class LobbyRoom extends Room {
         },
       );
 
-      // No need to wait for the remaining
-      // timer if everybody answered.
+      // Finish early when all eligible guessing
+      // players have submitted their answers.
+      const guessingPlayers = this.alivePlayerIds().filter(
+        (sessionId) =>
+          this.state.gameMode !== ANONYMOUS_RECALL_MODE ||
+          sessionId !== this.selectedRecallArtistSessionId,
+      );
+
       if (
-        this.recallAnswers.size >=
-        this.alivePlayerIds().length
+        this.recallAnswers.size >= guessingPlayers.length
       ) {
         this.finishRecallRound();
       }
@@ -1340,6 +1360,7 @@ export class LobbyRoom extends Room {
     this.recallAnswers.clear();
     this.recallDeadline = 0;
     this.recallStarted = false;
+    this.selectedRecallArtistSessionId = null;
     this.abilityVotes.clear();
     this.abilityUsedThisRound = false;
 
@@ -1432,21 +1453,52 @@ export class LobbyRoom extends Room {
   }
 
   /*
-   * BE-16: each player gets someone else's
-   * drawing of this round's word, without the
-   * artist's identity. Falls back to their own
-   * drawing when nobody else drew it (e.g. a
-   * one-player room).
-   */
+  * Anonymous Recall image distribution.
+  * Randomly select one player's drawing for
+  * the current round and send it to everyone
+  * except the artist.
+  */
   private sendAnonymousDrawings() {
     const roundIndex = this.recallRound;
 
-    this.sendOtherDrawings(
-      0,
-      (image) => ({ roundIndex, image }),
-      "recallDrawing",
-      true,
+    // Find players who submitted a drawing
+    // for the current round.
+    const artists = [
+      ...this.state.players.keys(),
+    ].filter((sessionId) =>
+      this.drawings.has(`${sessionId}:${roundIndex}`),
     );
+
+    // Randomly select one artist.
+    const artistSessionId =
+      artists.length > 0
+        ? artists[Math.floor(Math.random() * artists.length)]
+        : null;
+
+    // Save the selected artist for scoring.
+    this.selectedRecallArtistSessionId = artistSessionId;
+
+    // Get the selected drawing.
+    const drawing = artistSessionId
+      ? this.drawings.get(`${artistSessionId}:${roundIndex}`)
+      : undefined;
+
+    const image = drawing
+      ? Buffer.from(drawing).toString("base64")
+      : null;
+
+    // Send the same drawing to all guessing players.
+    // The artist receives no image.
+    for (const client of this.clients) {
+      const isArtist =
+        client.sessionId === artistSessionId;
+
+      client.send("recallDrawing", {
+        roundIndex,
+        image: isArtist ? null : image,
+        isArtist,
+      });
+    }
   }
 
   /*
