@@ -15,8 +15,12 @@ const VALID_DRAWING_SPEEDS = [
   "easy",
   "normal",
   "hard",
+  "custom",
 ] as const;
 type DrawingSpeed = typeof VALID_DRAWING_SPEEDS[number];
+
+const MIN_CUSTOM_DRAWING_TIME = 1;
+const MAX_CUSTOM_DRAWING_TIME = 120;
 
 const REQUIRED_PLAYER_QUESTIONS = 2;
 const QUESTION_OPTION_COUNT = 4;
@@ -311,6 +315,35 @@ export class LobbyRoom extends Room {
 
       this.playerQuestions.set(client.sessionId, []);
       player.questions.clear();
+    },
+    replacePlayerQuestion: (
+      client: Client,
+      message: { index: number },
+    ) => {
+      const player = this.state.players.get(
+        client.sessionId,
+      );
+
+      if (!player || player.ready) return;
+      if (!this.state.playerQuestionsEnabled) return;
+      if (this.state.phase !== "lobby") return;
+
+      const index = Math.round(message.index);
+      const questions =
+        this.playerQuestions.get(client.sessionId) ?? [];
+
+      if (
+        !Number.isFinite(index) ||
+        index < 0 ||
+        index >= questions.length ||
+        index >= player.questions.length
+      ) {
+        return;
+      }
+
+      questions.splice(index, 1);
+      this.playerQuestions.set(client.sessionId, questions);
+      player.questions.splice(index, 1);
     },
 
     submitPlayerQuestion: (
@@ -607,7 +640,11 @@ export class LobbyRoom extends Room {
 
     setDrawingSpeed: (
       client: Client,
-      message: { speed: string },
+      message: {
+        speed: string;
+        customMin?: number;
+        customMax?: number;
+      },
     ) => {
       const player =
         this.state.players.get(
@@ -634,6 +671,34 @@ export class LobbyRoom extends Room {
         "Changed to:",
         message.speed,
       );
+
+      if (message.speed === "custom") {
+        const customMin = Math.round(
+          message.customMin ??
+            this.state.customDrawingMin,
+        );
+        const customMax = Math.round(
+          message.customMax ??
+            this.state.customDrawingMax,
+        );
+
+        if (
+          !Number.isFinite(customMin) ||
+          !Number.isFinite(customMax) ||
+          customMin < MIN_CUSTOM_DRAWING_TIME ||
+          customMax > MAX_CUSTOM_DRAWING_TIME ||
+          customMin > customMax
+        ) {
+          client.send("drawing_speed_error", {
+            reason: `Custom drawing time must be between ${MIN_CUSTOM_DRAWING_TIME} and ${MAX_CUSTOM_DRAWING_TIME} seconds, with minimum no greater than maximum.`,
+          });
+
+          return;
+        }
+
+        this.state.customDrawingMin = customMin;
+        this.state.customDrawingMax = customMax;
+      }
 
       this.state.drawingSpeed =
         message.speed;

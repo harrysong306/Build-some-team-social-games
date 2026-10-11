@@ -41,6 +41,8 @@ export class GameState extends Schema {
   @type({ map: Player }) players = new MapSchema<Player>();
   @type("string") gameMode: string = "sketchRecall"; // Should have this be editable, with some validation after selection from front end menu dropdown.
   @type("string") drawingSpeed: string = "normal"; // Updated by the host through setDrawingSpeed.
+  @type("number") customDrawingMin: number = 6; // custom drawing speed lower bound
+  @type("number") customDrawingMax: number = 10; // custom drawing speed upper bound
   @type("number") drawingCount: number = 25; // Updated by the host through setDrawingCount. Independent of drawingSpeed.
   @type("string") wordTheme: string = "general";
   @type("boolean") playerQuestionsEnabled: boolean = true;

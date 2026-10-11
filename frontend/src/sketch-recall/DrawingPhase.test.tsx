@@ -613,6 +613,38 @@ describe('DrawingPhase component tests', () => {
     ).toBeInTheDocument()
   })
 
+  it('uses the custom drawing time bounds', () => {
+    vi.useFakeTimers()
+
+    vi.spyOn(
+      Math,
+      'random',
+    ).mockReturnValue(0.99)
+
+    render(
+      <DrawingPhase
+        words={['Apple', 'Tree']}
+        drawingSpeed="custom"
+        customDrawingMin={4}
+        customDrawingMax={14}
+        onBack={vi.fn()}
+        onComplete={vi.fn()}
+      />,
+    )
+
+    expect(
+      screen.getByText('14s'),
+    ).toBeInTheDocument()
+
+    act(() => {
+      vi.advanceTimersByTime(1000)
+    })
+
+    expect(
+      screen.getByText('13s'),
+    ).toBeInTheDocument()
+  })
+
   it('updates the drawing prompt and active grid cell after moving forward', async () => {
     render(
       <DrawingPhase

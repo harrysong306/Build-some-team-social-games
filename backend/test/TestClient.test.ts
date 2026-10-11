@@ -153,6 +153,46 @@ describe("LobbyRoom", () => {
     );
   });
 
+  it("replaces one selected player question without clearing the other", async () => {
+    const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
+    const client = await colyseus.connectTo(room, { name: "Jordan" });
+
+    client.send("submitPlayerQuestion", {
+      prompt: "Question one?",
+      options: ["A", "B", "C", "D"],
+      correctOption: 0,
+    });
+    await room.waitForNextPatch();
+
+    client.send("submitPlayerQuestion", {
+      prompt: "Question two?",
+      options: ["E", "F", "G", "H"],
+      correctOption: 1,
+    });
+    await room.waitForNextPatch();
+
+    client.send("replacePlayerQuestion", {
+      index: 0,
+    });
+    await room.waitForNextPatch();
+
+    const publicQuestions =
+      client.state.players.get(client.sessionId)?.questions;
+
+    assert.strictEqual(publicQuestions?.length, 1);
+    assert.strictEqual(publicQuestions?.[0].prompt, "Question two?");
+
+    client.send("submitPlayerQuestion", {
+      prompt: "Question three?",
+      options: ["I", "J", "K", "L"],
+      correctOption: 2,
+    });
+    await room.waitForNextPatch();
+
+    assert.strictEqual(publicQuestions?.length, 2);
+    assert.strictEqual(publicQuestions?.[1].prompt, "Question three?");
+  });
+
   it("checks player-question answers on the server", async () => {
     const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
     const client1 = await colyseus.connectTo(room, { name: "Jordan" });
@@ -689,6 +729,42 @@ client2.send("markReady", { ready: true });
       );
 
       assert.strictEqual(room.state.players.size, 8);
+    });
+  });
+
+  describe("setDrawingSpeed", () => {
+    it("stores valid custom drawing time bounds", async () => {
+      const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
+      const client1 = await colyseus.connectTo(room, { name: "Jordan" });
+
+      client1.send("setDrawingSpeed", {
+        speed: "custom",
+        customMin: 4,
+        customMax: 14,
+      });
+
+      await room.waitForNextPatch();
+
+      assert.strictEqual(client1.state.drawingSpeed, "custom");
+      assert.strictEqual(client1.state.customDrawingMin, 4);
+      assert.strictEqual(client1.state.customDrawingMax, 14);
+    });
+
+    it("rejects invalid custom drawing time bounds", async () => {
+      const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
+      const client1 = await colyseus.connectTo(room, { name: "Jordan" });
+
+      client1.send("setDrawingSpeed", {
+        speed: "custom",
+        customMin: 20,
+        customMax: 10,
+      });
+
+      await new Promise(resolve => setTimeout(resolve, 20));
+
+      assert.strictEqual(client1.state.drawingSpeed, "normal");
+      assert.strictEqual(client1.state.customDrawingMin, 6);
+      assert.strictEqual(client1.state.customDrawingMax, 10);
     });
   });
 
