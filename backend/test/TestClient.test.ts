@@ -2352,6 +2352,40 @@ client2.send("markReady", { ready: true });
         );
       });
 
+      it("does not deduct a life from the selected artist", async () => {
+        const { room, clients } = await setupGame(
+          ["Jordan", "Sam", "Alex"],
+          ["cat"],
+        );
+
+        room.state.gameMode = "anonymousRecall";
+
+        clients.forEach((client, index) => {
+          (room as any).drawings.set(
+            `${client.sessionId}:0`,
+            new Uint8Array([index + 1]),
+          );
+        });
+
+        await startRound(room, clients);
+
+        const internal = room as any;
+        const artistSessionId =
+          internal.selectedRecallArtistSessionId;
+
+        assert.ok(artistSessionId);
+
+        const artist = room.state.players.get(artistSessionId);
+        assert.ok(artist);
+        assert.strictEqual(artist.lives, 3);
+
+        // The artist cannot answer, but should not lose a life.
+        internal.finishRecallRound();
+
+        assert.strictEqual(artist.lives, 3);
+        assert.strictEqual(internal.recallRound, 1);
+      });
+
       it("does not send drawings in the normal sketchRecall mode", async () => {
         const { room, clients: [client1] } = await setupGame(["Jordan"], ["cat"]);
         (room as any).drawings.set(`${client1.sessionId}:0`, new Uint8Array([7]));
@@ -2419,6 +2453,59 @@ client2.send("markReady", { ready: true });
         assert.deepStrictEqual([...Buffer.from(message1.image, "base64")], [2]);
         assert.deepStrictEqual([...Buffer.from(message2.image, "base64")], [1]);
         assert.deepStrictEqual(Object.keys(message1).sort(), ["ability", "image", "roundIndex", "seconds"]);
+      });
+
+      it("reveal does not show the selected artist's drawing again", async () => {
+        const { room, clients } = await setupGame(
+          ["Jordan", "Sam", "Alex"],
+          ["cat"],
+        );
+
+        room.state.gameMode = "anonymousRecall";
+
+        clients.forEach((client, index) => {
+          (room as any).drawings.set(
+            `${client.sessionId}:0`,
+            new Uint8Array([index + 1]),
+          );
+        });
+
+        await startRound(room, clients);
+
+        const artistSessionId =
+          (room as any).selectedRecallArtistSessionId;
+
+        assert.ok(artistSessionId);
+
+        const guessingClients = clients.filter(
+          (client) => client.sessionId !== artistSessionId,
+        );
+
+        // The main drawing belongs to the selected artist.
+        const artistIndex = clients.findIndex(
+          (client) => client.sessionId === artistSessionId,
+        );
+
+        const mainImage = Buffer.from(
+          new Uint8Array([artistIndex + 1]),
+        ).toString("base64");
+
+        const revealPromise =
+          guessingClients[0].waitForMessage("abilityActivated");
+
+        // Two of three players vote for Reveal.
+        for (const client of guessingClients) {
+          await sendAndWait(room, client, "voteAbility", {
+            roundIndex: 0,
+            ability: "reveal",
+          });
+        }
+
+        const revealMessage: any = await revealPromise;
+
+        assert.strictEqual(revealMessage.ability, "reveal");
+        assert.ok(revealMessage.image);
+        assert.notStrictEqual(revealMessage.image, mainImage);
       });
 
       it("ignores votes from players who are out of lives", async () => {
