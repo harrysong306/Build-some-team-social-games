@@ -1254,6 +1254,164 @@ client2.send("markReady", { ready: true });
       assert.strictEqual(samResult.totalScore, 4);
     });
 
+    it("awards Anonymous Recall artist bonus from successful guesses", async () => {
+      const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
+
+      const jordan = await colyseus.connectTo(room, { name: "Jordan" });
+      const sam = await colyseus.connectTo(room, { name: "Sam" });
+      const alex = await colyseus.connectTo(room, { name: "Alex" });
+
+      room.state.gameMode = "anonymousRecall";
+      room.state.gameWords.clear();
+      room.state.gameWords.push("Apple");
+
+      const resultPromise =
+        new Promise<any>((resolve) => {
+          jordan.onMessage(
+            "recallRoundResult",
+            resolve,
+          );
+        });
+
+      const internal = room as any;
+
+      internal.recallRound = 0;
+      internal.recallStarted = true;
+      internal.selectedRecallArtistSessionId =
+        jordan.sessionId;
+      internal.recallDeadline = 20_000;
+
+      internal.recallAnswers =
+        new Map([
+          [
+            sam.sessionId,
+            {
+              sessionId: sam.sessionId,
+              answer: "Apple",
+              submittedAt: 10_400,
+            },
+          ],
+          [
+            alex.sessionId,
+            {
+              sessionId: alex.sessionId,
+              answer: "Aple",
+              submittedAt: 10_700,
+            },
+          ],
+        ]);
+
+      internal.finishRecallRound();
+
+      const result = await resultPromise;
+
+      const artistResult =
+        result.results.find(
+          (entry: any) =>
+            entry.sessionId ===
+            jordan.sessionId,
+        );
+
+      assert.ok(artistResult);
+      assert.strictEqual(artistResult.isArtist, true);
+      assert.strictEqual(artistResult.correctGuessCount, 2);
+      assert.strictEqual(artistResult.pointsEarned, 2);
+      assert.strictEqual(artistResult.totalScore, 2);
+      assert.strictEqual(artistResult.rank, null);
+      assert.strictEqual(artistResult.timedOut, false);
+      assert.strictEqual(artistResult.responseTimeMs, null);
+      assert.strictEqual(artistResult.averageResponseTimeMs, null);
+
+      assert.strictEqual(
+        room.state.players.get(jordan.sessionId)?.score,
+        2,
+      );
+      assert.strictEqual(
+        room.state.players.get(jordan.sessionId)?.recallResponseCount,
+        0,
+      );
+    });
+
+    it("tracks server response time, timeout and running average", async () => {
+      const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
+
+      const jordan = await colyseus.connectTo(room, { name: "Jordan" });
+      const sam = await colyseus.connectTo(room, { name: "Sam" });
+
+      room.state.gameWords.clear();
+      room.state.gameWords.push("Apple");
+
+      const jordanPlayer =
+        room.state.players.get(jordan.sessionId);
+      const samPlayer =
+        room.state.players.get(sam.sessionId);
+
+      assert.ok(jordanPlayer);
+      assert.ok(samPlayer);
+
+      jordanPlayer.recallResponseTimeMs = 400;
+      jordanPlayer.recallResponseCount = 1;
+      samPlayer.recallResponseTimeMs = 2000;
+      samPlayer.recallResponseCount = 1;
+
+      const resultPromise =
+        new Promise<any>((resolve) => {
+          jordan.onMessage(
+            "recallRoundResult",
+            resolve,
+          );
+        });
+
+      const internal = room as any;
+
+      internal.recallRound = 0;
+      internal.recallStarted = true;
+      internal.recallDeadline = 20_000;
+
+      internal.recallAnswers =
+        new Map([
+          [
+            jordan.sessionId,
+            {
+              sessionId: jordan.sessionId,
+              answer: "Apple",
+              submittedAt: 10_600,
+            },
+          ],
+        ]);
+
+      internal.finishRecallRound();
+
+      const result = await resultPromise;
+
+      const jordanResult =
+        result.results.find(
+          (entry: any) =>
+            entry.sessionId ===
+            jordan.sessionId,
+        );
+
+      const samResult =
+        result.results.find(
+          (entry: any) =>
+            entry.sessionId ===
+            sam.sessionId,
+        );
+
+      assert.ok(jordanResult);
+      assert.ok(samResult);
+
+      assert.strictEqual(jordanResult.responseTimeMs, 600);
+      assert.strictEqual(jordanResult.averageResponseTimeMs, 500);
+      assert.strictEqual(jordanPlayer.recallResponseTimeMs, 1000);
+      assert.strictEqual(jordanPlayer.recallResponseCount, 2);
+
+      assert.strictEqual(samResult.responseTimeMs, 10_000);
+      assert.strictEqual(samResult.averageResponseTimeMs, 6000);
+      assert.strictEqual(samPlayer.recallResponseTimeMs, 12_000);
+      assert.strictEqual(samPlayer.recallResponseCount, 2);
+    });
+
     it("accumulates four-mark Recall scores across rounds", async () => {
       const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
 
