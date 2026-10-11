@@ -306,18 +306,21 @@ describe(
 
         expect(minInput.value).toBe('120')
 
-        expect(send).not.toHaveBeenCalledWith(
+        expect(send).toHaveBeenCalledWith(
           'setDrawingSpeed',
           {
             speed: 'custom',
             customMin: 120,
-            customMax: 14,
+            customMax: 120,
           },
         )
 
-        fireEvent.blur(minInput)
+        const maxInputAfterMinChange =
+          screen.getByLabelText(
+            'Max seconds',
+          ) as HTMLInputElement
 
-        expect(minInput.value).toBe('6')
+        expect(maxInputAfterMinChange.value).toBe('120')
 
         pushState({
           players: {

@@ -682,6 +682,12 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
                               nextMin,
                               currentMax,
                             );
+                          } else if (currentMax !== null) {
+                            setCustomMaxDraft(String(nextMin));
+                            submitCustomDrawingTime(
+                              nextMin,
+                              nextMin,
+                            );
                           }
                         }}
                         onBlur={() => {
