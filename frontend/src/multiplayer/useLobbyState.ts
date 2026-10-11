@@ -29,6 +29,8 @@ export function useLobbyState(room: Room | null) {
   const [drawingSpeed, setDrawingSpeedState] = useState<string>("normal");
   const [drawingCount, setDrawingCountState] = useState<number>(25);
   const [wordTheme, setWordThemeState] = useState<string>("general");
+  const [playerQuestionsEnabled, setPlayerQuestionsEnabledState] =
+     useState<boolean>(true);
   const [phase, setPhase] = useState<string>("lobby");
   const [gameWords, setGameWords] = useState<string[]>([]);
   const [assignedPlayerQuestions, setAssignedPlayerQuestions] =
@@ -56,6 +58,9 @@ export function useLobbyState(room: Room | null) {
       setDrawingSpeedState(state.drawingSpeed ?? "normal");
       setDrawingCountState(state.drawingCount ?? 25);
       setWordThemeState(state.wordTheme ?? "general");
+      setPlayerQuestionsEnabledState(
+        state.playerQuestionsEnabled ?? true,
+      );
 
       setPhase(state.phase ?? "lobby");
       setGameWords(Array.from(state.gameWords ?? []));
@@ -94,7 +99,11 @@ export function useLobbyState(room: Room | null) {
       removeAssignedQuestionsListener?.();
       unsubscribeNameError?.();
     };
-  }, [room]);
+  }, 
+  [room]);
+  const setPlayerQuestionsEnabled = (enabled: boolean) => {
+     room?.send("setPlayerQuestionsEnabled", { enabled });
+     };
 
   const toggleReady = () => {
     if (!room) return;
@@ -128,6 +137,11 @@ export function useLobbyState(room: Room | null) {
     });
   };
 
+  const replacePlayerQuestions = () => {
+  room?.send("replacePlayerQuestions", {});
+  };
+
+
   // Sends { count } to LobbyRoom.ts using "setDrawingCount"
   const setDrawingCount = (count: number) => {
     room?.send("setDrawingCount", { count });
@@ -157,6 +171,7 @@ export function useLobbyState(room: Room | null) {
     drawingSpeed,
     drawingCount,
     wordTheme,
+    playerQuestionsEnabled,
     phase,
     gameWords,
     assignedPlayerQuestions,
@@ -166,8 +181,10 @@ export function useLobbyState(room: Room | null) {
     setGameMode,
     setDrawingSpeed,
     submitPlayerQuestion,
+    replacePlayerQuestions,
     setDrawingCount,
     setWordTheme,
+    setPlayerQuestionsEnabled,
     startGame,
     returnToLobby,
     changeName,

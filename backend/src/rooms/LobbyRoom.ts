@@ -1,4 +1,4 @@
-import { Room, Client, CloseCode } from "colyseus";
+import { Room, Client, CloseCode, ServerError } from "colyseus";
 import {
   GameState,
   Player,
@@ -75,6 +75,22 @@ type AssignedPlayerQuestion = {
 const MIN_DRAWING_COUNT = 10;
 const MAX_DRAWING_COUNT = 30;
 const VALID_WORD_THEMES = Object.keys(wordPacks) as WordPackTheme[];
+
+// BE-3: a room holds at most MAX_PLAYERS.
+// maxClients is one higher so the extra
+// player still reaches onAuth and gets
+// ROOM_FULL, instead of Colyseus' generic
+// "room is locked" error.
+const MAX_PLAYERS = 8;
+
+// BE-3: error codes sent to a client whose
+// join is rejected. A room code that doesn't
+// exist is already rejected by Colyseus with
+// ErrorCode.MATCHMAKE_INVALID_ROOM_ID (522).
+export const JoinError = {
+  ROOM_FULL: 4001,
+  GAME_IN_PROGRESS: 4002,
+} as const;
 
 type RecallAnswer = {
   sessionId: string;
@@ -189,7 +205,7 @@ type Ability = typeof ABILITIES[number];
 const REVEAL_SECONDS = 5;
 
 export class LobbyRoom extends Room {
-  maxClients = 8;
+  maxClients = MAX_PLAYERS + 1;
   state = new GameState();
 
   // BE-20: this round's ability votes.
@@ -251,9 +267,10 @@ export class LobbyRoom extends Room {
       if (player) {
         if (
           message.ready &&
+          this.state.playerQuestionsEnabled &&
           (this.playerQuestions.get(client.sessionId)?.length ?? 0) !==
             REQUIRED_PLAYER_QUESTIONS
-        ) {
+) {
           client.send("questions_required", {
             reason: `Submit ${REQUIRED_PLAYER_QUESTIONS} questions before readying up.`,
           });
@@ -269,6 +286,21 @@ export class LobbyRoom extends Room {
         player.ready = message.ready;
       }
     },
+    replacePlayerQuestions: (
+      client: Client,
+      _message: any,
+    ) => {
+      const player = this.state.players.get(
+       client.sessionId,
+      );
+
+      if (!player || player.ready) return;
+      if (!this.state.playerQuestionsEnabled) return;
+      if (this.state.phase !== "lobby") return;
+
+      this.playerQuestions.set(client.sessionId, []);
+      player.questions.clear();
+    },
 
     submitPlayerQuestion: (
       client: Client,
@@ -280,6 +312,7 @@ export class LobbyRoom extends Room {
     ) => {
       const player = this.state.players.get(client.sessionId);
       if (!player || player.ready) return;
+      if (!this.state.playerQuestionsEnabled) return;
 
       const prompt = message.prompt?.trim().slice(0, 120);
       const options = Array.isArray(message.options)
@@ -535,6 +568,11 @@ export class LobbyRoom extends Room {
 
       if (!player?.isHost) return;
 
+      // BE-27: the mode can only change between
+      // games (in the lobby, e.g. after Play Again),
+      // never in the middle of one.
+      if (this.state.phase !== "lobby") return;
+
       if (
         !VALID_GAME_MODES.includes(
           message.mode as GameMode,
@@ -627,6 +665,30 @@ export class LobbyRoom extends Room {
       this.state.drawingCount =
         count;
     },
+    setPlayerQuestionsEnabled: (
+     client: Client,
+     message: { enabled: boolean },
+    ) => {
+      if (this.state.phase !== "lobby") return;
+      const player =
+        this.state.players.get(
+          client.sessionId,
+        );
+
+     // Only the host can change this setting.
+     if (!player?.isHost) return;
+
+     if (typeof message.enabled !== "boolean") {
+     return;
+     }
+
+     this.state.playerQuestionsEnabled =
+     message.enabled;
+    
+     for (const player of this.state.players.values()) {
+    player.ready = false;
+  }
+    },
 
     setWordTheme: (
       client: Client,
@@ -658,7 +720,7 @@ export class LobbyRoom extends Room {
     startGame: (
       client: Client,
       _message: any,
-    ) => {
+    ) => {  
       const player =
         this.state.players.get(
           client.sessionId,
@@ -686,67 +748,73 @@ export class LobbyRoom extends Room {
         ...generateGameWords(wordCount, this.state.wordTheme as WordPackTheme),
       );
 
-      // Assign each personal question to one random player other than its
-      // author. The author never receives their own question.
-      const players = [...this.state.players.entries()];
-      const assignedQuestions = new Map<string, AssignedPlayerQuestion[]>();
-
-      for (const [ownerSessionId, owner] of players) {
-        const eligiblePlayers = players.filter(
-          ([sessionId]) => sessionId !== ownerSessionId,
-        );
-
-        for (const [questionIndex, question] of (
-          this.playerQuestions.get(ownerSessionId) ?? []
-        ).entries()) {
-          if (eligiblePlayers.length === 0) continue;
-
-          const [recipientSessionId] = eligiblePlayers[
-            Math.floor(Math.random() * eligiblePlayers.length)
-          ];
-
-          const recipientQuestions =
-            assignedQuestions.get(recipientSessionId) ?? [];
-
-          recipientQuestions.push({
-            ownerSessionId,
-            questionIndex,
-            ownerName: owner.name,
-            prompt: question.prompt,
-            options: question.options,
-          });
-          assignedQuestions.set(
-            recipientSessionId,
-            recipientQuestions,
-          );
-        }
-      }
-
-      for (const [recipientSessionId, questions] of assignedQuestions) {
-        this.clients
-          .find((connectedClient) =>
-            connectedClient.sessionId === recipientSessionId,
-          )
-          ?.send("assigned_player_questions", questions);
-          }
-
-      // BE-32: remember who may answer which question this game.
+      // Reset distraction state for every new game.
       this.assignedPlayerQuestionIds.clear();
       this.playerQuestionResults.clear();
       this.distractionProgress.clear();
 
-      for (const [recipientSessionId, questions] of assignedQuestions) {
-        this.assignedPlayerQuestionIds.set(
-          recipientSessionId,
-          new Set(
-            questions.map(
-              (question) =>
-                `${question.ownerSessionId}:${question.questionIndex}`,
-            ),
-          ),
-        );
-      }
+      const assignedQuestions = new Map<
+        string,
+        AssignedPlayerQuestion[]
+      >();
 
+      if (this.state.playerQuestionsEnabled) {
+        // Assign each personal question to a random player other than its author.
+        const players = [...this.state.players.entries()];
+
+        for (const [ownerSessionId, owner] of players) {
+          const eligiblePlayers = players.filter(
+            ([sessionId]) => sessionId !== ownerSessionId,
+          );
+
+          for (const [questionIndex, question] of (
+            this.playerQuestions.get(ownerSessionId) ?? []
+          ).entries()) {
+            if (eligiblePlayers.length === 0) continue;
+
+            const [recipientSessionId] = eligiblePlayers[
+              Math.floor(Math.random() * eligiblePlayers.length)
+            ];
+
+            const recipientQuestions =
+              assignedQuestions.get(recipientSessionId) ?? [];
+
+            recipientQuestions.push({
+              ownerSessionId,
+              questionIndex,
+              ownerName: owner.name,
+              prompt: question.prompt,
+              options: question.options,
+            });
+
+            assignedQuestions.set(
+              recipientSessionId,
+              recipientQuestions,
+            );
+          }
+        }
+
+        for (const [recipientSessionId, questions] of assignedQuestions) {
+          this.clients
+            .find((connectedClient) =>
+              connectedClient.sessionId === recipientSessionId,
+            )
+            ?.send("assigned_player_questions", questions);
+        }
+
+        // Remember which personal questions each player may answer.
+        for (const [recipientSessionId, questions] of assignedQuestions) {
+          this.assignedPlayerQuestionIds.set(
+            recipientSessionId,
+            new Set(
+              questions.map(
+                (question) =>
+                  `${question.ownerSessionId}:${question.questionIndex}`,
+              ),
+            ),
+          );
+        }
+      }
       // Start each new game with a clean scoreboard.
       for (
         const currentPlayer of
@@ -836,6 +904,18 @@ export class LobbyRoom extends Room {
 
       this.abilityVotes.clear();
       this.abilityUsedThisRound = false;
+    },
+
+    /*
+     * BE-27: leave the room. The client is
+     * disconnected, and onLeave removes them
+     * from the room state.
+     */
+    leaveRoom: (
+      client: Client,
+      _message: any,
+    ) => {
+      client.leave();
     },
 
     /*
@@ -1492,6 +1572,29 @@ export class LobbyRoom extends Room {
     );
   }
 
+  // BE-3: runs before onJoin. Throwing here
+  // rejects the join with a clear error.
+  onAuth(
+    _client: Client,
+    _options: any,
+  ) {
+    if (this.state.phase !== "lobby") {
+      throw new ServerError(
+        JoinError.GAME_IN_PROGRESS,
+        "This game has already started.",
+      );
+    }
+
+    if (this.state.players.size >= MAX_PLAYERS) {
+      throw new ServerError(
+        JoinError.ROOM_FULL,
+        "This room is full.",
+      );
+    }
+
+    return true;
+  }
+
   onJoin(
     client: Client,
     options: any,
@@ -1558,6 +1661,20 @@ export class LobbyRoom extends Room {
       client.sessionId,
     );
 
+    // BE-27: forget everything else that belongs
+    // to the player who left.
+    this.abilityVotes.delete(client.sessionId);
+    this.pendingDrawingIndexes.delete(client.sessionId);
+
+    // Their questions may already be assigned to
+    // someone in a running game, so only drop
+    // them while still in the lobby.
+    if (this.state.phase === "lobby") {
+      this.playerQuestions.delete(client.sessionId);
+    }
+
+    this.continueRecallAfterLeave();
+
     if (
       wasHost &&
       this.state.players.size > 0
@@ -1574,6 +1691,54 @@ export class LobbyRoom extends Room {
       "left!",
       code,
     );
+  }
+
+  /*
+   * BE-27: a Recall round waits for every player
+   * to be ready, then for every alive player to
+   * answer. If the player we were waiting for
+   * leaves, the others would wait forever, so
+   * check again with the players who are left.
+   */
+  private continueRecallAfterLeave() {
+    if (
+      this.state.phase !== "playing" ||
+      this.state.players.size === 0
+    ) {
+      return;
+    }
+
+    if (this.recallStarted) {
+      if (
+        this.recallAnswers.size >=
+        this.alivePlayerIds().length
+      ) {
+        this.finishRecallRound();
+      }
+
+      return;
+    }
+
+    // Everyone left is ready: replay a ready
+    // message from one of them so the round
+    // starts exactly as it normally would.
+    const readyClient = this.clients.find(
+      (connectedClient) =>
+        this.recallReady.has(
+          connectedClient.sessionId,
+        ),
+    );
+
+    if (
+      readyClient &&
+      this.recallReady.size ===
+        this.state.players.size
+    ) {
+      this.messages.readyRecallRound(
+        readyClient,
+        { roundIndex: this.recallRound },
+      );
+    }
   }
 
   onDispose() {
