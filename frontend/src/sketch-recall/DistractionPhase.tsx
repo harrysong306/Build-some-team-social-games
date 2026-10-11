@@ -145,7 +145,7 @@ function DistractionPhase({
     useState(0)
 
   const [selectedAnswer, setSelectedAnswer] =
-    useState('')
+    useState<number | null>(null)
 
   const [score, setScore] = useState(0)
   const [timeLeft, setTimeLeft] = useState(10)
@@ -223,7 +223,7 @@ function DistractionPhase({
       )
     }
 
-    setSelectedAnswer('')
+    setSelectedAnswer(null)
     setTimeLeft(10)
   }, [
     useServer,
@@ -314,17 +314,19 @@ function DistractionPhase({
   }
 
   const nextQuestion = async () => {
-    if (submitting || !selectedAnswer) return
-    setSubmitting(true)
+    if (submitting || selectedAnswer === null) return
+setSubmitting(true)
 
-    const displayedIndex = currentQuestion.options.indexOf(selectedAnswer)
-    const selectedIndex =
-      currentQuestion.optionIndexes?.[displayedIndex] ?? displayedIndex
-    const result: AnswerResult = currentQuestion.ownerSessionId
-      ? await checkPlayerAnswer(currentQuestion, selectedIndex)
-      : currentQuestion.serverQuestionId !== undefined
-        ? await checkServerAnswer(currentQuestion, selectedAnswer)
-        : { correct: selectedAnswer === currentQuestion.answer }
+const displayedIndex = selectedAnswer
+const selectedOption = currentQuestion.options[displayedIndex]
+const selectedIndex =
+  currentQuestion.optionIndexes?.[displayedIndex] ?? displayedIndex
+
+const result: AnswerResult = currentQuestion.ownerSessionId
+  ? await checkPlayerAnswer(currentQuestion, selectedIndex)
+  : currentQuestion.serverQuestionId !== undefined
+    ? await checkServerAnswer(currentQuestion, selectedOption)
+    : { correct: selectedOption === currentQuestion.answer }
 
     finishQuestion(result.correct, result.progress)
   }
@@ -484,18 +486,18 @@ function DistractionPhase({
 
           <div className="mt-8 grid gap-4 sm:grid-cols-2">
 
-            {currentQuestion.options.map(
-              (option) => {
-                const selected =
-                  selectedAnswer === option
+           {currentQuestion.options.map(
+             (option, optionIndex) => {
+               const selected =
+                selectedAnswer === optionIndex
 
-                return (
-                  <button
-                    key={option}
-                    type="button"
-                    onClick={() =>
-                      setSelectedAnswer(option)
-                    }
+               return (
+                <button
+                  key={`${questionIndex}-${optionIndex}`}
+                  type="button"
+                  onClick={() =>
+                    setSelectedAnswer(optionIndex)
+                  }
                     className={`rounded-xl border p-5 text-left font-semibold transition ${
                       selected
                         ? 'border-amber-400 bg-amber-400 text-black'
@@ -512,7 +514,7 @@ function DistractionPhase({
 
           <button
             type="button"
-            disabled={!selectedAnswer || submitting}
+            disabled={selectedAnswer === null || submitting}
             onClick={nextQuestion}
             className="mt-8 w-full rounded-xl bg-gradient-to-r from-amber-500 to-yellow-400 py-4 text-lg font-bold text-black disabled:cursor-not-allowed disabled:opacity-30"
           >
