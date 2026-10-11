@@ -483,306 +483,309 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
         </button>
 
         {isHost ? (
-          <div className="mt-6">
-            <label className="mb-2 block text-sm text-white/60">
-              Game mode
-            </label>
+          <details className="mt-6 rounded-lg border border-amber-500/30 bg-[#160b06]">
+            <summary className="cursor-pointer px-4 py-3 font-bold text-amber-300">
+              Lobby settings
+            </summary>
 
-            <select
-              value={gameMode}
-              onChange={(event) => {
-                saveLobbyPreferences({
-                  gameMode: event.target.value,
-                });
-                setGameMode(
-                  event.target.value,
-                );
-              }}
-              className="w-full rounded-lg border border-amber-500/30 bg-[#211006] px-4 py-3 text-white focus:border-amber-400 focus:outline-none"
-            >
-              {GAME_MODES.map((mode) => (
-                <option
-                  key={mode.value}
-                  value={mode.value}
-                >
-                  {mode.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        ) : (
-          <p className="mt-6 text-sm text-white/60">
-            Mode: {GAME_MODES.find((mode) => mode.value === gameMode)?.label ?? gameMode}
-          </p>
-        )}
-
-        {isHost ? (
-          <div className="mt-4">
-            <label
-              htmlFor="drawing-speed"
-              className="mb-2 block text-sm text-white/60"
-            >
-              Drawing speed
-            </label>
-
-            <select
-              id="drawing-speed"
-              value={drawingSpeed}
-              onChange={(event) => {
-                saveLobbyPreferences({
-                  drawingSpeed: event.target.value,
-                  customDrawingMin,
-                  customDrawingMax,
-                });
-                setDrawingSpeed(
-                  event.target.value,
-                  customDrawingMin,
-                  customDrawingMax,
-                );
-              }}
-              className="w-full rounded-lg border border-amber-500/30 bg-[#211006] px-4 py-3 text-white focus:border-amber-400 focus:outline-none"
-            >
-              {DRAWING_SPEEDS.map((speed) => (
-                <option
-                  key={speed.value}
-                  value={speed.value}
-                >
-                  {speed.label}
-                </option>
-              ))}
-            </select>
-
-            {drawingSpeed === "custom" ? (
-              <div className="mt-3 grid grid-cols-2 gap-3">
-                <label className="block text-sm text-white/60">
-                  Min seconds
-                  <input
-                    type="number"
-                    min={1}
-                    max={120}
-                    value={customMinDraft}
-                    onChange={(event) => {
-                      const rawValue = event.target.value;
-
-                      if (rawValue === "") {
-                        setCustomMinDraft("");
-                        return;
-                      }
-
-                      const nextMin =
-                        parseDrawingTimeDraft(rawValue);
-
-                      if (nextMin === null) return;
-                      setCustomMinDraft(String(nextMin));
-
-                      const currentMax =
-                        parseDrawingTimeDraft(customMaxDraft);
-
-                      if (
-                        currentMax !== null &&
-                        nextMin <= currentMax
-                      ) {
-                        submitCustomDrawingTime(
-                          nextMin,
-                          currentMax,
-                        );
-                      }
-                    }}
-                    onBlur={() => {
-                      const currentMin =
-                        parseDrawingTimeDraft(customMinDraft);
-                      const currentMax =
-                        parseDrawingTimeDraft(customMaxDraft);
-
-                      if (
-                        currentMin !== null &&
-                        currentMax !== null &&
-                        currentMin <= currentMax
-                      ) {
-                        return;
-                      }
-
-                      setCustomMinDraft(String(customDrawingMin));
-                    }}
-                    className="mt-2 w-full rounded-lg border border-amber-500/30 bg-[#211006] px-4 py-3 text-white focus:border-amber-400 focus:outline-none"
-                  />
+            <div className="border-t border-amber-500/20 p-4">
+              <div>
+                <label className="mb-2 block text-sm text-white/60">
+                  Game mode
                 </label>
 
-                <label className="block text-sm text-white/60">
-                  Max seconds
-                  <input
-                    type="number"
-                    min={1}
-                    max={120}
-                    value={customMaxDraft}
-                    onChange={(event) => {
-                      const rawValue = event.target.value;
-
-                      if (rawValue === "") {
-                        setCustomMaxDraft("");
-                        return;
-                      }
-
-                      const nextMax =
-                        parseDrawingTimeDraft(rawValue);
-
-                      if (nextMax === null) return;
-                      setCustomMaxDraft(String(nextMax));
-
-                      const currentMin =
-                        parseDrawingTimeDraft(customMinDraft);
-
-                      if (
-                        currentMin !== null &&
-                        nextMax >= currentMin
-                      ) {
-                        submitCustomDrawingTime(
-                          currentMin,
-                          nextMax,
-                        );
-                      }
-                    }}
-                    onBlur={() => {
-                      const currentMin =
-                        parseDrawingTimeDraft(customMinDraft);
-                      const currentMax =
-                        parseDrawingTimeDraft(customMaxDraft);
-
-                      if (
-                        currentMin !== null &&
-                        currentMax !== null &&
-                        currentMax >= currentMin
-                      ) {
-                        return;
-                      }
-
-                      setCustomMaxDraft(String(customDrawingMax));
-                    }}
-                    className="mt-2 w-full rounded-lg border border-amber-500/30 bg-[#211006] px-4 py-3 text-white focus:border-amber-400 focus:outline-none"
-                  />
-                </label>
+                <select
+                  value={gameMode}
+                  onChange={(event) => {
+                    saveLobbyPreferences({
+                      gameMode: event.target.value,
+                    });
+                    setGameMode(
+                      event.target.value,
+                    );
+                  }}
+                  className="w-full rounded-lg border border-amber-500/30 bg-[#211006] px-4 py-3 text-white focus:border-amber-400 focus:outline-none"
+                >
+                  {GAME_MODES.map((mode) => (
+                    <option
+                      key={mode.value}
+                      value={mode.value}
+                    >
+                      {mode.label}
+                    </option>
+                  ))}
+                </select>
               </div>
-            ) : null}
-          </div>
-        ) : (
-          <p className="mt-4 text-sm text-white/60">
-            Drawing speed: {drawingSpeed}
-          </p>
-        )}
 
-        {isHost ? (
-          <div className="mt-4">
-            <label
-              htmlFor="drawing-count"
-              className="mb-2 block text-sm text-white/60"
-            >
-              Number of drawings
-            </label>
-
-            <select
-              id="drawing-count"
-              value={drawingCount}
-              onChange={(event) => {
-                const count = Number(event.target.value);
-
-                saveLobbyPreferences({
-                  drawingCount: count,
-                });
-                setDrawingCount(count);
-              }}
-              className="w-full rounded-lg border border-amber-500/30 bg-[#211006] px-4 py-3 text-white focus:border-amber-400 focus:outline-none"
-            >
-              {DRAWING_COUNTS.map((count) => (
-                <option
-                  key={count}
-                  value={count}
+              <div className="mt-4">
+                <label
+                  htmlFor="drawing-speed"
+                  className="mb-2 block text-sm text-white/60"
                 >
-                  {count}
-                </option>
-              ))}
-            </select>
-          </div>
-        ) : (
-          <p className="mt-4 text-sm text-white/60">
-            Number of drawings: {drawingCount}
-          </p>
-        )}
+                  Drawing speed
+                </label>
 
-        {isHost ? (
-          <div className="mt-4">
-            <label
-              htmlFor="word-theme"
-              className="mb-2 block text-sm text-white/60"
-            >
-              Word theme
-            </label>
-
-            <select
-              id="word-theme"
-              value={wordTheme}
-              onChange={(event) => {
-                saveLobbyPreferences({
-                  wordTheme: event.target.value,
-                });
-                setWordTheme(event.target.value);
-              }}
-              className="w-full rounded-lg border border-amber-500/30 bg-[#211006] px-4 py-3 text-white focus:border-amber-400 focus:outline-none"
-            >
-              {WORD_THEMES.map((theme) => (
-                <option
-                  key={theme.value}
-                  value={theme.value}
+                <select
+                  id="drawing-speed"
+                  value={drawingSpeed}
+                  onChange={(event) => {
+                    saveLobbyPreferences({
+                      drawingSpeed: event.target.value,
+                      customDrawingMin,
+                      customDrawingMax,
+                    });
+                    setDrawingSpeed(
+                      event.target.value,
+                      customDrawingMin,
+                      customDrawingMax,
+                    );
+                  }}
+                  className="w-full rounded-lg border border-amber-500/30 bg-[#211006] px-4 py-3 text-white focus:border-amber-400 focus:outline-none"
                 >
-                  {theme.label}
-                </option>
-              ))}
-            </select>
-          </div>
+                  {DRAWING_SPEEDS.map((speed) => (
+                    <option
+                      key={speed.value}
+                      value={speed.value}
+                    >
+                      {speed.label}
+                    </option>
+                  ))}
+                </select>
+
+                {drawingSpeed === "custom" ? (
+                  <div className="mt-3 grid grid-cols-2 gap-3">
+                    <label className="block text-sm text-white/60">
+                      Min seconds
+                      <input
+                        type="number"
+                        min={1}
+                        max={120}
+                        value={customMinDraft}
+                        onChange={(event) => {
+                          const rawValue = event.target.value;
+
+                          if (rawValue === "") {
+                            setCustomMinDraft("");
+                            return;
+                          }
+
+                          const nextMin =
+                            parseDrawingTimeDraft(rawValue);
+
+                          if (nextMin === null) return;
+                          setCustomMinDraft(String(nextMin));
+
+                          const currentMax =
+                            parseDrawingTimeDraft(customMaxDraft);
+
+                          if (
+                            currentMax !== null &&
+                            nextMin <= currentMax
+                          ) {
+                            submitCustomDrawingTime(
+                              nextMin,
+                              currentMax,
+                            );
+                          }
+                        }}
+                        onBlur={() => {
+                          const currentMin =
+                            parseDrawingTimeDraft(customMinDraft);
+                          const currentMax =
+                            parseDrawingTimeDraft(customMaxDraft);
+
+                          if (
+                            currentMin !== null &&
+                            currentMax !== null &&
+                            currentMin <= currentMax
+                          ) {
+                            return;
+                          }
+
+                          setCustomMinDraft(String(customDrawingMin));
+                        }}
+                        className="mt-2 w-full rounded-lg border border-amber-500/30 bg-[#211006] px-4 py-3 text-white focus:border-amber-400 focus:outline-none"
+                      />
+                    </label>
+
+                    <label className="block text-sm text-white/60">
+                      Max seconds
+                      <input
+                        type="number"
+                        min={1}
+                        max={120}
+                        value={customMaxDraft}
+                        onChange={(event) => {
+                          const rawValue = event.target.value;
+
+                          if (rawValue === "") {
+                            setCustomMaxDraft("");
+                            return;
+                          }
+
+                          const nextMax =
+                            parseDrawingTimeDraft(rawValue);
+
+                          if (nextMax === null) return;
+                          setCustomMaxDraft(String(nextMax));
+
+                          const currentMin =
+                            parseDrawingTimeDraft(customMinDraft);
+
+                          if (
+                            currentMin !== null &&
+                            nextMax >= currentMin
+                          ) {
+                            submitCustomDrawingTime(
+                              currentMin,
+                              nextMax,
+                            );
+                          }
+                        }}
+                        onBlur={() => {
+                          const currentMin =
+                            parseDrawingTimeDraft(customMinDraft);
+                          const currentMax =
+                            parseDrawingTimeDraft(customMaxDraft);
+
+                          if (
+                            currentMin !== null &&
+                            currentMax !== null &&
+                            currentMax >= currentMin
+                          ) {
+                            return;
+                          }
+
+                          setCustomMaxDraft(String(customDrawingMax));
+                        }}
+                        className="mt-2 w-full rounded-lg border border-amber-500/30 bg-[#211006] px-4 py-3 text-white focus:border-amber-400 focus:outline-none"
+                      />
+                    </label>
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="mt-4">
+                <label
+                  htmlFor="drawing-count"
+                  className="mb-2 block text-sm text-white/60"
+                >
+                  Number of drawings
+                </label>
+
+                <select
+                  id="drawing-count"
+                  value={drawingCount}
+                  onChange={(event) => {
+                    const count = Number(event.target.value);
+
+                    saveLobbyPreferences({
+                      drawingCount: count,
+                    });
+                    setDrawingCount(count);
+                  }}
+                  className="w-full rounded-lg border border-amber-500/30 bg-[#211006] px-4 py-3 text-white focus:border-amber-400 focus:outline-none"
+                >
+                  {DRAWING_COUNTS.map((count) => (
+                    <option
+                      key={count}
+                      value={count}
+                    >
+                      {count}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="mt-4">
+                <label
+                  htmlFor="word-theme"
+                  className="mb-2 block text-sm text-white/60"
+                >
+                  Word theme
+                </label>
+
+                <select
+                  id="word-theme"
+                  value={wordTheme}
+                  onChange={(event) => {
+                    saveLobbyPreferences({
+                      wordTheme: event.target.value,
+                    });
+                    setWordTheme(event.target.value);
+                  }}
+                  className="w-full rounded-lg border border-amber-500/30 bg-[#211006] px-4 py-3 text-white focus:border-amber-400 focus:outline-none"
+                >
+                  {WORD_THEMES.map((theme) => (
+                    <option
+                      key={theme.value}
+                      value={theme.value}
+                    >
+                      {theme.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="mt-4">
+                <label
+                  htmlFor="player-questions"
+                  className="mb-2 block text-sm text-white/60"
+                >
+                  Player-created questions
+                </label>
+
+                <button
+                  id="player-questions"
+                  type="button"
+                  onClick={() => {
+                    const enabled = !playerQuestionsEnabled;
+
+                    saveLobbyPreferences({
+                      playerQuestionsEnabled: enabled,
+                    });
+
+                    setPlayerQuestionsEnabled(
+                      enabled,
+                    );
+                  }}
+                  className="w-full rounded-lg border border-amber-500/30 bg-[#211006] px-4 py-3 text-left text-white"
+                >
+                  {playerQuestionsEnabled
+                    ? "Enabled"
+                    : "Disabled"}
+                </button>
+              </div>
+            </div>
+          </details>
         ) : (
-          <p className="mt-4 text-sm text-white/60">
-            Word theme: {" "}
-            {WORD_THEMES.find(
-              (theme) => theme.value === wordTheme,
-            )?.label ?? wordTheme}
-          </p>
-        )}
-        {isHost ? (
-          <div className="mt-4">
-            <label
-              htmlFor="player-questions"
-              className="mb-2 block text-sm text-white/60"
-            >
-              Player-created questions
-            </label>
+          <div className="mt-6 space-y-4">
+            <p className="text-sm text-white/60">
+              Mode: {GAME_MODES.find((mode) => mode.value === gameMode)?.label ?? gameMode}
+            </p>
 
-            <button
-              id="player-questions"
-              type="button"
-              onClick={() => {
-                const enabled = !playerQuestionsEnabled;
+            <p className="text-sm text-white/60">
+              Drawing speed: {drawingSpeed}
+            </p>
 
-                saveLobbyPreferences({
-                  playerQuestionsEnabled: enabled,
-                });
+            <p className="text-sm text-white/60">
+              Number of drawings: {drawingCount}
+            </p>
 
-                setPlayerQuestionsEnabled(
-                  enabled,
-                );
-              }}
-              className="w-full rounded-lg border border-amber-500/30 bg-[#211006] px-4 py-3 text-left text-white"
-            >
+            <p className="text-sm text-white/60">
+              Word theme:{" "}
+              {WORD_THEMES.find(
+                (theme) => theme.value === wordTheme,
+              )?.label ?? wordTheme}
+            </p>
+
+            <p className="text-sm text-white/60">
+              Player-created questions:{" "}
               {playerQuestionsEnabled
                 ? "Enabled"
                 : "Disabled"}
-            </button>
+            </p>
           </div>
-        ) : (
-          <p className="mt-4 text-sm text-white/60">
-            Player-created questions:{" "}
-            {playerQuestionsEnabled
-              ? "Enabled"
-              : "Disabled"}
-          </p>
         )}
 
         {isHost ? (
