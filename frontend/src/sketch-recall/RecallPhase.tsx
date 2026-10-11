@@ -17,8 +17,6 @@ type RecallPlayerResult = {
   timedOut: boolean
   pointsEarned: number
   totalScore: number
-  lostLife?: boolean
-  lives?: number
 }
 
 type RecallRoundResult = {
@@ -34,9 +32,7 @@ type RecallPhaseProps = {
   // BE-16: guess someone else's drawing,
   // sent by the server without the artist.
   anonymous?: boolean
-  // Multiplayer only: this player's lives and
-  // the team abilities already used.
-  lives?: number
+  // Multiplayer team abilities already used.
   usedAbilities?: readonly string[]
   onComplete: (score: number) => void
 }
@@ -46,7 +42,6 @@ function RecallPhase({
   drawings,
   words,
   anonymous = false,
-  lives,
   usedAbilities = [],
   onComplete,
 }: RecallPhaseProps) {
@@ -110,23 +105,22 @@ function RecallPhase({
       isArtist: boolean
     } | null>(null)
 
-  const showAnonymous = anonymous && room !== null
+  const showAnonymous =
+    anonymous && room !== null
 
   const isCurrentArtist =
     showAnonymous &&
-    anonymousDrawing?.roundIndex === currentIndex &&
+    anonymousDrawing?.roundIndex ===
+      currentIndex &&
     anonymousDrawing.isArtist
 
-  // Out of lives: can watch but not answer.
-  // undefined means no lives (single player).
-  const isOut =
-    room !== null && lives !== undefined && lives <= 0
-
-  const currentDrawing = showAnonymous
-    ? anonymousDrawing?.roundIndex === currentIndex
-      ? anonymousDrawing.image
-      : null
-    : drawings[currentIndex]
+  const currentDrawing =
+    showAnonymous
+      ? anonymousDrawing?.roundIndex ===
+        currentIndex
+        ? anonymousDrawing.image
+        : null
+      : drawings[currentIndex]
 
   const currentWord =
     words[currentIndex]
@@ -188,17 +182,25 @@ function RecallPhase({
           image: string | null
           isArtist?: boolean
         }) => {
-          if (message.roundIndex !== currentIndex) {
+          if (
+            message.roundIndex !==
+            currentIndex
+          ) {
             return
           }
+
           setAnonymousDrawing({
-            roundIndex: message.roundIndex,
-            image: message.isArtist
-              ? null
-              : message.image
-                ? `data:image/png;base64,${message.image}`
-                : null,
-            isArtist: message.isArtist ?? false,
+            roundIndex:
+              message.roundIndex,
+            image:
+              message.isArtist
+                ? null
+                : message.image
+                  ? `data:image/png;base64,${message.image}`
+                  : null,
+            isArtist:
+              message.isArtist ??
+              false,
           })
         },
       )
@@ -328,7 +330,6 @@ function RecallPhase({
     () => {
       if (
         !room ||
-        isOut ||
         isCurrentArtist ||
         !roundStarted ||
         submitted ||
@@ -551,15 +552,6 @@ function RecallPhase({
                         }
                         /4
                       </p>
-
-                      {result.lives !== undefined && (
-                        <p className="mt-1 text-xs text-white/50">
-                          {result.lostLife ? '−1 ❤️ · ' : ''}
-                          {result.lives > 0
-                            ? '❤️'.repeat(result.lives)
-                            : 'Out'}
-                        </p>
-                      )}
                     </div>
                   </div>
                 ),
@@ -654,12 +646,6 @@ function RecallPhase({
             Drawing{' '}
             {currentIndex + 1} of{' '}
             {words.length}
-            {room && lives !== undefined && (
-              <>
-                {' · '}
-                {lives > 0 ? '❤️'.repeat(lives) : 'Out of lives'}
-              </>
-            )}
           </span>
 
           {room ? (
@@ -707,6 +693,7 @@ function RecallPhase({
                   <p className="text-lg font-semibold">
                     Your drawing was selected!
                   </p>
+
                   <p className="mt-2 text-sm">
                     Waiting for other players to guess...
                   </p>
@@ -730,7 +717,9 @@ function RecallPhase({
           <div className="flex flex-col rounded-2xl border border-amber-500/30 bg-[#160b06] p-7">
 
             <p className="text-sm font-semibold uppercase text-amber-400">
-              {isCurrentArtist ? 'Your Drawing' : 'Your Answer'}
+              {isCurrentArtist
+                ? 'Your Drawing'
+                : 'Your Answer'}
             </p>
 
             <h2 className="mt-3 text-2xl font-bold">
@@ -755,7 +744,6 @@ function RecallPhase({
                 room
                   ? !roundStarted ||
                     submitted ||
-                    isOut ||
                     isCurrentArtist
                   : checked
               }
@@ -824,19 +812,13 @@ function RecallPhase({
                 </div>
               )}
 
-            {isOut && (
-              <p className="mt-5 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">
-                You're out of lives. Watch the rest of the rounds!
-              </p>
-            )}
-
             {room && (
               <TeamAbilities
                 key={currentIndex}
                 room={room}
                 roundIndex={currentIndex}
                 roundStarted={roundStarted}
-                disabled={isOut || isCurrentArtist}
+                disabled={isCurrentArtist}
                 usedAbilities={usedAbilities}
               />
             )}
@@ -862,7 +844,6 @@ function RecallPhase({
                   disabled={
                     !roundStarted ||
                     submitted ||
-                    isOut ||
                     isCurrentArtist ||
                     !answer.trim()
                   }
