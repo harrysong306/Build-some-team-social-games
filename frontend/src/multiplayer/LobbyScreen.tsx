@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Room } from "@colyseus/sdk";
 import { useLobbyState } from "./useLobbyState";
 import InstructionsScreen from "../sketch-recall/InstructionsScreen";
@@ -45,6 +45,7 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
     gameWords,
     assignedPlayerQuestions,
     mySessionId,
+    nameError,
     toggleReady,
     setGameMode,
     setDrawingSpeed,
@@ -55,6 +56,7 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
     submitPlayerQuestion,
     replacePlayerQuestions,
     returnToLobby,
+    changeName,
   } = useLobbyState(room);
 
   const [roundStarted, setRoundStarted] = useState(false);
@@ -66,6 +68,22 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
     "",
   ]);
   const [correctOption, setCorrectOption] = useState(0);
+
+  // whether the player's own row in the list is in edit-name mode
+  const [isEditingName, setIsEditingName] = useState(false);
+
+  // draft name typed while editing, before it's submitted
+  const [nameDraft, setNameDraft] = useState("");
+
+  // briefly true right after the room code is copied, to show feedback
+  const [codeCopied, setCodeCopied] = useState(false);
+
+  // mirrors isEditingName but updates synchronously (unlike the state
+  // value), so a stray blur fired by the input unmounting - which can
+  // happen an unpredictable amount of time after Enter/Escape already
+  // closed the field - reliably sees editing has already ended and no-ops
+  // instead of racing to submit or re-submit a draft
+  const isEditingRef = useRef(false);
 
   const playerList = Object.entries(players);
   const me = players[mySessionId];
@@ -99,6 +117,44 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
     setCorrectOption(0);
   };
 
+  const startEditingName = () => {
+    setNameDraft(me?.name ?? "");
+    isEditingRef.current = true;
+    setIsEditingName(true);
+  };
+
+  const closeEditingName = () => {
+    isEditingRef.current = false;
+    setIsEditingName(false);
+  };
+
+  const cancelEditingName = () => {
+    closeEditingName();
+  };
+
+  const submitNameChange = () => {
+    if (!isEditingRef.current) return;
+
+    const trimmed = nameDraft.trim();
+    closeEditingName();
+
+    if (!trimmed || trimmed === me?.name) return;
+    changeName(trimmed);
+  };
+
+  const copyRoomCode = async () => {
+    if (!roomId) return;
+
+    try {
+      await navigator.clipboard.writeText(roomId);
+      setCodeCopied(true);
+      setTimeout(() => setCodeCopied(false), 1500);
+    } catch {
+      // clipboard access can be blocked (permissions, insecure context, etc.) -
+      // fail quietly, the room code is still visible as plain text either way
+    }
+  };
+
   /*
    * The backend phase is authoritative.
    *
@@ -122,6 +178,9 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
         gameWords={gameWords}
         playerQuestions={assignedPlayerQuestions}
         drawingSpeed={drawingSpeed}
+        // the InstructionsScreen below already ran its countdown
+        // before roundStarted flipped to true, so don't show it again
+        skipInstructions
         onPlayAgain={returnToLobby}
         onSubmitDrawing={(bytes, index) => {
           room?.send("submit-drawing-meta", {
@@ -155,37 +214,83 @@ function LobbyScreen({ room, roomId }: LobbyScreenProps) {
           Lobby
         </h2>
 
-        <p className="mt-1 text-sm text-white/60">
-          Room code: {roomId}
-        </p>
+        <div className="mt-1 flex items-center gap-2">
+          <p className="text-sm text-white/60">
+            Room code: {roomId}
+          </p>
+
+          <button
+            type="button"
+            onClick={copyRoomCode}
+            disabled={!roomId}
+            className="rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-xs font-semibold text-amber-300 transition hover:border-amber-400 hover:bg-amber-500/20 disabled:opacity-40"
+          >
+            {codeCopied ? "✅ Copied" : "📋 Copy"}
+          </button>
+        </div>
 
         <ul className="mt-6 space-y-2">
           {playerList.map(
-            ([sessionId, player]) => (
-              <li
-                key={sessionId}
-                className="flex items-center justify-between rounded-lg border border-amber-500/20 bg-[#211006] px-4 py-3"
-              >
-                <span>
-                  {player.name}
-                  {player.isHost && " 👑"}
-                </span>
+            ([sessionId, player]) => {
+              const isMe = sessionId === mySessionId;
 
-                <span
-                  className={
-                    player.ready
-                      ? "text-emerald-400"
-                      : "text-white/50"
-                  }
+              return (
+                <li
+                  key={sessionId}
+                  className="flex items-center justify-between rounded-lg border border-amber-500/20 bg-[#211006] px-4 py-3"
                 >
-                  {player.ready
-                    ? "✅ Ready"
-                    : "⏳ Not ready"}
-                </span>
-              </li>
-            ),
+                  {isMe && isEditingName ? (
+                    <input
+                      autoFocus
+                      value={nameDraft}
+                      onChange={(e) => setNameDraft(e.target.value)}
+                      onBlur={submitNameChange}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") submitNameChange();
+                        if (e.key === "Escape") cancelEditingName();
+                      }}
+                      maxLength={20}
+                      className="mr-3 w-full rounded border border-amber-400 bg-[#160b06] px-2 py-1 text-white focus:outline-none"
+                    />
+                  ) : (
+                    <span className="flex items-center gap-2">
+                      {player.name}
+                      {player.isHost && " 👑"}
+                      {isMe && (
+                        <button
+                          type="button"
+                          onClick={startEditingName}
+                          aria-label="Edit your name"
+                          className="flex h-6 w-6 items-center justify-center rounded-full border border-amber-500/30 bg-amber-500/10 text-xs transition hover:border-amber-400 hover:bg-amber-500/20"
+                        >
+                          ✏️
+                        </button>
+                      )}
+                    </span>
+                  )}
+
+                  <span
+                    className={
+                      player.ready
+                        ? "text-emerald-400"
+                        : "text-white/50"
+                    }
+                  >
+                    {player.ready
+                      ? "✅ Ready"
+                      : "⏳ Not ready"}
+                  </span>
+                </li>
+              );
+            },
           )}
         </ul>
+
+        {nameError && (
+          <p className="mt-2 text-sm text-red-400" role="alert">
+            {nameError}
+          </p>
+        )}
 
         {playerQuestionsEnabled &&
          questionCount === 2 &&
