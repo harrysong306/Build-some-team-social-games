@@ -3,6 +3,7 @@ import {
   fireEvent,
   render,
   screen,
+  waitFor,
 } from '@testing-library/react'
 
 import {
@@ -14,91 +15,87 @@ import {
   vi,
 } from 'vitest'
 
-vi.mock('./DistractionQuestions', () => ({
-  distractionQuestions: [
-    {
-      question: 'Question 1',
-      options: [
-        'Correct 1',
-        'Wrong 1A',
-        'Wrong 1B',
-        'Wrong 1C',
-      ],
-      answer: 'Correct 1',
-    },
-    {
-      question: 'Question 2',
-      options: [
-        'Correct 2',
-        'Wrong 2A',
-        'Wrong 2B',
-        'Wrong 2C',
-      ],
-      answer: 'Correct 2',
-    },
-    {
-      question: 'Question 3',
-      options: [
-        'Correct 3',
-        'Wrong 3A',
-        'Wrong 3B',
-        'Wrong 3C',
-      ],
-      answer: 'Correct 3',
-    },
-    {
-      question: 'Question 4',
-      options: [
-        'Correct 4',
-        'Wrong 4A',
-        'Wrong 4B',
-        'Wrong 4C',
-      ],
-      answer: 'Correct 4',
-    },
-    {
-      question: 'Question 5',
-      options: [
-        'Correct 5',
-        'Wrong 5A',
-        'Wrong 5B',
-        'Wrong 5C',
-      ],
-      answer: 'Correct 5',
-    },
-    {
-      question: 'Question 6',
-      options: [
-        'Correct 6',
-        'Wrong 6A',
-        'Wrong 6B',
-        'Wrong 6C',
-      ],
-      answer: 'Correct 6',
-    },
-  ],
-}))
-
-vi.mock('./DistractionMinigame', () => ({
-  default: ({
-    onComplete,
-  }: {
-    onComplete: () => void
-  }) => (
-    <button
-      type="button"
-      onClick={onComplete}
-    >
-      Finish minigame
-    </button>
-  ),
-}))
+import type { Room } from '@colyseus/sdk'
 
 import DistractionPhase from './DistractionPhase'
 
-describe('DistractionPhase component tests', () => {
+// Minimal stand-in for a Colyseus room that
+// records sent messages and lets the test
+// deliver server messages.
+function createFakeRoom() {
+  const listeners: Record<string, Set<(message: any) => void>> = {}
+
+  const room = {
+    sessionId: 'me',
+    send: vi.fn(),
+    onMessage: vi.fn((type: string, handler: (message: any) => void) => {
+      listeners[type] ??= new Set()
+      listeners[type].add(handler)
+      return () => { listeners[type].delete(handler) }
+    }),
+  }
+
+  const deliver = async (type: string, message: any) => {
+    await act(async () => {
+      for (const handler of [...(listeners[type] ?? [])]) {
+        handler(message)
+      }
+    })
+  }
+
+  return {
+    room: room as unknown as Room,
+    send: room.send,
+    deliver,
+  }
+}
+
+const progress = (
+  answered: number,
+  correct: number,
+  complete = false,
+) => ({ answered, correct, required: 3, complete })
+
+const serveQuestion = (
+  deliver: (type: string, message: any) => Promise<void>,
+  questionId: number,
+) =>
+  deliver('distractionQuestion', {
+    questionId,
+    question: `Server question ${questionId}`,
+    options: ['A', 'B', 'C', 'D'],
+  })
+
+const answer = (option: string) => {
+  fireEvent.click(screen.getByRole('button', { name: option }))
+  fireEvent.click(
+    screen.getByRole('button', { name: /submit answer/i }),
+  )
+}
+
+// a minigame now plays between questions - force it to always be the
+// click-targets one (deterministic) and clear it out of the way so
+// these tests can get straight back to exercising the server flow
+const finishMinigame = async () => {
+  const target = screen.queryByRole('button', { name: 'Target' })
+  if (!target) return
+
+  for (let hit = 0; hit < 6; hit += 1) {
+    fireEvent.click(target)
+  }
+
+  // "Target" disappears as soon as the minigame shows its done/"Nice!"
+  // state, but the phase doesn't actually move on to the next question
+  // until its post-result beat elapses and onComplete fires - wait for
+  // the whole minigame screen to clear, not just the button
+  await waitFor(() => {
+    expect(screen.queryByText('Quick Break')).not.toBeInTheDocument()
+  })
+}
+
+describe('DistractionPhase with a room (BE-15)', () => {
   beforeEach(() => {
-    vi.useFakeTimers()
+    vi.spyOn(Math, 'random').mockReturnValue(0)
   })
 
   afterEach(() => {
@@ -106,243 +103,143 @@ describe('DistractionPhase component tests', () => {
     vi.restoreAllMocks()
   })
 
-  // a minigame now plays between questions - this file forces it to
-  // always be the deterministic click-targets one (Math.random mocked
-  // to 0 below) and clears it out of the way after every answer
-  const finishMinigame = () => {
-    const target = screen.queryByRole('button', { name: 'Target' })
-    if (!target) return
+  it('asks the server for a question instead of using the local bank', async () => {
+    const { room, send, deliver } = createFakeRoom()
 
-    for (let hit = 0; hit < 6; hit += 1) {
-      fireEvent.click(target)
-    }
+    render(<DistractionPhase room={room} onComplete={vi.fn()} />)
 
-    act(() => {
-      vi.advanceTimersByTime(700)
-    })
-  }
+    expect(screen.getByText('Loading question…')).toBeInTheDocument()
+    expect(send).toHaveBeenCalledWith('requestDistractionQuestion', {})
 
-  const submitAnswer = () => {
-    fireEvent.click(
-      screen.getByRole('button', {
-        name: /submit answer/i,
-      }),
-    )
+    await serveQuestion(deliver, 7)
 
-    finishMinigame()
-  }
-
-  const answerCorrectly = () => {
-    fireEvent.click(
-      screen.getByRole('button', {
-        name: /^correct \d$/i,
-      }),
-    )
-
-    submitAnswer()
-  }
-
-  const answerIncorrectly = () => {
-    fireEvent.click(
-      screen.getAllByRole('button', {
-        name: /^wrong/i,
-      })[0],
-    )
-
-    submitAnswer()
-  }
-
-  it('allows the user to select an answer', () => {
-    vi.spyOn(Math, 'random').mockReturnValue(0)
-
-    render(
-      <DistractionPhase
-        onComplete={vi.fn()}
-      />,
-    )
-
-    const submitButton =
-      screen.getByRole('button', {
-        name: /submit answer/i,
-      })
-
-    expect(submitButton).toBeDisabled()
-
-    const correctAnswer =
-      screen.getByRole('button', {
-        name: /^correct \d$/i,
-      })
-
-    fireEvent.click(correctAnswer)
-
-    expect(correctAnswer).toHaveClass(
-      'border-amber-400',
-    )
-
-    expect(submitButton).toBeEnabled()
+    expect(screen.getByText('Server question 7')).toBeInTheDocument()
   })
 
-  it('counts down and treats a timeout as an incorrect answer', () => {
-    vi.useFakeTimers()
+  it('sends answers to the server and moves on after its result', async () => {
+    const { room, send, deliver } = createFakeRoom()
 
-    vi.spyOn(Math, 'random').mockReturnValue(0)
+    render(<DistractionPhase room={room} onComplete={vi.fn()} />)
+    await serveQuestion(deliver, 7)
 
-    render(
-      <DistractionPhase
-        onComplete={vi.fn()}
-      />,
-    )
+    answer('B')
 
-    expect(
-      screen.getByText('10s'),
-    ).toBeInTheDocument()
-
-    act(() => {
-      vi.advanceTimersByTime(1000)
+    expect(send).toHaveBeenCalledWith('submitDistractionAnswer', {
+      questionId: 7,
+      answer: 'B',
     })
 
-    expect(
-      screen.getByText('9s'),
-    ).toBeInTheDocument()
+    send.mockClear()
 
-    for (let second = 0; second < 9; second += 1) {
-      act(() => {
+    await deliver('distractionResult', {
+      questionId: 7,
+      correct: true,
+      progress: progress(1, 1),
+    })
+
+    await finishMinigame()
+
+    expect(send).toHaveBeenCalledWith('requestDistractionQuestion', {})
+
+    await serveQuestion(deliver, 8)
+
+    expect(screen.getByText('Server question 8')).toBeInTheDocument()
+    expect(screen.getByText('Correct: 1 / 3 required')).toBeInTheDocument()
+  })
+
+  it('only finishes once the server says the phase is complete', async () => {
+    const { room, deliver } = createFakeRoom()
+    const onComplete = vi.fn()
+
+    render(<DistractionPhase room={room} onComplete={onComplete} />)
+
+    // Locally this would already be "5 answered, 3 correct",
+    // but the server hasn't marked it complete yet.
+    for (let index = 0; index < 5; index += 1) {
+      await serveQuestion(deliver, index)
+      answer('A')
+      await deliver('distractionResult', {
+        questionId: index,
+        correct: index < 3,
+        progress: progress(index + 1, Math.min(index + 1, 3)),
+      })
+      await finishMinigame()
+    }
+
+    expect(screen.queryByText('Distraction Complete')).toBeNull()
+
+    await serveQuestion(deliver, 5)
+    answer('A')
+    await deliver('distractionResult', {
+      questionId: 5,
+      correct: true,
+      progress: progress(6, 4, true),
+    })
+
+    expect(screen.getByText('Distraction Complete')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /start recall/i }))
+    expect(onComplete).toHaveBeenCalledTimes(1)
+  })
+
+  it('tells the server when a question times out', async () => {
+    vi.useFakeTimers()
+    const { room, send, deliver } = createFakeRoom()
+
+    render(<DistractionPhase room={room} onComplete={vi.fn()} />)
+    await serveQuestion(deliver, 3)
+
+    for (let second = 0; second < 10; second += 1) {
+      await act(async () => {
         vi.advanceTimersByTime(1000)
       })
     }
 
-    finishMinigame()
-
-    expect(
-      screen.getByText('Question 2 of 5'),
-    ).toBeInTheDocument()
-
-    expect(
-      screen.getByText(
-        'Correct: 0 / 3 required',
-      ),
-    ).toBeInTheDocument()
-
-    expect(
-      screen.getByText('10s'),
-    ).toBeInTheDocument()
+    expect(send).toHaveBeenCalledWith('submitDistractionAnswer', {
+      questionId: 3,
+      answer: '',
+    })
   })
 
-  it('updates the score for correct and incorrect answers', () => {
-    vi.spyOn(Math, 'random').mockReturnValue(0)
+  it('asks player-submitted questions first, then server questions', async () => {
+    const { room, send, deliver } = createFakeRoom()
 
     render(
       <DistractionPhase
+        room={room}
+        playerQuestions={[
+          {
+            ownerSessionId: 'sam',
+            questionIndex: 0,
+            ownerName: 'Sam',
+            prompt: 'My pet?',
+            options: ['Cat', 'Dog', 'Fish', 'Bird'],
+            score: 0,
+          },
+        ]}
         onComplete={vi.fn()}
       />,
     )
 
-    answerCorrectly()
+    expect(screen.getByText('Sam: My pet?')).toBeInTheDocument()
+    expect(send).not.toHaveBeenCalledWith('requestDistractionQuestion', {})
 
-    expect(
-      screen.getByText(
-        'Correct: 1 / 3 required',
-      ),
-    ).toBeInTheDocument()
+    answer('Dog')
 
-    answerIncorrectly()
+    expect(send).toHaveBeenCalledWith('submitPlayerQuestionAnswer', {
+      ownerSessionId: 'sam',
+      questionIndex: 0,
+      answerIndex: 1,
+    })
 
-    expect(
-      screen.getByText(
-        'Correct: 1 / 3 required',
-      ),
-    ).toBeInTheDocument()
+    await deliver('player_question_result', {
+      questionId: 'sam:0',
+      correct: true,
+      progress: progress(1, 1),
+    })
 
-    expect(
-      screen.getByText('Question 3 of 5'),
-    ).toBeInTheDocument()
-  })
+    await finishMinigame()
 
-  it('finishes after five questions when three answers are correct', () => {
-    const onComplete = vi.fn()
-
-    vi.spyOn(Math, 'random').mockReturnValue(0)
-
-    render(
-      <DistractionPhase
-        onComplete={onComplete}
-      />,
-    )
-
-    answerCorrectly()
-    answerCorrectly()
-    answerCorrectly()
-    answerIncorrectly()
-    answerIncorrectly()
-
-    expect(
-      screen.getByText(
-        'Distraction Complete',
-      ),
-    ).toBeInTheDocument()
-
-    expect(
-      screen.getByText(
-        'You answered 3 out of 5 questions correctly.',
-      ),
-    ).toBeInTheDocument()
-
-    expect(onComplete).not.toHaveBeenCalled()
-
-    fireEvent.click(
-      screen.getByRole('button', {
-        name: /start recall/i,
-      }),
-    )
-
-    expect(onComplete).toHaveBeenCalledTimes(1)
-  })
-
-  it('continues with replacement questions until three answers are correct', () => {
-    vi.spyOn(Math, 'random').mockReturnValue(0)
-
-    render(
-      <DistractionPhase
-        onComplete={vi.fn()}
-      />,
-    )
-
-    answerCorrectly()
-    answerCorrectly()
-    answerIncorrectly()
-    answerIncorrectly()
-    answerIncorrectly()
-
-    expect(
-      screen.getByText(
-        'Replacement Question',
-      ),
-    ).toBeInTheDocument()
-
-    expect(
-      screen.queryByText(
-        'Distraction Complete',
-      ),
-    ).not.toBeInTheDocument()
-
-    expect(
-      screen.getByText(
-        'Correct: 2 / 3 required',
-      ),
-    ).toBeInTheDocument()
-
-    answerCorrectly()
-
-    expect(
-      screen.getByText(
-        'Distraction Complete',
-      ),
-    ).toBeInTheDocument()
-
-    expect(
-      screen.getByText(
-        'You answered 3 out of 6 questions correctly.',
-      ),
-    ).toBeInTheDocument()
+    expect(send).toHaveBeenCalledWith('requestDistractionQuestion', {})
   })
 })
