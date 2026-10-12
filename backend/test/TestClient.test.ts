@@ -446,6 +446,37 @@ describe("LobbyRoom", () => {
       assert.ok(distractionQuestions[question.questionId]);
     });
 
+    it("a failed between-question minigame costs a correct answer on the server too", async () => {
+      const { client } = await startSoloGame();
+      let progress: any;
+
+      for (let index = 0; index < 3; index += 1) {
+        const question = await nextQuestion(client);
+        const bankQuestion = distractionQuestions[question.questionId];
+        progress = (
+          await submit(client, question.questionId, bankQuestion.answer)
+        ).progress;
+      }
+
+      assert.strictEqual(progress.correct, 3);
+
+      client.send("distractionMinigameFailed", {});
+
+      const question = await nextQuestion(client);
+      const result = await submit(client, question.questionId, "");
+      assert.strictEqual(result.progress.correct, 2);
+    });
+
+    it("never takes a failed minigame's correct count below zero", async () => {
+      const { client } = await startSoloGame();
+
+      client.send("distractionMinigameFailed", {});
+
+      const question = await nextQuestion(client);
+      const result = await submit(client, question.questionId, "");
+      assert.strictEqual(result.progress.correct, 0);
+    });
+
     it("ignores answers to a question that wasn't served", async () => {
       const { client } = await startSoloGame();
 
