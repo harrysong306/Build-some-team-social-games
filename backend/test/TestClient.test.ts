@@ -766,6 +766,22 @@ client2.send("markReady", { ready: true });
       assert.strictEqual(client1.state.customDrawingMin, 6);
       assert.strictEqual(client1.state.customDrawingMax, 10);
     });
+
+    it("does not change drawing speed while a game is running", async () => {
+      const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
+      const client1 = await colyseus.connectTo(room, { name: "Jordan" });
+
+      room.state.phase = "playing";
+      await room.waitForNextPatch();
+
+      client1.send("setDrawingSpeed", {
+        speed: "hard",
+      });
+
+      await new Promise(resolve => setTimeout(resolve, 20));
+
+      assert.strictEqual(client1.state.drawingSpeed, "normal");
+    });
   });
 
   describe("setDrawingCount (FE-99)", () => {

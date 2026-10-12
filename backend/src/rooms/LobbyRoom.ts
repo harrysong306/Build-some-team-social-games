@@ -687,6 +687,10 @@ export class LobbyRoom extends Room {
       // Only the host can change the drawing speed.
       if (!player?.isHost) return;
 
+      // Drawing speed affects round timers, so it
+      // can only change between games.
+      if (this.state.phase !== "lobby") return;
+
       if (
         !VALID_DRAWING_SPEEDS.includes(
           message.speed as DrawingSpeed,
