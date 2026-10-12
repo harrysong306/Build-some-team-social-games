@@ -7,6 +7,7 @@ import {
 
 import {
   afterEach,
+  beforeEach,
   describe,
   expect,
   it,
@@ -78,37 +79,33 @@ vi.mock('./DistractionQuestions', () => ({
   ],
 }))
 
-/*
- * DistractionPhase now deliberately shows a short
- * minigame between questions.
- *
- * These tests cover DistractionPhase itself rather
- * than the internals of DistractionMinigame, so use
- * a deterministic stand-in that lets each test move
- * through that interlude explicitly.
- */
-vi.mock('./DistractionMinigame', () => ({
-  default: ({
-    onComplete,
-  }: {
-    onComplete: () => void
-  }) => (
-    <button
-      type="button"
-      onClick={onComplete}
-    >
-      Finish minigame
-    </button>
-  ),
-}))
-
 import DistractionPhase from './DistractionPhase'
 
 describe('DistractionPhase component tests', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+
   afterEach(() => {
     vi.useRealTimers()
     vi.restoreAllMocks()
   })
+
+  // a minigame now plays between questions - this file forces it to
+  // always be the deterministic click-targets one (Math.random mocked
+  // to 0 below) and clears it out of the way after every answer
+  const finishMinigame = () => {
+    const target = screen.queryByRole('button', { name: 'Target' })
+    if (!target) return
+
+    for (let hit = 0; hit < 6; hit += 1) {
+      fireEvent.click(target)
+    }
+
+    act(() => {
+      vi.advanceTimersByTime(700)
+    })
+  }
 
   const submitAnswer = () => {
     fireEvent.click(
@@ -116,6 +113,8 @@ describe('DistractionPhase component tests', () => {
         name: /submit answer/i,
       }),
     )
+
+    finishMinigame()
   }
 
   const answerCorrectly = () => {
@@ -138,19 +137,8 @@ describe('DistractionPhase component tests', () => {
     submitAnswer()
   }
 
-  const finishMinigame = () => {
-    fireEvent.click(
-      screen.getByRole('button', {
-        name: /finish minigame/i,
-      }),
-    )
-  }
-
   it('allows the user to select an answer', () => {
-    vi.spyOn(
-      Math,
-      'random',
-    ).mockReturnValue(0)
+    vi.spyOn(Math, 'random').mockReturnValue(0)
 
     render(
       <DistractionPhase
@@ -163,37 +151,26 @@ describe('DistractionPhase component tests', () => {
         name: /submit answer/i,
       })
 
-    expect(
-      submitButton,
-    ).toBeDisabled()
+    expect(submitButton).toBeDisabled()
 
     const correctAnswer =
       screen.getByRole('button', {
         name: /^correct \d$/i,
       })
 
-    fireEvent.click(
-      correctAnswer,
-    )
+    fireEvent.click(correctAnswer)
 
-    expect(
-      correctAnswer,
-    ).toHaveClass(
+    expect(correctAnswer).toHaveClass(
       'border-amber-400',
     )
 
-    expect(
-      submitButton,
-    ).toBeEnabled()
+    expect(submitButton).toBeEnabled()
   })
 
   it('counts down and treats a timeout as an incorrect answer', () => {
     vi.useFakeTimers()
 
-    vi.spyOn(
-      Math,
-      'random',
-    ).mockReturnValue(0)
+    vi.spyOn(Math, 'random').mockReturnValue(0)
 
     render(
       <DistractionPhase
@@ -206,47 +183,23 @@ describe('DistractionPhase component tests', () => {
     ).toBeInTheDocument()
 
     act(() => {
-      vi.advanceTimersByTime(
-        1000,
-      )
+      vi.advanceTimersByTime(1000)
     })
 
     expect(
       screen.getByText('9s'),
     ).toBeInTheDocument()
 
-    for (
-      let second = 0;
-      second < 9;
-      second += 1
-    ) {
+    for (let second = 0; second < 9; second += 1) {
       act(() => {
-        vi.advanceTimersByTime(
-          1000,
-        )
+        vi.advanceTimersByTime(1000)
       })
     }
-
-    /*
-     * A timeout now leads to the
-     * between-question minigame.
-     */
-    expect(
-      screen.getByRole(
-        'button',
-        {
-          name:
-            /finish minigame/i,
-        },
-      ),
-    ).toBeInTheDocument()
 
     finishMinigame()
 
     expect(
-      screen.getByText(
-        'Question 2 of 5',
-      ),
+      screen.getByText('Question 2 of 5'),
     ).toBeInTheDocument()
 
     expect(
@@ -261,10 +214,7 @@ describe('DistractionPhase component tests', () => {
   })
 
   it('updates the score for correct and incorrect answers', () => {
-    vi.spyOn(
-      Math,
-      'random',
-    ).mockReturnValue(0)
+    vi.spyOn(Math, 'random').mockReturnValue(0)
 
     render(
       <DistractionPhase
@@ -274,8 +224,6 @@ describe('DistractionPhase component tests', () => {
 
     answerCorrectly()
 
-    finishMinigame()
-
     expect(
       screen.getByText(
         'Correct: 1 / 3 required',
@@ -284,8 +232,6 @@ describe('DistractionPhase component tests', () => {
 
     answerIncorrectly()
 
-    finishMinigame()
-
     expect(
       screen.getByText(
         'Correct: 1 / 3 required',
@@ -293,20 +239,14 @@ describe('DistractionPhase component tests', () => {
     ).toBeInTheDocument()
 
     expect(
-      screen.getByText(
-        'Question 3 of 5',
-      ),
+      screen.getByText('Question 3 of 5'),
     ).toBeInTheDocument()
   })
 
   it('finishes after five questions when three answers are correct', () => {
-    const onComplete =
-      vi.fn()
+    const onComplete = vi.fn()
 
-    vi.spyOn(
-      Math,
-      'random',
-    ).mockReturnValue(0)
+    vi.spyOn(Math, 'random').mockReturnValue(0)
 
     render(
       <DistractionPhase
@@ -315,22 +255,9 @@ describe('DistractionPhase component tests', () => {
     )
 
     answerCorrectly()
-    finishMinigame()
-
     answerCorrectly()
-    finishMinigame()
-
     answerCorrectly()
-    finishMinigame()
-
     answerIncorrectly()
-    finishMinigame()
-
-    /*
-     * The fifth answer completes the
-     * phase, so there is no minigame
-     * after this one.
-     */
     answerIncorrectly()
 
     expect(
@@ -345,32 +272,19 @@ describe('DistractionPhase component tests', () => {
       ),
     ).toBeInTheDocument()
 
-    expect(
-      onComplete,
-    ).not.toHaveBeenCalled()
+    expect(onComplete).not.toHaveBeenCalled()
 
     fireEvent.click(
-      screen.getByRole(
-        'button',
-        {
-          name:
-            /start recall/i,
-        },
-      ),
+      screen.getByRole('button', {
+        name: /start recall/i,
+      }),
     )
 
-    expect(
-      onComplete,
-    ).toHaveBeenCalledTimes(
-      1,
-    )
+    expect(onComplete).toHaveBeenCalledTimes(1)
   })
 
   it('continues with replacement questions until three answers are correct', () => {
-    vi.spyOn(
-      Math,
-      'random',
-    ).mockReturnValue(0)
+    vi.spyOn(Math, 'random').mockReturnValue(0)
 
     render(
       <DistractionPhase
@@ -379,25 +293,10 @@ describe('DistractionPhase component tests', () => {
     )
 
     answerCorrectly()
-    finishMinigame()
-
     answerCorrectly()
-    finishMinigame()
-
     answerIncorrectly()
-    finishMinigame()
-
     answerIncorrectly()
-    finishMinigame()
-
-    /*
-     * Five questions have now been
-     * answered, but only two were
-     * correct, so the phase continues
-     * after the minigame.
-     */
     answerIncorrectly()
-    finishMinigame()
 
     expect(
       screen.getByText(
@@ -417,11 +316,6 @@ describe('DistractionPhase component tests', () => {
       ),
     ).toBeInTheDocument()
 
-    /*
-     * The replacement answer reaches
-     * the required score and completes
-     * the phase immediately.
-     */
     answerCorrectly()
 
     expect(

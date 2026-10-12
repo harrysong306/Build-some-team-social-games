@@ -569,6 +569,19 @@ export class LobbyRoom extends Room {
         progress: this.distractionStatus(client.sessionId),
       });
     },
+    // a missed between-question minigame costs a correct answer, same
+    // as the client-only penalty without telling the server too, its
+    // own completion check (DISTRACTION_CORRECT_REQUIRED) would never
+    // see the penalty and could finish the phase anyway
+    distractionMinigameFailed: (
+      client: Client,
+      _message: any,
+    ) => {
+      if (this.state.phase !== "playing") return;
+
+      const progress = this.getDistractionProgress(client.sessionId);
+      progress.correct = Math.max(0, progress.correct - 1);
+    },
 
     // sync point entering the distraction phase: this player has
     // finished drawing and is waiting for everyone else to catch up

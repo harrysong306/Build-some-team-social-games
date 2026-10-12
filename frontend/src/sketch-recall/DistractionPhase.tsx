@@ -391,11 +391,24 @@ function DistractionPhase({
     setShowingMinigame(true)
     setSubmitting(false)
   }
-
-  const handleMinigameComplete = useCallback(() => {
+  const handleMinigameComplete = useCallback((success: boolean) => {
     setShowingMinigame(false)
+
+    // failing to finish the minigame in time costs a correct answer,
+    // so the minigame actually matters instead of being free filler
+    if (!success) {
+      setScore((current) => Math.max(0, current - 1))
+
+      // in a multiplayer room the server decides when the phase is
+      // complete, so it needs to know about the penalty too - otherwise
+      // the server's own tally would never reflect a failed minigame
+      if (useServer) {
+        room?.send('distractionMinigameFailed')
+      }
+    }
+
     moveToNextQuestion()
-  }, [moveToNextQuestion])
+  }, [moveToNextQuestion, useServer, room])
 
   const nextQuestion = async () => {
     if (submitting || selectedAnswer === null) return
