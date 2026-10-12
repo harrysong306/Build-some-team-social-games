@@ -392,8 +392,15 @@ function DistractionPhase({
     setSubmitting(false)
   }
 
-  const handleMinigameComplete = useCallback(() => {
+  const handleMinigameComplete = useCallback((success: boolean) => {
     setShowingMinigame(false)
+
+    // failing to finish the minigame in time costs a correct answer,
+    // so the minigame actually matters instead of being free filler
+    if (!success) {
+      setScore((current) => Math.max(0, current - 1))
+    }
+
     moveToNextQuestion()
   }, [moveToNextQuestion])
 
