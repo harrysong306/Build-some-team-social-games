@@ -7,6 +7,7 @@ import {
 
 import {
   afterEach,
+  beforeEach,
   describe,
   expect,
   it,
@@ -81,10 +82,30 @@ vi.mock('./DistractionQuestions', () => ({
 import DistractionPhase from './DistractionPhase'
 
 describe('DistractionPhase component tests', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+
   afterEach(() => {
     vi.useRealTimers()
     vi.restoreAllMocks()
   })
+
+  // a minigame now plays between questions - this file forces it to
+  // always be the deterministic click-targets one (Math.random mocked
+  // to 0 below) and clears it out of the way after every answer
+  const finishMinigame = () => {
+    const target = screen.queryByRole('button', { name: 'Target' })
+    if (!target) return
+
+    for (let hit = 0; hit < 6; hit += 1) {
+      fireEvent.click(target)
+    }
+
+    act(() => {
+      vi.advanceTimersByTime(700)
+    })
+  }
 
   const submitAnswer = () => {
     fireEvent.click(
@@ -92,6 +113,8 @@ describe('DistractionPhase component tests', () => {
         name: /submit answer/i,
       }),
     )
+
+    finishMinigame()
   }
 
   const answerCorrectly = () => {
@@ -172,6 +195,8 @@ describe('DistractionPhase component tests', () => {
         vi.advanceTimersByTime(1000)
       })
     }
+
+    finishMinigame()
 
     expect(
       screen.getByText('Question 2 of 5'),
