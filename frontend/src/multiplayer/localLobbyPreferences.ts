@@ -10,6 +10,7 @@ export type LobbyPreferences = {
   questionPrompt: string
   questionOptions: string[]
   correctOption: number
+  questionCorrectOptions: Record<string, number>
 }
 
 const STORAGE_KEY = 'sketchRecallLobbyPreferences'
@@ -26,6 +27,7 @@ export const DEFAULT_LOBBY_PREFERENCES: LobbyPreferences = {
   questionPrompt: '',
   questionOptions: ['', '', '', ''],
   correctOption: 0,
+  questionCorrectOptions: {},
 }
 
 function hasLocalStorage() {
@@ -66,6 +68,18 @@ export function readLobbyPreferences(): LobbyPreferences {
         typeof saved.correctOption === 'number'
           ? Math.min(3, Math.max(0, Math.round(saved.correctOption)))
           : DEFAULT_LOBBY_PREFERENCES.correctOption,
+      questionCorrectOptions:
+        saved.questionCorrectOptions &&
+        typeof saved.questionCorrectOptions === 'object'
+          ? Object.fromEntries(
+              Object.entries(saved.questionCorrectOptions)
+                .filter(([, option]) => typeof option === 'number')
+                .map(([key, option]) => [
+                  key,
+                  Math.min(3, Math.max(0, Math.round(option))),
+                ]),
+            )
+          : DEFAULT_LOBBY_PREFERENCES.questionCorrectOptions,
     }
   } catch {
     return DEFAULT_LOBBY_PREFERENCES

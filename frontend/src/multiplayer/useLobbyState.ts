@@ -43,6 +43,9 @@ export function useLobbyState(room: Room | null) {
   const [playerQuestionsEnabled, setPlayerQuestionsEnabledState] =
      useState<boolean>(true);
   const [phase, setPhase] = useState<string>("lobby");
+  const [drawingRound, setDrawingRound] = useState<number>(0);
+  const [drawingDeadline, setDrawingDeadline] = useState<number>(0);
+  const [drawingReadyCount, setDrawingReadyCount] = useState<number>(0);
   const [gameWords, setGameWords] = useState<string[]>([]);
   const [assignedPlayerQuestions, setAssignedPlayerQuestions] =
     useState<PlayerQuestionForGame[]>([]);
@@ -76,6 +79,9 @@ export function useLobbyState(room: Room | null) {
       );
 
       setPhase(state.phase ?? "lobby");
+      setDrawingRound(state.drawingRound ?? 0);
+      setDrawingDeadline(state.drawingDeadline ?? 0);
+      setDrawingReadyCount(state.drawingReadyCount ?? 0);
       setGameWords(Array.from(state.gameWords ?? []));
     };
 
@@ -201,6 +207,9 @@ export function useLobbyState(room: Room | null) {
     wordTheme,
     playerQuestionsEnabled,
     phase,
+    drawingRound,
+    drawingDeadline,
+    drawingReadyCount,
     gameWords,
     assignedPlayerQuestions,
     mySessionId: room?.sessionId ?? "",

@@ -20,6 +20,17 @@ type DrawingPhaseProps = {
     bytes: Uint8Array,
     index: number,
   ) => void
+  multiplayerSync?: {
+    drawingRound: number
+    drawingDeadline: number
+    drawingReadyCount: number
+    totalPlayers: number
+    onEnter: () => void
+    onReady: (index: number) => void
+    onForceSave: (
+      handler: (message: { index: number }) => void,
+    ) => (() => void) | undefined
+  }
   onComplete: (drawings: (string | null)[]) => void
 }
 
@@ -86,10 +97,16 @@ function DrawingPhase({
   customDrawingMax,
   onBack,
   onSubmitDrawing,
+  multiplayerSync,
   onComplete,
 }: DrawingPhaseProps) {
   const canvasRef = useRef<DrawingCanvasHandle>(null)
   const isAdvancingRef = useRef(false)
+  const drawingsRef = useRef<(string | null)[]>(
+    Array(words.length).fill(null),
+  )
+  const completedRef = useRef(false)
+  const sentEnterRef = useRef(false)
 
   const [currentIndex, setCurrentIndex] = useState(0)
 
@@ -120,9 +137,29 @@ function DrawingPhase({
     )
 
   const [finished, setFinished] = useState(false)
+  const [waitingForRound, setWaitingForRound] =
+    useState<number | null>(null)
+
+  useEffect(() => {
+    if (
+      !multiplayerSync ||
+      sentEnterRef.current
+    ) {
+      return
+    }
+
+    sentEnterRef.current = true
+    multiplayerSync.onEnter()
+  }, [multiplayerSync])
 
   const saveAndNext = useCallback(async () => {
     if (isAdvancingRef.current) return
+    if (
+      multiplayerSync &&
+      waitingForRound === currentIndex
+    ) {
+      return
+    }
 
     isAdvancingRef.current = true
 
@@ -137,8 +174,16 @@ function DrawingPhase({
     setDrawings((previous) => {
       const updated = [...previous]
       updated[currentIndex] = drawing?.url ?? null
+      drawingsRef.current = updated
       return updated
     })
+
+    if (multiplayerSync) {
+      setWaitingForRound(currentIndex)
+      multiplayerSync.onReady(currentIndex)
+      isAdvancingRef.current = false
+      return
+    }
 
     if (currentIndex >= words.length - 1) {
       setFinished(true)
@@ -164,12 +209,14 @@ function DrawingPhase({
     words.length,
     onSubmitDrawing,
     drawingSpeed,
+    multiplayerSync,
+    waitingForRound,
     customDrawingMin,
     customDrawingMax,
   ])
 
   useEffect(() => {
-    if (finished) return
+    if (finished || multiplayerSync) return
 
     const timer = window.setInterval(() => {
       setTimeLeft((current) => {
@@ -182,13 +229,118 @@ function DrawingPhase({
     }, 1000)
 
     return () => window.clearInterval(timer)
-  }, [currentIndex, finished])
+  }, [currentIndex, finished, multiplayerSync])
 
   useEffect(() => {
-    if (timeLeft === 0 && !finished) {
-      saveAndNext()
+    if (
+      !multiplayerSync ||
+      finished ||
+      multiplayerSync.drawingDeadline <= 0
+    ) {
+      return
     }
-  }, [timeLeft, finished, saveAndNext])
+
+    const updateTimeLeft = () => {
+      setTimeLeft(
+        Math.max(
+          0,
+          Math.ceil(
+            (multiplayerSync.drawingDeadline -
+              Date.now()) /
+              1000,
+          ),
+        ),
+      )
+    }
+
+    updateTimeLeft()
+    const timer = window.setInterval(updateTimeLeft, 250)
+
+    return () => window.clearInterval(timer)
+  }, [
+    multiplayerSync?.drawingDeadline,
+    finished,
+    multiplayerSync,
+  ])
+
+  useEffect(() => {
+    if (!multiplayerSync) return
+
+    if (multiplayerSync.drawingRound >= words.length) {
+      if (!completedRef.current) {
+        completedRef.current = true
+        onComplete(drawingsRef.current)
+      }
+      return
+    }
+
+    if (
+      multiplayerSync.drawingRound !== currentIndex
+    ) {
+      setCurrentIndex(multiplayerSync.drawingRound)
+      setWaitingForRound(null)
+      setTimeLeft(
+        Math.max(
+          0,
+          Math.ceil(
+            (multiplayerSync.drawingDeadline -
+              Date.now()) /
+              1000,
+          ),
+        ),
+      )
+      canvasRef.current?.clear()
+      isAdvancingRef.current = false
+    }
+  }, [
+    multiplayerSync?.drawingRound,
+    multiplayerSync?.drawingDeadline,
+    multiplayerSync,
+    currentIndex,
+    words.length,
+    onComplete,
+  ])
+
+  useEffect(() => {
+    if (!multiplayerSync) return
+
+    return multiplayerSync.onForceSave((message) => {
+      if (
+        message.index !== currentIndex ||
+        waitingForRound === currentIndex
+      ) {
+        return
+      }
+
+      void saveAndNext()
+    })
+  }, [
+    multiplayerSync,
+    currentIndex,
+    waitingForRound,
+    saveAndNext,
+  ])
+
+  useEffect(() => {
+    if (
+      timeLeft === 0 &&
+      !finished &&
+      (!multiplayerSync ||
+        multiplayerSync.drawingDeadline > 0) &&
+      waitingForRound !== currentIndex
+    ) {
+      if (!multiplayerSync) {
+        saveAndNext()
+      }
+    }
+  }, [
+    timeLeft,
+    finished,
+    saveAndNext,
+    waitingForRound,
+    currentIndex,
+    multiplayerSync,
+  ])
 
   if (finished) {
     return (
@@ -217,6 +369,42 @@ function DrawingPhase({
           </button>
 
         </div>
+      </main>
+    )
+  }
+
+  if (
+    multiplayerSync &&
+    (waitingForRound === currentIndex ||
+      multiplayerSync.drawingDeadline <= 0)
+  ) {
+    return (
+      <main className="flex min-h-[calc(100vh-80px)] items-center justify-center bg-[#0d0704] px-6 text-white">
+        <section className="w-full max-w-xl rounded-2xl border border-amber-500/30 bg-[#160b06] p-10 text-center">
+          <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-amber-400/10 text-4xl text-amber-400">
+            ⏳
+          </div>
+
+          <h1 className="mt-6 text-3xl font-bold">
+            Waiting for other players
+          </h1>
+
+          <p className="mt-3 text-white/55">
+            The next word starts when everyone finishes or the timer runs out.
+          </p>
+
+          {multiplayerSync.drawingDeadline > 0 ? (
+            <p className="mt-6 text-lg font-bold text-amber-300">
+              {multiplayerSync.drawingReadyCount} / {multiplayerSync.totalPlayers} players ready
+            </p>
+          ) : null}
+
+          <p className="mt-3 text-sm text-white/45">
+            {multiplayerSync.drawingDeadline > 0
+              ? `${timeLeft}s remaining`
+              : 'Waiting for the drawing round to start'}
+          </p>
+        </section>
       </main>
     )
   }

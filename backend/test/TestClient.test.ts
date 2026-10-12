@@ -766,6 +766,22 @@ client2.send("markReady", { ready: true });
       assert.strictEqual(client1.state.customDrawingMin, 6);
       assert.strictEqual(client1.state.customDrawingMax, 10);
     });
+
+    it("does not change drawing speed while a game is running", async () => {
+      const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
+      const client1 = await colyseus.connectTo(room, { name: "Jordan" });
+
+      room.state.phase = "playing";
+      await room.waitForNextPatch();
+
+      client1.send("setDrawingSpeed", {
+        speed: "hard",
+      });
+
+      await new Promise(resolve => setTimeout(resolve, 20));
+
+      assert.strictEqual(client1.state.drawingSpeed, "normal");
+    });
   });
 
   describe("setDrawingCount (FE-99)", () => {
@@ -1828,6 +1844,124 @@ client2.send("markReady", { ready: true });
   });
 
   describe("drawing uploads", () => {
+    it("starts the shared drawing timer only after players enter the drawing phase", async () => {
+      const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
+      const client1 = await colyseus.connectTo(room, { name: "Jordan" });
+
+      await submitQuestions(client1, room);
+      client1.send("markReady", { ready: true });
+      await room.waitForNextPatch();
+
+      client1.send("startGame", {});
+      await room.waitForNextPatch();
+
+      assert.strictEqual(room.state.drawingRound, 0);
+      assert.strictEqual(room.state.drawingDeadline, 0);
+
+      client1.send("drawingPhaseReady", {});
+      await room.waitForNextPatch();
+
+      assert.strictEqual(room.state.drawingRound, 0);
+      assert.ok(room.state.drawingDeadline > Date.now());
+    });
+
+    it("uses custom drawing bounds for the shared drawing timer", async () => {
+      const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
+      const client1 = await colyseus.connectTo(room, { name: "Jordan" });
+
+      await submitQuestions(client1, room);
+
+      client1.send("setDrawingSpeed", {
+        speed: "custom",
+        customMin: 1,
+        customMax: 1,
+      });
+      await room.waitForNextPatch();
+
+      client1.send("markReady", { ready: true });
+      await room.waitForNextPatch();
+
+      client1.send("startGame", {});
+      await room.waitForNextPatch();
+
+      client1.send("drawingPhaseReady", {});
+      await room.waitForNextPatch();
+
+      const remaining =
+        room.state.drawingDeadline - Date.now();
+
+      assert.ok(
+        remaining > 0 && remaining <= 1_000,
+        `expected roughly a 1s custom timer, got ${remaining}ms`,
+      );
+    });
+
+    it("force-starts drawing if a player never enters the drawing phase", async () => {
+      const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
+      const client1 = await colyseus.connectTo(room, { name: "Jordan" });
+      const client2 = await colyseus.connectTo(room, { name: "Sam" });
+      const client3 = await colyseus.connectTo(room, { name: "Alex" });
+
+      await submitQuestions(client1, room);
+      await submitQuestions(client2, room);
+      await submitQuestions(client3, room);
+
+      client1.send("markReady", { ready: true });
+      client2.send("markReady", { ready: true });
+      client3.send("markReady", { ready: true });
+      await room.waitForNextPatch();
+
+      client1.send("startGame", {});
+      await room.waitForNextPatch();
+
+      client1.send("drawingPhaseReady", {});
+      client2.send("drawingPhaseReady", {});
+      await new Promise(resolve => setTimeout(resolve, 20));
+
+      assert.strictEqual(room.state.drawingDeadline, 0);
+
+      room.clock.currentTime = Date.now() - 15_001;
+      room.clock.tick();
+
+      assert.strictEqual(room.state.drawingRound, 0);
+      assert.ok(room.state.drawingDeadline > Date.now());
+    });
+
+    it("advances a drawing round as soon as every player is ready", async () => {
+      const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
+      const client1 = await colyseus.connectTo(room, { name: "Jordan" });
+      const client2 = await colyseus.connectTo(room, { name: "Sam" });
+
+      await submitQuestions(client1, room);
+      await submitQuestions(client2, room);
+
+      client1.send("markReady", { ready: true });
+      client2.send("markReady", { ready: true });
+      await room.waitForNextPatch();
+
+      client1.send("startGame", {});
+      await room.waitForNextPatch();
+
+      client1.send("drawingPhaseReady", {});
+      client2.send("drawingPhaseReady", {});
+      await room.waitForNextPatch();
+
+      assert.strictEqual(room.state.drawingRound, 0);
+
+      client1.send("drawingRoundReady", { index: 0 });
+      await room.waitForNextPatch();
+
+      assert.strictEqual(room.state.drawingRound, 0);
+      assert.strictEqual(room.state.drawingReadyCount, 1);
+
+      client2.send("drawingRoundReady", { index: 0 });
+      await room.waitForNextPatch();
+
+      assert.strictEqual(room.state.drawingRound, 1);
+      assert.strictEqual(room.state.drawingReadyCount, 0);
+      assert.ok(room.state.drawingDeadline > Date.now());
+    });
+
     it("stores submitted drawing bytes with the submitted drawing index", async () => {
       const room = await colyseus.createRoom<GameState>("LobbyRoom", {});
       const client1 = await colyseus.connectTo(room, { name: "Jordan" });

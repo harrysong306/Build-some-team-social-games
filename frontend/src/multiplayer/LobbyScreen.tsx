@@ -39,6 +39,16 @@ const WORD_THEMES = [
   { value: "nature", label: "Nature" },
 ];
 
+function questionPreferenceKey(
+  prompt: string,
+  options: readonly string[],
+) {
+  return JSON.stringify({
+    prompt: prompt.trim(),
+    options: options.map((option) => option.trim()),
+  });
+}
+
 type DropdownOption = {
   value: string;
   label: string;
@@ -154,6 +164,9 @@ function LobbyScreen({
     wordTheme,
     playerQuestionsEnabled,
     phase,
+    drawingRound,
+    drawingDeadline,
+    drawingReadyCount,
     gameWords,
     assignedPlayerQuestions,
     mySessionId,
@@ -255,10 +268,17 @@ function LobbyScreen({
       options,
       correctOption,
     );
+    const saved = readLobbyPreferences();
+    const questionKey = questionPreferenceKey(prompt, options);
+
     saveLobbyPreferences({
       questionPrompt: prompt,
       questionOptions: options,
       correctOption,
+      questionCorrectOptions: {
+        ...saved.questionCorrectOptions,
+        [questionKey]: correctOption,
+      },
     });
     setQuestionPrompt("");
     setQuestionOptions(["", "", "", ""]);
@@ -303,15 +323,19 @@ function LobbyScreen({
     if (!question) return;
 
     const saved = readLobbyPreferences();
+    const questionKey = questionPreferenceKey(
+      question.prompt,
+      question.options,
+    );
     const savedMatchesQuestion =
       saved.questionPrompt === question.prompt &&
       saved.questionOptions.every(
         (option, optionIndex) =>
           option === question.options[optionIndex],
       );
-    const nextCorrectOption = savedMatchesQuestion
-      ? saved.correctOption
-      : 0;
+    const nextCorrectOption =
+      saved.questionCorrectOptions[questionKey] ??
+      (savedMatchesQuestion ? saved.correctOption : 0);
 
     setQuestionPrompt(question.prompt);
     setQuestionOptions([...question.options]);
@@ -509,6 +533,9 @@ function LobbyScreen({
         gameWords={gameWords}
         playerQuestions={assignedPlayerQuestions}
         drawingSpeed={drawingSpeed}
+        drawingRound={drawingRound}
+        drawingDeadline={drawingDeadline}
+        drawingReadyCount={drawingReadyCount}
         customDrawingMin={customDrawingMin}
         customDrawingMax={customDrawingMax}
         // the InstructionsScreen below already ran its countdown

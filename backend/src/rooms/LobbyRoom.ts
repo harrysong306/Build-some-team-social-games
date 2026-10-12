@@ -79,6 +79,33 @@ type AssignedPlayerQuestion = {
 const MIN_DRAWING_COUNT = 10;
 const MAX_DRAWING_COUNT = 30;
 const VALID_WORD_THEMES = Object.keys(wordPacks) as WordPackTheme[];
+const DRAWING_FORCE_SAVE_GRACE_MS = 1_000;
+const DRAWING_PHASE_READY_TIMEOUT_MS = 15_000;
+
+function drawingDurationMs(
+  speed: string,
+  customMin = 6,
+  customMax = 10,
+) {
+  if (speed === "hard") {
+    return (Math.floor(Math.random() * 4) + 3) * 1000;
+  }
+
+  if (speed === "easy") {
+    return (Math.floor(Math.random() * 5) + 8) * 1000;
+  }
+
+  if (speed === "custom") {
+    const min = Math.max(1, Math.round(customMin));
+    const max = Math.max(min, Math.round(customMax));
+
+    return (
+      Math.floor(Math.random() * (max - min + 1)) + min
+    ) * 1000;
+  }
+
+  return (Math.floor(Math.random() * 5) + 6) * 1000;
+}
 
 // BE-3: a room holds at most MAX_PLAYERS.
 // maxClients is one higher so the extra
@@ -231,6 +258,12 @@ export class LobbyRoom extends Room {
   // with its drawing index.
   private pendingDrawingIndexes =
     new Map<string, number>();
+
+  private drawingReady = new Set<string>();
+  private drawingPhaseReady = new Set<string>();
+  private drawingRoundActive = false;
+  private drawingForceSaveActive = false;
+  private drawingPhaseReadyTimeoutActive = false;
 
   // Competitive Recall state.
   private recallRound = 0;
@@ -654,6 +687,10 @@ export class LobbyRoom extends Room {
       // Only the host can change the drawing speed.
       if (!player?.isHost) return;
 
+      // Drawing speed affects round timers, so it
+      // can only change between games.
+      if (this.state.phase !== "lobby") return;
+
       if (
         !VALID_DRAWING_SPEEDS.includes(
           message.speed as DrawingSpeed,
@@ -915,6 +952,9 @@ export class LobbyRoom extends Room {
       this.state.usedAbilities.clear();
 
       this.state.phase = "playing";
+      this.state.drawingRound = 0;
+      this.state.drawingDeadline = 0;
+      this.state.drawingReadyCount = 0;
 
       // Reset Recall multiplayer state.
       this.recallRound = 0;
@@ -928,6 +968,11 @@ export class LobbyRoom extends Room {
       // drawing metadata from a previous game.
       this.drawings.clear();
       this.pendingDrawingIndexes.clear();
+      this.drawingReady.clear();
+      this.drawingPhaseReady.clear();
+      this.drawingRoundActive = false;
+      this.drawingForceSaveActive = false;
+      this.drawingPhaseReadyTimeoutActive = false;
 
       this.abilityVotes.clear();
       this.abilityUsedThisRound = false;
@@ -1220,6 +1265,56 @@ export class LobbyRoom extends Room {
       );
     },
 
+    drawingRoundReady: (
+      client: Client,
+      message: { index: number },
+    ) => {
+      if (
+        this.state.phase !== "playing" ||
+        (
+          !this.drawingRoundActive &&
+          !this.drawingForceSaveActive
+        ) ||
+        message.index !== this.state.drawingRound
+      ) {
+        return;
+      }
+
+      this.drawingReady.add(client.sessionId);
+      this.state.drawingReadyCount =
+        this.drawingReady.size;
+
+      if (this.allDrawingPlayersReady()) {
+        this.finishDrawingRound(message.index);
+      }
+    },
+
+    drawingPhaseReady: (
+      client: Client,
+      _message: any,
+    ) => {
+      if (
+        this.state.phase !== "playing" ||
+        this.drawingRoundActive ||
+        this.state.drawingRound !== 0
+      ) {
+        return;
+      }
+
+      this.drawingPhaseReady.add(client.sessionId);
+      this.scheduleDrawingPhaseReadyTimeout();
+
+      const players = this.activeDrawingPlayerIds();
+      if (
+        players.length > 0 &&
+        players.every((sessionId) =>
+          this.drawingPhaseReady.has(sessionId),
+        )
+      ) {
+        this.startDrawingRound();
+      }
+    },
+
     /*
      * The manifest is also broadcast once
      * automatically (see finishRecallRound),
@@ -1280,6 +1375,135 @@ export class LobbyRoom extends Room {
       });
     },
   };
+
+  private activeDrawingPlayerIds() {
+    return [...this.state.players.keys()];
+  }
+
+  private allDrawingPlayersReady() {
+    const players = this.activeDrawingPlayerIds();
+
+    return (
+      players.length > 0 &&
+      players.every((sessionId) =>
+        this.drawingReady.has(sessionId),
+      )
+    );
+  }
+
+  private scheduleDrawingPhaseReadyTimeout() {
+    if (this.drawingPhaseReadyTimeoutActive) return;
+
+    this.drawingPhaseReadyTimeoutActive = true;
+
+    this.clock.setTimeout(() => {
+      if (
+        this.drawingPhaseReadyTimeoutActive &&
+        this.state.phase === "playing" &&
+        !this.drawingRoundActive &&
+        !this.drawingForceSaveActive &&
+        this.state.drawingRound === 0 &&
+        this.drawingPhaseReady.size > 0
+      ) {
+        this.startDrawingRound();
+      }
+    }, DRAWING_PHASE_READY_TIMEOUT_MS);
+  }
+
+  private startDrawingRound() {
+    if (
+      this.state.phase !== "playing" ||
+      this.state.drawingRound >=
+        this.state.gameWords.length
+    ) {
+      this.drawingRoundActive = false;
+      this.drawingForceSaveActive = false;
+      this.drawingPhaseReadyTimeoutActive = false;
+      this.state.drawingDeadline = 0;
+      this.state.drawingReadyCount = 0;
+      return;
+    }
+
+    const roundIndex = this.state.drawingRound;
+    const duration = drawingDurationMs(
+      this.state.drawingSpeed,
+      this.state.customDrawingMin,
+      this.state.customDrawingMax,
+    );
+
+    this.drawingReady.clear();
+    this.drawingRoundActive = true;
+    this.drawingForceSaveActive = false;
+    this.drawingPhaseReadyTimeoutActive = false;
+    this.state.drawingReadyCount = 0;
+    this.state.drawingDeadline = Date.now() + duration;
+
+    this.clock.setTimeout(() => {
+      if (
+        this.drawingRoundActive &&
+        this.state.phase === "playing" &&
+        this.state.drawingRound === roundIndex
+      ) {
+        this.forceSaveDrawingRound(roundIndex);
+      }
+    }, duration);
+  }
+
+  private forceSaveDrawingRound(roundIndex: number) {
+    if (
+      !this.drawingRoundActive ||
+      roundIndex !== this.state.drawingRound
+    ) {
+      return;
+    }
+
+    this.drawingRoundActive = false;
+    this.drawingForceSaveActive = true;
+    this.state.drawingDeadline =
+      Date.now() + DRAWING_FORCE_SAVE_GRACE_MS;
+
+    this.broadcast("forceSaveDrawing", {
+      index: roundIndex,
+    });
+
+    this.clock.setTimeout(() => {
+      if (
+        this.drawingForceSaveActive &&
+        this.state.phase === "playing" &&
+        this.state.drawingRound === roundIndex
+      ) {
+        this.finishDrawingRound(roundIndex);
+      }
+    }, DRAWING_FORCE_SAVE_GRACE_MS);
+  }
+
+  private finishDrawingRound(roundIndex: number) {
+    if (
+      (
+        !this.drawingRoundActive &&
+        !this.drawingForceSaveActive
+      ) ||
+      roundIndex !== this.state.drawingRound
+    ) {
+      return;
+    }
+
+    this.drawingRoundActive = false;
+    this.drawingForceSaveActive = false;
+    this.drawingReady.clear();
+    this.state.drawingReadyCount = 0;
+    this.state.drawingRound += 1;
+
+    if (
+      this.state.drawingRound <
+      this.state.gameWords.length
+    ) {
+      this.startDrawingRound();
+      return;
+    }
+
+    this.state.drawingDeadline = 0;
+  }
 
   // BE-15: distraction phase helpers.
   private getDistractionProgress(sessionId: string) {
@@ -1902,6 +2126,10 @@ export class LobbyRoom extends Room {
     // to the player who left.
     this.abilityVotes.delete(client.sessionId);
     this.pendingDrawingIndexes.delete(client.sessionId);
+    this.drawingReady.delete(client.sessionId);
+    this.drawingPhaseReady.delete(client.sessionId);
+    this.state.drawingReadyCount =
+      this.drawingReady.size;
 
     // Their questions may already be assigned to
     // someone in a running game, so only drop
@@ -1911,6 +2139,27 @@ export class LobbyRoom extends Room {
     }
 
     this.continueRecallAfterLeave();
+    if (
+      this.state.phase === "playing" &&
+      !this.drawingRoundActive &&
+      this.state.drawingRound === 0
+    ) {
+      const players = this.activeDrawingPlayerIds();
+      if (
+        players.length > 0 &&
+        players.every((sessionId) =>
+          this.drawingPhaseReady.has(sessionId),
+        )
+      ) {
+        this.startDrawingRound();
+      }
+    }
+    if (
+      this.drawingRoundActive &&
+      this.allDrawingPlayersReady()
+    ) {
+      this.finishDrawingRound(this.state.drawingRound);
+    }
 
     if (
       wasHost &&

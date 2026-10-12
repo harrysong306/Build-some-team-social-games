@@ -47,6 +47,9 @@ export class GameState extends Schema {
   @type("string") wordTheme: string = "general";
   @type("boolean") playerQuestionsEnabled: boolean = true;
   @type("string") phase: string = "lobby";
+  @type("number") drawingRound: number = 0;
+  @type("number") drawingDeadline: number = 0;
+  @type("number") drawingReadyCount: number = 0;
   //not sure if at some point we will want different game state schemas for each game
   @type(["string"])
   gameWords = new ArraySchema<string>();

@@ -494,6 +494,130 @@ describe(
         ).toBeChecked()
       },
     )
+
+    it(
+      'remembers correct options separately for changed submitted questions',
+      () => {
+        saveLobbyPreferences({
+          questionPrompt: 'Favourite snack?',
+          questionOptions: [
+            'Chips',
+            'Fruit',
+            'Toast',
+            'Soup',
+          ],
+          correctOption: 1,
+          questionCorrectOptions: {
+            [JSON.stringify({
+              prompt: 'Favourite snack?',
+              options: [
+                'Chips',
+                'Fruit',
+                'Toast',
+                'Soup',
+              ],
+            })]: 1,
+          },
+        })
+
+        const {
+          room,
+          pushState,
+        } = createFakeRoom('guest')
+
+        render(
+          <LobbyScreen
+            room={room}
+            roomId="ABCD"
+          />,
+        )
+
+        const pushSubmittedQuestions = () => {
+          pushState({
+            players: {
+              host: {
+                name: 'Jordan',
+                ready: false,
+                isHost: true,
+                score: 0,
+              },
+              guest: {
+                name: 'Sam',
+                ready: false,
+                isHost: false,
+                score: 0,
+                questions: [
+                  {
+                    prompt: 'Favourite colour?',
+                    options: [
+                      'Red',
+                      'Blue',
+                      'Green',
+                      'Gold',
+                    ],
+                  },
+                  {
+                    prompt: 'Favourite snack?',
+                    options: [
+                      'Chips',
+                      'Fruit',
+                      'Toast',
+                      'Soup',
+                    ],
+                  },
+                ],
+              },
+            },
+          })
+        }
+
+        pushSubmittedQuestions()
+
+        fireEvent.click(
+          screen.getByRole('button', {
+            name: /change a question/i,
+          }),
+        )
+
+        fireEvent.click(
+          screen.getByRole('button', {
+            name: /question 1favourite colour/i,
+          }),
+        )
+
+        fireEvent.click(
+          screen.getByLabelText(
+            'Option 3 is correct',
+          ),
+        )
+
+        fireEvent.click(
+          screen.getByRole('button', {
+            name: /save question/i,
+          }),
+        )
+
+        pushSubmittedQuestions()
+
+        fireEvent.click(
+          screen.getByRole('button', {
+            name: /change a question/i,
+          }),
+        )
+
+        fireEvent.click(
+          screen.getByRole('button', {
+            name: /question 2favourite snack/i,
+          }),
+        )
+
+        expect(
+          screen.getByLabelText(
+            'Option 2 is correct',
+          ),
+        ).toBeChecked()
+      },
+    )
   },
 )
 
