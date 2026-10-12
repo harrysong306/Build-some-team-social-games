@@ -20,20 +20,26 @@ function Logo() {
 
 type HeaderProps = {
   onJoinGame?: () => void
+  onLogoClick?: () => void
 }
 
-function Header({ onJoinGame }: HeaderProps) {
+function Header({ onJoinGame, onLogoClick }: HeaderProps) {
   return (
     <header className="border-b border-amber-500/30 bg-[#0d0704]">
       <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-6">
 
-        <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={onLogoClick}
+          aria-label="Back to home"
+          className="flex items-center gap-3 rounded-lg transition hover:opacity-80"
+        >
           <Logo />
 
           <span className="text-lg font-extrabold tracking-wide text-white">
             TEAM 31 <span className="text-amber-400">GAMES</span>
           </span>
-        </div>
+        </button>
 
         <nav className="hidden h-full items-center md:flex">
           <button className="relative h-full px-8 font-semibold text-amber-300">
