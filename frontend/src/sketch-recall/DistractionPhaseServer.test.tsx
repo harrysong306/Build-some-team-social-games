@@ -79,6 +79,21 @@ vi.mock('./DistractionQuestions', () => ({
   ],
 }))
 
+vi.mock('./DistractionMinigame', () => ({
+  default: ({
+    onComplete,
+  }: {
+    onComplete: () => void
+  }) => (
+    <button
+      type="button"
+      onClick={onComplete}
+    >
+      Finish minigame
+    </button>
+  ),
+}))
+
 import DistractionPhase from './DistractionPhase'
 
 describe('DistractionPhase component tests', () => {

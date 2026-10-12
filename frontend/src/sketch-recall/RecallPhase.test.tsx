@@ -72,849 +72,1475 @@ function createMockRoom(
   }
 }
 
-describe('RecallPhase component tests', () => {
-  it('allows the user to type and submit an answer', () => {
-    const onComplete = vi.fn()
+describe(
+  'RecallPhase component tests',
+  () => {
+    it(
+      'allows the user to type and submit an answer',
+      () => {
+        const onComplete =
+          vi.fn()
 
-    render(
-      <RecallPhase
-        drawings={[
-          'data:image/png;base64,drawing-one',
-          'data:image/png;base64,drawing-two',
-        ]}
-        words={['Apple', 'Tree']}
-        onComplete={onComplete}
-      />,
-    )
-
-    const answerInput =
-      screen.getByPlaceholderText(
-        /enter your answer/i,
-      )
-
-    fireEvent.change(
-      answerInput,
-      {
-        target: {
-          value: 'Apple',
-        },
-      },
-    )
-
-    expect(
-      answerInput,
-    ).toHaveValue(
-      'Apple',
-    )
-
-    fireEvent.click(
-      screen.getByRole(
-        'button',
-        {
-          name: /check answer/i,
-        },
-      ),
-    )
-
-    expect(
-      answerInput,
-    ).toBeDisabled()
-
-    expect(
-      screen.getByText(
-        'Correct! +4/4',
-      ),
-    ).toBeInTheDocument()
-
-    expect(
-      screen.getByText(
-        'Score: 4 / 8',
-      ),
-    ).toBeInTheDocument()
-
-    expect(
-      screen.getByRole(
-        'button',
-        {
-          name: /next drawing/i,
-        },
-      ),
-    ).toBeInTheDocument()
-
-    expect(
-      onComplete,
-    ).not.toHaveBeenCalled()
-  })
-
-  it('awards full marks ignoring case and spaces', () => {
-    render(
-      <RecallPhase
-        drawings={[
-          'data:image/png;base64,drawing-one',
-        ]}
-        words={['Apple']}
-        onComplete={vi.fn()}
-      />,
-    )
-
-    const answerInput =
-      screen.getByPlaceholderText(
-        /enter your answer/i,
-      )
-
-    fireEvent.change(
-      answerInput,
-      {
-        target: {
-          value:
-            '  APPLE  ',
-        },
-      },
-    )
-
-    fireEvent.click(
-      screen.getByRole(
-        'button',
-        {
-          name: /check answer/i,
-        },
-      ),
-    )
-
-    expect(
-      screen.getByText(
-        'Correct! +4/4',
-      ),
-    ).toBeInTheDocument()
-
-    expect(
-      screen.getByText(
-        'Score: 4 / 4',
-      ),
-    ).toBeInTheDocument()
-  })
-
-  it('awards partial marks for a close answer', () => {
-    render(
-      <RecallPhase
-        drawings={[
-          'data:image/png;base64,drawing-one',
-        ]}
-        words={['Cake']}
-        onComplete={vi.fn()}
-      />,
-    )
-
-    const answerInput =
-      screen.getByPlaceholderText(
-        /enter your answer/i,
-      )
-
-    fireEvent.change(
-      answerInput,
-      {
-        target: {
-          value: 'Kake',
-        },
-      },
-    )
-
-    fireEvent.click(
-      screen.getByRole(
-        'button',
-        {
-          name: /check answer/i,
-        },
-      ),
-    )
-
-    expect(
-      screen.getByText(
-        'Close! +3/4',
-      ),
-    ).toBeInTheDocument()
-
-    expect(
-      screen.getByText(
-        'Score: 3 / 4',
-      ),
-    ).toBeInTheDocument()
-
-    expect(
-      screen.getByText(
-        'Cake',
-      ),
-    ).toBeInTheDocument()
-  })
-
-  it('awards fewer partial marks for a more noticeable spelling mistake', () => {
-    render(
-      <RecallPhase
-        drawings={[
-          'data:image/png;base64,drawing-one',
-        ]}
-        words={['Cake']}
-        onComplete={vi.fn()}
-      />,
-    )
-
-    const answerInput =
-      screen.getByPlaceholderText(
-        /enter your answer/i,
-      )
-
-    fireEvent.change(
-      answerInput,
-      {
-        target: {
-          value: 'Kacke',
-        },
-      },
-    )
-
-    fireEvent.click(
-      screen.getByRole(
-        'button',
-        {
-          name: /check answer/i,
-        },
-      ),
-    )
-
-    expect(
-      screen.getByText(
-        'Close! +2/4',
-      ),
-    ).toBeInTheDocument()
-
-    expect(
-      screen.getByText(
-        'Score: 2 / 4',
-      ),
-    ).toBeInTheDocument()
-  })
-
-  it('submits a partial-credit answer when Enter is pressed', () => {
-    render(
-      <RecallPhase
-        drawings={[
-          'data:image/png;base64,drawing-one',
-        ]}
-        words={['Cake']}
-        onComplete={vi.fn()}
-      />,
-    )
-
-    const answerInput =
-      screen.getByPlaceholderText(
-        /enter your answer/i,
-      )
-
-    fireEvent.change(
-      answerInput,
-      {
-        target: {
-          value: 'Kake',
-        },
-      },
-    )
-
-    fireEvent.keyDown(
-      answerInput,
-      {
-        key: 'Enter',
-        code: 'Enter',
-      },
-    )
-
-    expect(
-      screen.getByText(
-        'Close! +3/4',
-      ),
-    ).toBeInTheDocument()
-
-    expect(
-      screen.getByText(
-        'Score: 3 / 4',
-      ),
-    ).toBeInTheDocument()
-  })
-
-  it('awards zero marks for an unrelated answer', () => {
-    render(
-      <RecallPhase
-        drawings={[
-          'data:image/png;base64,drawing-one',
-        ]}
-        words={['Cake']}
-        onComplete={vi.fn()}
-      />,
-    )
-
-    const answerInput =
-      screen.getByPlaceholderText(
-        /enter your answer/i,
-      )
-
-    fireEvent.change(
-      answerInput,
-      {
-        target: {
-          value: 'Dog',
-        },
-      },
-    )
-
-    fireEvent.click(
-      screen.getByRole(
-        'button',
-        {
-          name: /check answer/i,
-        },
-      ),
-    )
-
-    expect(
-      screen.getByText(
-        'Not quite',
-      ),
-    ).toBeInTheDocument()
-
-    expect(
-      screen.getByText(
-        'Score: 0 / 4',
-      ),
-    ).toBeInTheDocument()
-  })
-
-  it('keeps the accumulated score across drawings', () => {
-    const onComplete =
-      vi.fn()
-
-    render(
-      <RecallPhase
-        drawings={[
-          'data:image/png;base64,drawing-one',
-          'data:image/png;base64,drawing-two',
-        ]}
-        words={[
-          'Cake',
-          'Tree',
-        ]}
-        onComplete={onComplete}
-      />,
-    )
-
-    let answerInput =
-      screen.getByPlaceholderText(
-        /enter your answer/i,
-      )
-
-    fireEvent.change(
-      answerInput,
-      {
-        target: {
-          value: 'Cake',
-        },
-      },
-    )
-
-    fireEvent.click(
-      screen.getByRole(
-        'button',
-        {
-          name: /check answer/i,
-        },
-      ),
-    )
-
-    expect(
-      screen.getByText(
-        'Score: 4 / 8',
-      ),
-    ).toBeInTheDocument()
-
-    fireEvent.click(
-      screen.getByRole(
-        'button',
-        {
-          name: /next drawing/i,
-        },
-      ),
-    )
-
-    answerInput =
-      screen.getByPlaceholderText(
-        /enter your answer/i,
-      )
-
-    fireEvent.change(
-      answerInput,
-      {
-        target: {
-          value: 'Dog',
-        },
-      },
-    )
-
-    fireEvent.click(
-      screen.getByRole(
-        'button',
-        {
-          name: /check answer/i,
-        },
-      ),
-    )
-
-    expect(
-      screen.getByText(
-        'Score: 4 / 8',
-      ),
-    ).toBeInTheDocument()
-
-    fireEvent.click(
-      screen.getByRole(
-        'button',
-        {
-          name: /view results/i,
-        },
-      ),
-    )
-
-    expect(
-      onComplete,
-    ).toHaveBeenCalledWith(
-      4,
-    )
-  })
-
-  it('combines partial marks from several drawings', () => {
-    const onComplete =
-      vi.fn()
-
-    render(
-      <RecallPhase
-        drawings={[
-          'data:image/png;base64,drawing-one',
-          'data:image/png;base64,drawing-two',
-          'data:image/png;base64,drawing-three',
-        ]}
-        words={[
-          'Cake',
-          'Cake',
-          'Cake',
-        ]}
-        onComplete={onComplete}
-      />,
-    )
-
-    const submitAnswer = (
-      value: string,
-    ) => {
-      const answerInput =
-        screen.getByPlaceholderText(
-          /enter your answer/i,
+        render(
+          <RecallPhase
+            drawings={[
+              'data:image/png;base64,drawing-one',
+              'data:image/png;base64,drawing-two',
+            ]}
+            words={[
+              'Apple',
+              'Tree',
+            ]}
+            onComplete={
+              onComplete
+            }
+          />,
         )
 
-      fireEvent.change(
-        answerInput,
-        {
-          target: {
-            value,
-          },
-        },
-      )
+        const answerInput =
+          screen.getByPlaceholderText(
+            /enter your answer/i,
+          )
 
-      fireEvent.click(
-        screen.getByRole(
-          'button',
+        fireEvent.change(
+          answerInput,
           {
-            name:
-              /check answer/i,
+            target: {
+              value:
+                'Apple',
+            },
           },
-        ),
-      )
-    }
+        )
 
-    submitAnswer('Kake')
-
-    expect(
-      screen.getByText(
-        'Score: 3 / 12',
-      ),
-    ).toBeInTheDocument()
-
-    fireEvent.click(
-      screen.getByRole(
-        'button',
-        {
-          name: /next drawing/i,
-        },
-      ),
-    )
-
-    submitAnswer('Kacke')
-
-    expect(
-      screen.getByText(
-        'Score: 5 / 12',
-      ),
-    ).toBeInTheDocument()
-
-    fireEvent.click(
-      screen.getByRole(
-        'button',
-        {
-          name: /next drawing/i,
-        },
-      ),
-    )
-
-    submitAnswer('Cake')
-
-    expect(
-      screen.getByText(
-        'Score: 9 / 12',
-      ),
-    ).toBeInTheDocument()
-
-    fireEvent.click(
-      screen.getByRole(
-        'button',
-        {
-          name: /view results/i,
-        },
-      ),
-    )
-
-    expect(
-      onComplete,
-    ).toHaveBeenCalledWith(
-      9,
-    )
-  })
-
-  it('does not submit a blank recall answer', () => {
-    const onComplete =
-      vi.fn()
-
-    render(
-      <RecallPhase
-        drawings={[
-          'data:image/png;base64,drawing-one',
-        ]}
-        words={['Apple']}
-        onComplete={onComplete}
-      />,
-    )
-
-    const answerInput =
-      screen.getByPlaceholderText(
-        /enter your answer/i,
-      )
-
-    const checkButton =
-      screen.getByRole(
-        'button',
-        {
-          name: /check answer/i,
-        },
-      )
-
-    expect(
-      checkButton,
-    ).toBeDisabled()
-
-    fireEvent.change(
-      answerInput,
-      {
-        target: {
-          value: '   ',
-        },
-      },
-    )
-
-    expect(
-      checkButton,
-    ).toBeDisabled()
-
-    fireEvent.keyDown(
-      answerInput,
-      {
-        key: 'Enter',
-        code: 'Enter',
-      },
-    )
-
-    expect(
-      answerInput,
-    ).toBeEnabled()
-
-    expect(
-      screen.queryByText(
-        /correct!/i,
-      ),
-    ).not.toBeInTheDocument()
-
-    expect(
-      screen.queryByText(
-        /close!/i,
-      ),
-    ).not.toBeInTheDocument()
-
-    expect(
-      screen.queryByText(
-        'Not quite',
-      ),
-    ).not.toBeInTheDocument()
-
-    expect(
-      onComplete,
-    ).not.toHaveBeenCalled()
-  })
-
-  it('shows four-mark multiplayer scores and ranks current standings by total score', () => {
-    const {
-      room,
-      sendMessage,
-    } = createMockRoom(
-      'player-one',
-    )
-
-    render(
-      <RecallPhase
-        room={room}
-        drawings={[
-          'data:image/png;base64,drawing-one',
-        ]}
-        words={['Apple']}
-        onComplete={vi.fn()}
-      />,
-    )
-
-    sendMessage(
-      'recallRoundResult',
-      {
-        roundIndex: 0,
-        correctWord:
+        expect(
+          answerInput,
+        ).toHaveValue(
           'Apple',
-        results: [
-          {
-            sessionId:
-              'player-one',
-            playerName:
-              'Jordan',
-            answer: 'Aple',
-            rank: 2,
-            timedOut: false,
-            pointsEarned: 3,
-            totalScore: 7,
-          },
-          {
-            sessionId:
-              'player-two',
-            playerName:
-              'Sam',
-            answer: 'Apple',
-            rank: 1,
-            timedOut: false,
-            pointsEarned: 4,
-            totalScore: 6,
-          },
-          {
-            sessionId:
-              'player-three',
-            playerName:
-              'Alex',
-            answer: '',
-            rank: null,
-            timedOut: true,
-            pointsEarned: 0,
-            totalScore: 2,
-          },
-        ],
+        )
+
+        fireEvent.click(
+          screen.getByRole(
+            'button',
+            {
+              name:
+                /check answer/i,
+            },
+          ),
+        )
+
+        expect(
+          answerInput,
+        ).toBeDisabled()
+
+        expect(
+          screen.getByText(
+            'Correct! +4/4',
+          ),
+        ).toBeInTheDocument()
+
+        expect(
+          screen.getByText(
+            'Score: 4 / 8',
+          ),
+        ).toBeInTheDocument()
+
+        expect(
+          screen.getByRole(
+            'button',
+            {
+              name:
+                /next drawing/i,
+            },
+          ),
+        ).toBeInTheDocument()
+
+        expect(
+          onComplete,
+        ).not.toHaveBeenCalled()
       },
     )
 
-    expect(
-      screen.getByText(
-        'You ranked #2',
-      ),
-    ).toBeInTheDocument()
+    it(
+      'awards full marks ignoring case and spaces',
+      () => {
+        render(
+          <RecallPhase
+            drawings={[
+              'data:image/png;base64,drawing-one',
+            ]}
+            words={[
+              'Apple',
+            ]}
+            onComplete={
+              vi.fn()
+            }
+          />,
+        )
 
-    expect(
-      screen.getByText(
-        /Correct word:/i,
-      ),
-    ).toHaveTextContent(
-      'Apple',
+        const answerInput =
+          screen.getByPlaceholderText(
+            /enter your answer/i,
+          )
+
+        fireEvent.change(
+          answerInput,
+          {
+            target: {
+              value:
+                '  APPLE  ',
+            },
+          },
+        )
+
+        fireEvent.click(
+          screen.getByRole(
+            'button',
+            {
+              name:
+                /check answer/i,
+            },
+          ),
+        )
+
+        expect(
+          screen.getByText(
+            'Correct! +4/4',
+          ),
+        ).toBeInTheDocument()
+
+        expect(
+          screen.getByText(
+            'Score: 4 / 4',
+          ),
+        ).toBeInTheDocument()
+      },
     )
 
-    expect(
-      screen.getAllByText(
-        /\+3\/4/i,
-      ).length,
-    ).toBeGreaterThan(0)
+    it(
+      'awards partial marks for a close answer',
+      () => {
+        render(
+          <RecallPhase
+            drawings={[
+              'data:image/png;base64,drawing-one',
+            ]}
+            words={[
+              'Cake',
+            ]}
+            onComplete={
+              vi.fn()
+            }
+          />,
+        )
 
-    expect(
-      screen.getByText(
-        /Total:\s*7/i,
-      ),
-    ).toBeInTheDocument()
+        const answerInput =
+          screen.getByPlaceholderText(
+            /enter your answer/i,
+          )
 
-    expect(
-      screen.getByRole(
-        'heading',
-        {
-          name:
-            /round rankings/i,
-        },
-      ),
-    ).toBeInTheDocument()
+        fireEvent.change(
+          answerInput,
+          {
+            target: {
+              value:
+                'Kake',
+            },
+          },
+        )
 
-    const standingsHeading =
-      screen.getByRole(
-        'heading',
-        {
-          name:
-            /current standings/i,
-        },
-      )
+        fireEvent.click(
+          screen.getByRole(
+            'button',
+            {
+              name:
+                /check answer/i,
+            },
+          ),
+        )
 
-    const standingsSection =
-      standingsHeading.closest(
-        'section',
-      )
+        expect(
+          screen.getByText(
+            'Close! +3/4',
+          ),
+        ).toBeInTheDocument()
 
-    expect(
-      standingsSection,
-    ).not.toBeNull()
+        expect(
+          screen.getByText(
+            'Score: 3 / 4',
+          ),
+        ).toBeInTheDocument()
 
-    const standings =
-      within(
-        standingsSection as HTMLElement,
-      )
-
-    expect(
-      standings.getByText(
-        '7 pts',
-      ),
-    ).toBeInTheDocument()
-
-    expect(
-      standings.getByText(
-        '6 pts',
-      ),
-    ).toBeInTheDocument()
-
-    expect(
-      standings.getByText(
-        '2 pts',
-      ),
-    ).toBeInTheDocument()
-
-    const standingsText =
-      standingsSection
-        ?.textContent ??
-      ''
-
-    /*
-     * Jordan had round rank #2,
-     * but has the highest total.
-     *
-     * Current standings therefore
-     * rank Jordan above Sam.
-     */
-    expect(
-      standingsText.indexOf(
-        'Jordan',
-      ),
-    ).toBeLessThan(
-      standingsText.indexOf(
-        'Sam',
-      ),
+        expect(
+          screen.getByText(
+            'Cake',
+          ),
+        ).toBeInTheDocument()
+      },
     )
 
-    expect(
-      standingsText.indexOf(
-        'Sam',
-      ),
-    ).toBeLessThan(
-      standingsText.indexOf(
-        'Alex',
-      ),
-    )
-  })
+    it(
+      'awards fewer partial marks for a more noticeable spelling mistake',
+      () => {
+        render(
+          <RecallPhase
+            drawings={[
+              'data:image/png;base64,drawing-one',
+            ]}
+            words={[
+              'Cake',
+            ]}
+            onComplete={
+              vi.fn()
+            }
+          />,
+        )
 
-  it('shows zero out of four when the player times out', () => {
-    const {
-      room,
-      sendMessage,
-    } = createMockRoom(
-      'player-one',
+        const answerInput =
+          screen.getByPlaceholderText(
+            /enter your answer/i,
+          )
+
+        fireEvent.change(
+          answerInput,
+          {
+            target: {
+              value:
+                'Kacke',
+            },
+          },
+        )
+
+        fireEvent.click(
+          screen.getByRole(
+            'button',
+            {
+              name:
+                /check answer/i,
+            },
+          ),
+        )
+
+        expect(
+          screen.getByText(
+            'Close! +2/4',
+          ),
+        ).toBeInTheDocument()
+
+        expect(
+          screen.getByText(
+            'Score: 2 / 4',
+          ),
+        ).toBeInTheDocument()
+      },
     )
 
-    render(
-      <RecallPhase
-        room={room}
-        drawings={[
-          'data:image/png;base64,drawing-one',
-        ]}
-        words={['Apple']}
-        onComplete={vi.fn()}
-      />,
+    it(
+      'submits a partial-credit answer when Enter is pressed',
+      () => {
+        render(
+          <RecallPhase
+            drawings={[
+              'data:image/png;base64,drawing-one',
+            ]}
+            words={[
+              'Cake',
+            ]}
+            onComplete={
+              vi.fn()
+            }
+          />,
+        )
+
+        const answerInput =
+          screen.getByPlaceholderText(
+            /enter your answer/i,
+          )
+
+        fireEvent.change(
+          answerInput,
+          {
+            target: {
+              value:
+                'Kake',
+            },
+          },
+        )
+
+        fireEvent.keyDown(
+          answerInput,
+          {
+            key:
+              'Enter',
+            code:
+              'Enter',
+          },
+        )
+
+        expect(
+          screen.getByText(
+            'Close! +3/4',
+          ),
+        ).toBeInTheDocument()
+
+        expect(
+          screen.getByText(
+            'Score: 3 / 4',
+          ),
+        ).toBeInTheDocument()
+      },
     )
 
-    sendMessage(
-      'recallRoundResult',
-      {
-        roundIndex: 0,
-        correctWord:
+    it(
+      'awards zero marks for an unrelated answer',
+      () => {
+        render(
+          <RecallPhase
+            drawings={[
+              'data:image/png;base64,drawing-one',
+            ]}
+            words={[
+              'Cake',
+            ]}
+            onComplete={
+              vi.fn()
+            }
+          />,
+        )
+
+        const answerInput =
+          screen.getByPlaceholderText(
+            /enter your answer/i,
+          )
+
+        fireEvent.change(
+          answerInput,
+          {
+            target: {
+              value:
+                'Dog',
+            },
+          },
+        )
+
+        fireEvent.click(
+          screen.getByRole(
+            'button',
+            {
+              name:
+                /check answer/i,
+            },
+          ),
+        )
+
+        expect(
+          screen.getByText(
+            'Not quite',
+          ),
+        ).toBeInTheDocument()
+
+        expect(
+          screen.getByText(
+            'Score: 0 / 4',
+          ),
+        ).toBeInTheDocument()
+      },
+    )
+
+    it(
+      'keeps the accumulated score across drawings',
+      () => {
+        const onComplete =
+          vi.fn()
+
+        render(
+          <RecallPhase
+            drawings={[
+              'data:image/png;base64,drawing-one',
+              'data:image/png;base64,drawing-two',
+            ]}
+            words={[
+              'Cake',
+              'Tree',
+            ]}
+            onComplete={
+              onComplete
+            }
+          />,
+        )
+
+        let answerInput =
+          screen.getByPlaceholderText(
+            /enter your answer/i,
+          )
+
+        fireEvent.change(
+          answerInput,
+          {
+            target: {
+              value:
+                'Cake',
+            },
+          },
+        )
+
+        fireEvent.click(
+          screen.getByRole(
+            'button',
+            {
+              name:
+                /check answer/i,
+            },
+          ),
+        )
+
+        expect(
+          screen.getByText(
+            'Score: 4 / 8',
+          ),
+        ).toBeInTheDocument()
+
+        fireEvent.click(
+          screen.getByRole(
+            'button',
+            {
+              name:
+                /next drawing/i,
+            },
+          ),
+        )
+
+        answerInput =
+          screen.getByPlaceholderText(
+            /enter your answer/i,
+          )
+
+        fireEvent.change(
+          answerInput,
+          {
+            target: {
+              value:
+                'Dog',
+            },
+          },
+        )
+
+        fireEvent.click(
+          screen.getByRole(
+            'button',
+            {
+              name:
+                /check answer/i,
+            },
+          ),
+        )
+
+        expect(
+          screen.getByText(
+            'Score: 4 / 8',
+          ),
+        ).toBeInTheDocument()
+
+        fireEvent.click(
+          screen.getByRole(
+            'button',
+            {
+              name:
+                /view results/i,
+            },
+          ),
+        )
+
+        expect(
+          onComplete,
+        ).toHaveBeenCalledWith(
+          4,
+        )
+      },
+    )
+
+    it(
+      'combines partial marks from several drawings',
+      () => {
+        const onComplete =
+          vi.fn()
+
+        render(
+          <RecallPhase
+            drawings={[
+              'data:image/png;base64,drawing-one',
+              'data:image/png;base64,drawing-two',
+              'data:image/png;base64,drawing-three',
+            ]}
+            words={[
+              'Cake',
+              'Cake',
+              'Cake',
+            ]}
+            onComplete={
+              onComplete
+            }
+          />,
+        )
+
+        const submitAnswer = (
+          value: string,
+        ) => {
+          const answerInput =
+            screen.getByPlaceholderText(
+              /enter your answer/i,
+            )
+
+          fireEvent.change(
+            answerInput,
+            {
+              target: {
+                value,
+              },
+            },
+          )
+
+          fireEvent.click(
+            screen.getByRole(
+              'button',
+              {
+                name:
+                  /check answer/i,
+              },
+            ),
+          )
+        }
+
+        submitAnswer(
+          'Kake',
+        )
+
+        expect(
+          screen.getByText(
+            'Score: 3 / 12',
+          ),
+        ).toBeInTheDocument()
+
+        fireEvent.click(
+          screen.getByRole(
+            'button',
+            {
+              name:
+                /next drawing/i,
+            },
+          ),
+        )
+
+        submitAnswer(
+          'Kacke',
+        )
+
+        expect(
+          screen.getByText(
+            'Score: 5 / 12',
+          ),
+        ).toBeInTheDocument()
+
+        fireEvent.click(
+          screen.getByRole(
+            'button',
+            {
+              name:
+                /next drawing/i,
+            },
+          ),
+        )
+
+        submitAnswer(
+          'Cake',
+        )
+
+        expect(
+          screen.getByText(
+            'Score: 9 / 12',
+          ),
+        ).toBeInTheDocument()
+
+        fireEvent.click(
+          screen.getByRole(
+            'button',
+            {
+              name:
+                /view results/i,
+            },
+          ),
+        )
+
+        expect(
+          onComplete,
+        ).toHaveBeenCalledWith(
+          9,
+        )
+      },
+    )
+
+    it(
+      'does not submit a blank recall answer',
+      () => {
+        const onComplete =
+          vi.fn()
+
+        render(
+          <RecallPhase
+            drawings={[
+              'data:image/png;base64,drawing-one',
+            ]}
+            words={[
+              'Apple',
+            ]}
+            onComplete={
+              onComplete
+            }
+          />,
+        )
+
+        const answerInput =
+          screen.getByPlaceholderText(
+            /enter your answer/i,
+          )
+
+        const checkButton =
+          screen.getByRole(
+            'button',
+            {
+              name:
+                /check answer/i,
+            },
+          )
+
+        expect(
+          checkButton,
+        ).toBeDisabled()
+
+        fireEvent.change(
+          answerInput,
+          {
+            target: {
+              value:
+                '   ',
+            },
+          },
+        )
+
+        expect(
+          checkButton,
+        ).toBeDisabled()
+
+        fireEvent.keyDown(
+          answerInput,
+          {
+            key:
+              'Enter',
+            code:
+              'Enter',
+          },
+        )
+
+        expect(
+          answerInput,
+        ).toBeEnabled()
+
+        expect(
+          screen.queryByText(
+            /correct!/i,
+          ),
+        ).not.toBeInTheDocument()
+
+        expect(
+          screen.queryByText(
+            /close!/i,
+          ),
+        ).not.toBeInTheDocument()
+
+        expect(
+          screen.queryByText(
+            'Not quite',
+          ),
+        ).not.toBeInTheDocument()
+
+        expect(
+          onComplete,
+        ).not.toHaveBeenCalled()
+      },
+    )
+
+    it(
+      'shows four-mark multiplayer scores and ranks current standings by total score',
+      () => {
+        const {
+          room,
+          sendMessage,
+        } =
+          createMockRoom(
+            'player-one',
+          )
+
+        render(
+          <RecallPhase
+            room={room}
+            drawings={[
+              'data:image/png;base64,drawing-one',
+            ]}
+            words={[
+              'Apple',
+            ]}
+            onComplete={
+              vi.fn()
+            }
+          />,
+        )
+
+        sendMessage(
+          'recallRoundResult',
+          {
+            roundIndex:
+              0,
+            correctWord:
+              'Apple',
+            results: [
+              {
+                sessionId:
+                  'player-one',
+                playerName:
+                  'Jordan',
+                answer:
+                  'Aple',
+                rank: 2,
+                timedOut:
+                  false,
+                pointsEarned:
+                  3,
+                totalScore:
+                  7,
+              },
+              {
+                sessionId:
+                  'player-two',
+                playerName:
+                  'Sam',
+                answer:
+                  'Apple',
+                rank: 1,
+                timedOut:
+                  false,
+                pointsEarned:
+                  4,
+                totalScore:
+                  6,
+              },
+              {
+                sessionId:
+                  'player-three',
+                playerName:
+                  'Alex',
+                answer: '',
+                rank: null,
+                timedOut:
+                  true,
+                pointsEarned:
+                  0,
+                totalScore:
+                  2,
+              },
+            ],
+          },
+        )
+
+        expect(
+          screen.getByText(
+            'You ranked #2',
+          ),
+        ).toBeInTheDocument()
+
+        expect(
+          screen.getByText(
+            /Correct word:/i,
+          ),
+        ).toHaveTextContent(
           'Apple',
-        results: [
-          {
-            sessionId:
-              'player-one',
-            playerName:
-              'Jordan',
-            answer: '',
-            rank: null,
-            timedOut: true,
-            pointsEarned: 0,
-            totalScore: 3,
-          },
-        ],
+        )
+
+        expect(
+          screen.getAllByText(
+            /\+3\/4/i,
+          ).length,
+        ).toBeGreaterThan(
+          0,
+        )
+
+        expect(
+          screen.getByText(
+            /Total:\s*7/i,
+          ),
+        ).toBeInTheDocument()
+
+        expect(
+          screen.getByRole(
+            'heading',
+            {
+              name:
+                /round rankings/i,
+            },
+          ),
+        ).toBeInTheDocument()
+
+        const standingsHeading =
+          screen.getByRole(
+            'heading',
+            {
+              name:
+                /current standings/i,
+            },
+          )
+
+        const standingsSection =
+          standingsHeading.closest(
+            'section',
+          )
+
+        expect(
+          standingsSection,
+        ).not.toBeNull()
+
+        const standings =
+          within(
+            standingsSection as HTMLElement,
+          )
+
+        expect(
+          standings.getByText(
+            '7 pts',
+          ),
+        ).toBeInTheDocument()
+
+        expect(
+          standings.getByText(
+            '6 pts',
+          ),
+        ).toBeInTheDocument()
+
+        expect(
+          standings.getByText(
+            '2 pts',
+          ),
+        ).toBeInTheDocument()
+
+        const standingsText =
+          standingsSection
+            ?.textContent ??
+          ''
+
+        /*
+         * Jordan had round rank #2,
+         * but has the highest total.
+         *
+         * Current standings therefore
+         * rank Jordan above Sam.
+         */
+        expect(
+          standingsText.indexOf(
+            'Jordan',
+          ),
+        ).toBeLessThan(
+          standingsText.indexOf(
+            'Sam',
+          ),
+        )
+
+        expect(
+          standingsText.indexOf(
+            'Sam',
+          ),
+        ).toBeLessThan(
+          standingsText.indexOf(
+            'Alex',
+          ),
+        )
       },
     )
 
-    expect(
-      screen.getByText(
-        'Time is up',
-      ),
-    ).toBeInTheDocument()
+    it(
+      'uses average response time to break an equal-score current-standings tie',
+      () => {
+        const {
+          room,
+          sendMessage,
+        } =
+          createMockRoom(
+            'player-one',
+          )
 
-    expect(
-      screen.getAllByText(
-        /\+0\/4/i,
-      ).length,
-    ).toBeGreaterThan(0)
+        render(
+          <RecallPhase
+            room={room}
+            drawings={[
+              'data:image/png;base64,drawing-one',
+            ]}
+            words={[
+              'Apple',
+            ]}
+            onComplete={
+              vi.fn()
+            }
+          />,
+        )
 
-    expect(
-      screen.getByText(
-        /Total:\s*3/i,
-      ),
-    ).toBeInTheDocument()
+        sendMessage(
+          'recallRoundResult',
+          {
+            roundIndex:
+              0,
+            correctWord:
+              'Apple',
+            results: [
+              {
+                sessionId:
+                  'player-one',
+                playerName:
+                  'Jordan',
+                answer:
+                  'Apple',
+                rank: 1,
+                timedOut:
+                  false,
+                pointsEarned:
+                  4,
+                totalScore:
+                  10,
+                averageResponseTimeMs:
+                  3000,
+              },
+              {
+                sessionId:
+                  'player-two',
+                playerName:
+                  'Sam',
+                answer:
+                  'Apple',
+                rank: 2,
+                timedOut:
+                  false,
+                pointsEarned:
+                  4,
+                totalScore:
+                  10,
+                averageResponseTimeMs:
+                  1000,
+              },
+            ],
+          },
+        )
 
-    expect(
-      screen.getByText(
-        'Timed out',
-      ),
-    ).toBeInTheDocument()
+        const standingsHeading =
+          screen.getByRole(
+            'heading',
+            {
+              name:
+                /current standings/i,
+            },
+          )
 
-    expect(
-      screen.getByText(
-        '3 pts',
-      ),
-    ).toBeInTheDocument()
-  })
-})
+        const standingsSection =
+          standingsHeading.closest(
+            'section',
+          )
+
+        expect(
+          standingsSection,
+        ).not.toBeNull()
+
+        const standings =
+          within(
+            standingsSection as HTMLElement,
+          )
+
+        const standingsText =
+          standingsSection
+            ?.textContent ??
+          ''
+
+        /*
+         * Equal score: Sam's 1 second
+         * average beats Jordan's
+         * 3 second average.
+         */
+        expect(
+          standingsText.indexOf(
+            'Sam',
+          ),
+        ).toBeLessThan(
+          standingsText.indexOf(
+            'Jordan',
+          ),
+        )
+
+        expect(
+          standings.getByText(
+            '#1',
+          ),
+        ).toBeInTheDocument()
+
+        expect(
+          standings.getByText(
+            '#2',
+          ),
+        ).toBeInTheDocument()
+
+        expect(
+          standings.getByText(
+            /Avg Recall time:\s*1\.00s/i,
+          ),
+        ).toBeInTheDocument()
+
+        expect(
+          standings.getByText(
+            /Avg Recall time:\s*3\.00s/i,
+          ),
+        ).toBeInTheDocument()
+      },
+    )
+
+    it(
+      'shows zero out of four when the player times out',
+      () => {
+        const {
+          room,
+          sendMessage,
+        } =
+          createMockRoom(
+            'player-one',
+          )
+
+        render(
+          <RecallPhase
+            room={room}
+            drawings={[
+              'data:image/png;base64,drawing-one',
+            ]}
+            words={[
+              'Apple',
+            ]}
+            onComplete={
+              vi.fn()
+            }
+          />,
+        )
+
+        sendMessage(
+          'recallRoundResult',
+          {
+            roundIndex:
+              0,
+            correctWord:
+              'Apple',
+            results: [
+              {
+                sessionId:
+                  'player-one',
+                playerName:
+                  'Jordan',
+                answer: '',
+                rank: null,
+                timedOut:
+                  true,
+                pointsEarned:
+                  0,
+                totalScore:
+                  3,
+              },
+            ],
+          },
+        )
+
+        expect(
+          screen.getByText(
+            'Time is up',
+          ),
+        ).toBeInTheDocument()
+
+        expect(
+          screen.getAllByText(
+            /\+0\/4/i,
+          ).length,
+        ).toBeGreaterThan(
+          0,
+        )
+
+        expect(
+          screen.getByText(
+            /Total:\s*3/i,
+          ),
+        ).toBeInTheDocument()
+
+        expect(
+          screen.getByText(
+            'Timed out',
+          ),
+        ).toBeInTheDocument()
+
+        expect(
+          screen.getByText(
+            '3 pts',
+          ),
+        ).toBeInTheDocument()
+      },
+    )
+
+    it(
+      'shows the Anonymous Recall artist bonus without treating the artist as timed out',
+      () => {
+        const {
+          room,
+          sendMessage,
+        } =
+          createMockRoom(
+            'player-one',
+          )
+
+        render(
+          <RecallPhase
+            room={room}
+            drawings={[
+              null,
+            ]}
+            words={[
+              'Apple',
+            ]}
+            anonymous={
+              true
+            }
+            onComplete={
+              vi.fn()
+            }
+          />,
+        )
+
+        sendMessage(
+          'recallRoundResult',
+          {
+            roundIndex:
+              0,
+            correctWord:
+              'Apple',
+            results: [
+              {
+                sessionId:
+                  'player-one',
+                playerName:
+                  'Jordan',
+                answer: '',
+                rank: null,
+                timedOut:
+                  false,
+                pointsEarned:
+                  2,
+                totalScore:
+                  8,
+                isArtist:
+                  true,
+                correctGuessCount:
+                  2,
+                responseTimeMs:
+                  null,
+                averageResponseTimeMs:
+                  2500,
+                lives: 3,
+              },
+              {
+                sessionId:
+                  'player-two',
+                playerName:
+                  'Sam',
+                answer:
+                  'Apple',
+                rank: 1,
+                timedOut:
+                  false,
+                pointsEarned:
+                  4,
+                totalScore:
+                  7,
+                isArtist:
+                  false,
+                correctGuessCount:
+                  null,
+                responseTimeMs:
+                  1200,
+                averageResponseTimeMs:
+                  1200,
+                lives: 3,
+              },
+              {
+                sessionId:
+                  'player-three',
+                playerName:
+                  'Alex',
+                answer:
+                  'Aple',
+                rank: 2,
+                timedOut:
+                  false,
+                pointsEarned:
+                  3,
+                totalScore:
+                  6,
+                isArtist:
+                  false,
+                correctGuessCount:
+                  null,
+                responseTimeMs:
+                  1800,
+                averageResponseTimeMs:
+                  1800,
+                lives: 3,
+              },
+            ],
+          },
+        )
+
+        expect(
+          screen.getByText(
+            'Your drawing was selected',
+          ),
+        ).toBeInTheDocument()
+
+        expect(
+          screen.getByText(
+            /2 players successfully guessed your drawing/i,
+          ),
+        ).toBeInTheDocument()
+
+        expect(
+          screen.getAllByText(
+            /\+2 artist bonus/i,
+          ).length,
+        ).toBeGreaterThan(
+          0,
+        )
+
+        expect(
+          screen.getByText(
+            'Selected artist',
+          ),
+        ).toBeInTheDocument()
+
+        expect(
+          screen.getByText(
+            '2 successful guesses',
+          ),
+        ).toBeInTheDocument()
+
+        expect(
+          screen.queryByText(
+            'Timed out',
+          ),
+        ).not.toBeInTheDocument()
+      },
+    )
+
+    it(
+      'hides the selected drawing and disables answering for the artist',
+      () => {
+        const {
+          room,
+          sendMessage,
+        } =
+          createMockRoom(
+            'player-one',
+          )
+
+        render(
+          <RecallPhase
+            room={room}
+            drawings={[
+              null,
+            ]}
+            words={[
+              'Apple',
+            ]}
+            anonymous={
+              true
+            }
+            onComplete={
+              vi.fn()
+            }
+          />,
+        )
+
+        sendMessage(
+          'recallRoundStarted',
+          {
+            roundIndex:
+              0,
+            deadline:
+              Date.now() +
+              10000,
+          },
+        )
+
+        sendMessage(
+          'recallDrawing',
+          {
+            roundIndex:
+              0,
+            image:
+              null,
+            isArtist:
+              true,
+          },
+        )
+
+        expect(
+          screen.getByText(
+            'Your drawing was selected!',
+          ),
+        ).toBeInTheDocument()
+
+        expect(
+          screen.getByPlaceholderText(
+            'Waiting for other players to guess...',
+          ),
+        ).toBeDisabled()
+
+        expect(
+          screen.getByRole(
+            'button',
+            {
+              name:
+                /submit answer/i,
+            },
+          ),
+        ).toBeDisabled()
+
+        expect(
+          screen.queryByRole(
+            'img',
+            {
+              name:
+                'Drawing 1',
+            },
+          ),
+        ).not.toBeInTheDocument()
+
+        expect(
+          room.send,
+        ).not.toHaveBeenCalledWith(
+          'submitRecallAnswer',
+          expect.anything(),
+        )
+      },
+    )
+
+    it(
+      'shows the selected drawing and allows other players to answer',
+      () => {
+        const {
+          room,
+          sendMessage,
+        } =
+          createMockRoom(
+            'player-two',
+          )
+
+        render(
+          <RecallPhase
+            room={room}
+            drawings={[
+              null,
+            ]}
+            words={[
+              'Apple',
+            ]}
+            anonymous={
+              true
+            }
+            onComplete={
+              vi.fn()
+            }
+          />,
+        )
+
+        sendMessage(
+          'recallRoundStarted',
+          {
+            roundIndex:
+              0,
+            deadline:
+              Date.now() +
+              10000,
+          },
+        )
+
+        sendMessage(
+          'recallDrawing',
+          {
+            roundIndex:
+              0,
+            image:
+              'test-image',
+            isArtist:
+              false,
+          },
+        )
+
+        expect(
+          screen.getByRole(
+            'img',
+            {
+              name:
+                'Drawing 1',
+            },
+          ),
+        ).toHaveAttribute(
+          'src',
+          'data:image/png;base64,test-image',
+        )
+
+        const answerInput =
+          screen.getByPlaceholderText(
+            'Enter your answer...',
+          )
+
+        expect(
+          answerInput,
+        ).toBeEnabled()
+
+        fireEvent.change(
+          answerInput,
+          {
+            target: {
+              value:
+                'Apple',
+            },
+          },
+        )
+
+        fireEvent.click(
+          screen.getByRole(
+            'button',
+            {
+              name:
+                /submit answer/i,
+            },
+          ),
+        )
+
+        expect(
+          room.send,
+        ).toHaveBeenCalledWith(
+          'submitRecallAnswer',
+          {
+            roundIndex:
+              0,
+            answer:
+              'Apple',
+          },
+        )
+      },
+    )
+  },
+)

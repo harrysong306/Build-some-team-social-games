@@ -7,6 +7,15 @@ export type PlayerView = {
   isHost: boolean;
   questions?: PlayerQuestionView[];
   score: number;
+
+  // Server-tracked Recall timing used to break
+  // equal-score leaderboard ties.
+  //
+  // Optional so older test fixtures and brief
+  // pre-sync client state remain compatible.
+  recallResponseTimeMs?: number;
+  recallResponseCount?: number;
+
   distractionReady?: boolean;
   distractionDone?: boolean;
 };
@@ -27,6 +36,8 @@ export function useLobbyState(room: Room | null) {
   const [players, setPlayers] = useState<Record<string, PlayerView>>({});
   const [gameMode, setGameModeState] = useState<string>("sketchRecall");
   const [drawingSpeed, setDrawingSpeedState] = useState<string>("normal");
+  const [customDrawingMin, setCustomDrawingMinState] = useState<number>(6);
+  const [customDrawingMax, setCustomDrawingMaxState] = useState<number>(10);
   const [drawingCount, setDrawingCountState] = useState<number>(25);
   const [wordTheme, setWordThemeState] = useState<string>("general");
   const [playerQuestionsEnabled, setPlayerQuestionsEnabledState] =
@@ -56,6 +67,8 @@ export function useLobbyState(room: Room | null) {
 
       // Synced from the backend GameState schema
       setDrawingSpeedState(state.drawingSpeed ?? "normal");
+      setCustomDrawingMinState(state.customDrawingMin ?? 6);
+      setCustomDrawingMaxState(state.customDrawingMax ?? 10);
       setDrawingCountState(state.drawingCount ?? 25);
       setWordThemeState(state.wordTheme ?? "general");
       setPlayerQuestionsEnabledState(
@@ -99,8 +112,9 @@ export function useLobbyState(room: Room | null) {
       removeAssignedQuestionsListener?.();
       unsubscribeNameError?.();
     };
-  }, 
+  },
   [room]);
+
   const setPlayerQuestionsEnabled = (enabled: boolean) => {
      room?.send("setPlayerQuestionsEnabled", { enabled });
      };
@@ -120,8 +134,16 @@ export function useLobbyState(room: Room | null) {
   };
 
   // Sends { speed } to LobbyRoom.ts using "setDrawingSpeed"
-  const setDrawingSpeed = (speed: string) => {
-    room?.send("setDrawingSpeed", { speed });
+  const setDrawingSpeed = (
+    speed: string,
+    customMin = customDrawingMin,
+    customMax = customDrawingMax,
+  ) => {
+    room?.send("setDrawingSpeed", {
+      speed,
+      customMin,
+      customMax,
+    });
   };
 
   // Correct answers are intentionally not sent to the client in this message.
@@ -139,6 +161,10 @@ export function useLobbyState(room: Room | null) {
 
   const replacePlayerQuestions = () => {
   room?.send("replacePlayerQuestions", {});
+  };
+
+  const replacePlayerQuestion = (index: number) => {
+    room?.send("replacePlayerQuestion", { index });
   };
 
 
@@ -169,6 +195,8 @@ export function useLobbyState(room: Room | null) {
     players,
     gameMode,
     drawingSpeed,
+    customDrawingMin,
+    customDrawingMax,
     drawingCount,
     wordTheme,
     playerQuestionsEnabled,
@@ -182,6 +210,7 @@ export function useLobbyState(room: Room | null) {
     setDrawingSpeed,
     submitPlayerQuestion,
     replacePlayerQuestions,
+    replacePlayerQuestion,
     setDrawingCount,
     setWordTheme,
     setPlayerQuestionsEnabled,

@@ -14,27 +14,61 @@ import {
 import MultiplayerResultsScreen from './MultiplayerResultsScreen'
 
 const players = {
-  me: { name: 'Jordan', ready: false, isHost: true, score: 12 },
-  other: { name: 'Sam', ready: false, isHost: false, score: 20 },
+  me: {
+    name: 'Jordan',
+    ready: false,
+    isHost: true,
+    score: 12,
+  },
+  other: {
+    name: 'Sam',
+    ready: false,
+    isHost: false,
+    score: 20,
+  },
 }
 
-describe('MultiplayerResultsScreen lives and leaving', () => {
-  it('shows lives left under each player when given', () => {
+describe('MultiplayerResultsScreen leaving and leaderboard', () => {
+  it('shows the final leaderboard without lives information', () => {
     render(
       <MultiplayerResultsScreen
         players={players}
         sessionId="me"
         onPlayAgain={vi.fn()}
         onExit={vi.fn()}
-        lives={{ me: 2, other: 0 }}
       />,
     )
 
-    const rows = screen.getAllByTestId('leaderboard-row')
-    expect(rows[0]).toHaveTextContent('Sam')
-    expect(rows[0]).toHaveTextContent('Out of lives')
-    expect(rows[1]).toHaveTextContent('Jordan (You)')
-    expect(rows[1]).toHaveTextContent('❤️❤️')
+    const rows =
+      screen.getAllByTestId(
+        'leaderboard-row',
+      )
+
+    expect(rows[0]).toHaveTextContent(
+      'Sam',
+    )
+    expect(rows[0]).toHaveTextContent(
+      '20',
+    )
+
+    expect(rows[1]).toHaveTextContent(
+      'Jordan (You)',
+    )
+    expect(rows[1]).toHaveTextContent(
+      '12',
+    )
+
+    expect(
+      screen.queryByText(
+        'Out of lives',
+      ),
+    ).toBeNull()
+
+    expect(
+      screen.queryByText(
+        /❤️/,
+      ),
+    ).toBeNull()
   })
 
   it('leaves the room when LEAVE ROOM is pressed', () => {
@@ -50,12 +84,21 @@ describe('MultiplayerResultsScreen lives and leaving', () => {
       />,
     )
 
-    fireEvent.click(screen.getByRole('button', { name: 'LEAVE ROOM' }))
+    fireEvent.click(
+      screen.getByRole(
+        'button',
+        {
+          name: 'LEAVE ROOM',
+        },
+      ),
+    )
 
-    expect(onLeave).toHaveBeenCalled()
+    expect(
+      onLeave,
+    ).toHaveBeenCalled()
   })
 
-  it('keeps the original layout when lives and onLeave are not given', () => {
+  it('does not show LEAVE ROOM when no leave handler is given', () => {
     render(
       <MultiplayerResultsScreen
         players={players}
@@ -65,7 +108,13 @@ describe('MultiplayerResultsScreen lives and leaving', () => {
       />,
     )
 
-    expect(screen.queryByRole('button', { name: 'LEAVE ROOM' })).toBeNull()
-    expect(screen.queryByText('Out of lives')).toBeNull()
+    expect(
+      screen.queryByRole(
+        'button',
+        {
+          name: 'LEAVE ROOM',
+        },
+      ),
+    ).toBeNull()
   })
 })

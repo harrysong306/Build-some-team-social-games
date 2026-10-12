@@ -27,7 +27,9 @@ type TeamAbilitiesProps = {
   room: Room
   roundIndex: number
   roundStarted: boolean
-  // e.g. the player is out of lives
+  // Disable abilities when this player should not
+  // vote during the current round, such as the
+  // selected Anonymous Recall artist.
   disabled: boolean
   usedAbilities: readonly string[]
 }
